@@ -1,0 +1,23 @@
+<!-- $PostgreSQL: pgsql/doc/src/sgml/perm.sgml,v 1.62 2007/06/07 14:49:56 tgl Exp $ -->
+
+<sect1 id="perm">
+ <title>Perm Extension to Postgres</title>
+
+ <indexterm>
+  <primary>perm</primary>
+ </indexterm>
+
+ <para>
+  <productname>Perm</productname> enhances <productname>PostgreSQL</productname> with Provenance features. In this section we introduce the
+  new language constructs introduced by <productname>Perm</productname>
+ </para>
+
+ <sect2>
+  <title>SQL-PLE (Perm language Extension)</title>
+
+ <para>
+ sdfsd hsdfjkhj
+ </para>
+  </sect2>
+
+</sect1>

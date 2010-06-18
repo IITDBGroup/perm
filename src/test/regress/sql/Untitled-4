@@ -1,0 +1,82 @@
+SELECT * FROM r, t WHERE r.a = t.d AND (t.d = 2 OR (r.a IN (SELECT * FROM s WHERE s.c = t.d)));
+
+-->
+
+SELECT * FROM r, t, (SELECT * FROM s) AS sub WHERE r.a = t.d AND (t.d = 2 OR (r.a IN (SELECT * FROM s WHERE s.c = t.d))) AND r.a = sub.c AND sub.c = t.d;
+
+FALSE
+
+--> 
+
+SELECT r.* FROM r JOIN t ON (r.a = t.d)  LEFT JOIN (SELECT DISTINCT * FROM s) AS sub ON ((r.a = t.d) AND (t.d =2 OR (r.a = sub.c AND sub.c = t.d))) 
+WHERE (t.d = 2 OR (r.a IN (SELECT * FROM s WHERE s.c = t.d)));
+
+-->
+
+SELECT * FROM r JOIN t ON (r.a = t.d)  LEFT JOIN (SELECT * FROM s) AS sub ON ((r.a = t.d) AND (t.d =2 OR (r.a = sub.c AND (true = (SELECT sub.c = t.d))))) 
+WHERE (t.d = 2 OR (r.a IN (SELECT * FROM s WHERE s.c = t.d)));
+
+
+
+-->
+
+SELECT * FROM r, t, (SELECT * FROM s) AS sub 
+	WHERE (r.a = t.d AND (t.d = 2 OR (r.a IN (SELECT * FROM s WHERE s.c = t.d)))) AND 
+	(r.a = t.d AND (t.d = 2 OR (r.a = sub.c AND (sub.c = t.d))));
+
+	
+/* Equivalence for original subquery ? */
+
+man verliert dup anzahl
+
+SELECT r.*, t.* FROM r, t, (SELECT DISTINCT s.c FROM s) AS sub 
+	WHERE (r.a = t.d AND (t.d = 2 OR (r.a = sub.c AND (sub.c = t.d))));
+	
+-->
+
+/************* new example *********************/
+
+SELECT * FROM r WHERE r.a * 5 > (SELECT sum(c) FROM s WHERE s.c >  r.a);
+
+-->
+
+SELECT * FROM r LEFT JOIN (SELECT sum(c) AS sum FROM s , (SELECT * FROM r) rsub WHERE s.c > rsub.a GROUP BY s.c) AS sub ON (r.a * 5 > sum)  WHERE r.a * 5 > (SELECT sum(c) FROM s WHERE s.c >  r.a);
+
+-->
+SELECT sum(c) AS sum FROM (SELECT DISTINCT ON (s.c) * FROM s, r WHERE s.c > r.a) AS newsub; 
+
+-->
+
+SELECT * FROM r LEFT JOIN (SELECT sum(c) AS sum, newsub.a FROM (SELECT DISTINCT ON (s.c,r.a) * FROM s, r WHERE s.c > r.a) AS newsub GROUP BY newsub.a) AS sub ON (r.a * 5 > sum AND sub.a = r.a)  WHERE r.a * 5 > (SELECT sum(c) FROM s WHERE s.c >  r.a);
+
+
+-->
+
+SELECT PROVENANCE r.a, r.b 
+FROM 
+	r 
+	LEFT JOIN 
+	(SELECT sum(c) AS sum, newsub.a FROM (SELECT DISTINCT ON (s.c,r.a) * FROM s, r WHERE s.c > r.a) AS newsub GROUP BY newsub.a) AS sub ON (r.a * 5 > sum AND sub.a = r.a)  
+WHERE r.a * 5 > (S1ELECT sum(c) FROM s WHERE s.c >  r.a);
+
+-->
+
+SELECT PROVENANCE r.a, r.b 
+FROM 
+	r 
+	LEFT JOIN 
+	(SELECT sum(c) AS sum, newsub.a FROM (SELECT DISTINCT ON (s.c,r.a) * FROM s, r WHERE s.c > r.a) AS newsub GROUP BY newsub.a) AS sub ON (r.a * 5 > sum AND sub.a = r.a)  
+WHERE r.a * 5 > (SELECT sum(c) FROM s WHERE s.c >  r.a);
+
+ c 
+---
+ 1
+ 3
+ 4
+
+  a |   b   
+---+-------
+ 1 | aber
+ 2 | hallo
+ 2 | test
+

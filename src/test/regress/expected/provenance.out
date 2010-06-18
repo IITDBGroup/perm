@@ -1,0 +1,1230 @@
+/******************************************************************************
+*******************************************************************************
+*******************************************************************************
+******* 	Table Defs     ************************************************
+*******************************************************************************
+*******************************************************************************
+******************************************************************************/
+/******************************************************************************
+******* 	real world example		   ****************************
+******************************************************************************/
+DROP TABLE IF EXISTS address CASCADE;
+NOTICE:  table "address" does not exist, skipping
+DROP TABLE IF EXISTS employee CASCADE;
+NOTICE:  table "employee" does not exist, skipping
+DROP TABLE IF EXISTS shop CASCADE;
+NOTICE:  table "shop" does not exist, skipping
+DROP TABLE IF EXISTS item CASCADE;
+NOTICE:  table "item" does not exist, skipping
+DROP TABLE IF EXISTS sales CASCADE;
+NOTICE:  table "sales" does not exist, skipping
+DROP TABLE IF EXISTS employee_works_at_shop CASCADE;
+NOTICE:  table "employee_works_at_shop" does not exist, skipping
+DROP TABLE IF EXISTS customer CASCADE;
+NOTICE:  table "customer" does not exist, skipping
+CREATE TABLE address (
+	id SERIAL,
+	city text,
+	street text,
+	number int,
+	PRIMARY KEY (id)
+	);
+NOTICE:  CREATE TABLE will create implicit sequence "address_id_seq" for serial column "address.id"
+NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "address_pkey" for table "address"
+	
+	
+CREATE TABLE employee (
+	id SERIAL,
+	first_name TEXT,
+	last_name TEXT,
+	salary int,
+	PRIMARY KEY (id)
+	);
+NOTICE:  CREATE TABLE will create implicit sequence "employee_id_seq" for serial column "employee.id"
+NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "employee_pkey" for table "employee"
+	
+CREATE TABLE shop (
+	id serial,
+	name text,
+	location_id int8,
+	manager_id int8,
+	PRIMARY KEY (id),
+	FOREIGN KEY (location_id) REFERENCES address (id),
+	FOREIGN KEY (manager_id) REFERENCES employee(id)
+	);
+NOTICE:  CREATE TABLE will create implicit sequence "shop_id_seq" for serial column "shop.id"
+NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "shop_pkey" for table "shop"
+	
+CREATE TABLE item (
+	id SERIAL,
+	name text,
+	price int,
+	cost int,
+	PRIMARY KEY (id)
+	);
+NOTICE:  CREATE TABLE will create implicit sequence "item_id_seq" for serial column "item.id"
+NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "item_pkey" for table "item"
+	
+CREATE TABLE sales (
+	item_id int8,
+	shop_id int8,
+	number_items int,
+	sales_date DATE,
+	PRIMARY KEY (shop_id, item_id, sales_date),
+	FOREIGN KEY (shop_id) REFERENCES shop (id),
+	FOREIGN KEY (item_id) REFERENCES item (id)
+	);
+NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "sales_pkey" for table "sales"
+	
+	
+CREATE TABLE employee_works_at_shop (
+	employee_id int8,
+	shop_id int8,
+	PRIMARY KEY (employee_id, shop_id),
+	FOREIGN KEY (employee_id) REFERENCES employee (id),
+	FOREIGN KEY (shop_id) REFERENCES shop (id)
+	);
+NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "employee_works_at_shop_pkey" for table "employee_works_at_shop"
+	
+CREATE TABLE customer (
+	customer_id SERIAL,
+	name text,
+	address_id int8,
+	PRIMARY KEY (customer_id),
+	FOREIGN KEY (address_id) REFERENCES address (id)
+	);
+NOTICE:  CREATE TABLE will create implicit sequence "customer_customer_id_seq" for serial column "customer.customer_id"
+NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "customer_pkey" for table "customer"
+	
+	
+/******************************************************************************
+******* 	real world example data		   ****************************
+******************************************************************************/
+/**** address *****/
+INSERT INTO address VALUES (DEFAULT, 'Zürich','Sihlquai',155);
+INSERT INTO address VALUES (DEFAULT, 'Zürich','Altstettener Strasse',25);
+INSERT INTO address VALUES (DEFAULT, 'Basel','Birmannsgasse',5);
+INSERT INTO address VALUES (DEFAULT, 'Bern','Bernerstrasse',109);
+INSERT INTO address VALUES (DEFAULT, 'Zürich','Kundenstrasse',23);
+INSERT INTO address VALUES (DEFAULT, 'Luzern','Hallostrasse',23);
+INSERT INTO address VALUES (DEFAULT, 'Basel','Baumweg',23);
+INSERT INTO address VALUES (DEFAULT, 'Basel','Missionsstrasse',24);
+/****** employee **/
+INSERT INTO employee VALUES (DEFAULT, 'Peter', 'Meter', 10000);
+INSERT INTO employee VALUES (DEFAULT, 'Getrud', 'Müller', 8000);
+INSERT INTO employee VALUES (DEFAULT, 'Heinz', 'Heller', 15000);
+INSERT INTO employee VALUES (DEFAULT, 'Fritz', 'Knoten', 9000);
+INSERT INTO employee VALUES (DEFAULT, 'Boris', 'Heinzer', 5000);
+INSERT INTO employee VALUES (DEFAULT, 'Gert', 'Gertsen', 12000);
+INSERT INTO employee VALUES (DEFAULT, 'Doris', 'Dorissen', 3000);
+INSERT INTO employee VALUES (DEFAULT, 'Walter', 'Ott', 2000);
+/***** shop *******/
+INSERT INTO shop VALUES (DEFAULT, 'Zürich city', 1,1);
+INSERT INTO shop VALUES (DEFAULT, 'Zürich Altstetten', 2,2);
+INSERT INTO shop VALUES (DEFAULT, 'Basel', 3,3);
+INSERT INTO shop VALUES (DEFAULT, 'Bern', 4,4);
+/******* employee working at shop ******/
+INSERT INTO employee_works_at_shop VALUES (1,1);
+INSERT INTO employee_works_at_shop VALUES (2,2);
+INSERT INTO employee_works_at_shop VALUES (3,3);
+INSERT INTO employee_works_at_shop VALUES (4,4);
+INSERT INTO employee_works_at_shop VALUES (5,1);
+INSERT INTO employee_works_at_shop VALUES (6,2);
+INSERT INTO employee_works_at_shop VALUES (7,2);
+INSERT INTO employee_works_at_shop VALUES (8,3);
+/******** customer *********************/
+INSERT INTO customer VALUES (DEFAULT, 'P. Kunde', 5);
+INSERT INTO customer VALUES (DEFAULT, 'J. Kunde', 6);
+INSERT INTO customer VALUES (DEFAULT, 'B. Kunde', 7);
+INSERT INTO customer VALUES (DEFAULT, 'Q. Kunde', 8);
+/**** item *******/
+INSERT INTO item VALUES (DEFAULT, 'heckenschere', 25, 13);
+INSERT INTO item VALUES (DEFAULT, 'Rasenmäher', 599, 125);
+INSERT INTO item VALUES (DEFAULT, 'Gartenschlauch', 19, 5);
+/***** sales *****/
+INSERT INTO sales VALUES (1,1,25,'2007-01-01');
+INSERT INTO sales VALUES (1,1,11,'2007-05-01');
+INSERT INTO sales VALUES (1,2,46,'2008-01-01');
+INSERT INTO sales VALUES (1,2,2,'2008-10-01');
+INSERT INTO sales VALUES (1,3,33,'2007-01-01');
+INSERT INTO sales VALUES (1,4,20,'2007-01-01');
+INSERT INTO sales VALUES (3,1,6,'2009-01-01');
+INSERT INTO sales VALUES (3,4,100,'2009-01-01');
+INSERT INTO sales VALUES (3,4,1,'2009-01-25');
+INSERT INTO sales VALUES (3,2,13,'2007-01-01');
+INSERT INTO sales VALUES (3,2,13,'2010-01-01');
+INSERT INTO sales VALUES (3,2,3,'2003-01-15');
+INSERT INTO sales VALUES (2,1,20,'2003-01-01');
+INSERT INTO sales VALUES (2,3,1,'2002-01-01');
+INSERT INTO sales VALUES (2,4,1,'2007-01-01');
+/******************************************************************************
+******* 	set operations data and table def  ****************************
+******************************************************************************/
+DROP TABLE IF EXISTS bagdiff1 CASCADE;
+NOTICE:  table "bagdiff1" does not exist, skipping
+DROP TABLE IF EXISTS bagdiff2 CASCADE;
+NOTICE:  table "bagdiff2" does not exist, skipping
+DROP TABLE IF EXISTS bagdiff3 CASCADE;
+NOTICE:  table "bagdiff3" does not exist, skipping
+DROP TABLE IF EXISTS bagdiff4 CASCADE;
+NOTICE:  table "bagdiff4" does not exist, skipping
+CREATE TABLE bagdiff1 (
+	id int
+	);
+	
+INSERT INTO bagdiff1 VALUES (1);
+INSERT INTO bagdiff1 VALUES (1);
+CREATE TABLE bagdiff2 (
+	id int
+	);
+INSERT INTO bagdiff2 VALUES (1);
+	
+CREATE TABLE bagdiff3 (
+	id int
+	);
+INSERT INTO bagdiff3 VALUES (1);
+INSERT INTO bagdiff3 VALUES (1);
+INSERT INTO bagdiff3 VALUES (2);
+INSERT INTO bagdiff3 VALUES (3);
+CREATE TABLE bagdiff4 (
+	id int,
+	nonnu int
+	);
+INSERT INTO bagdiff4 VALUES (1,100);
+INSERT INTO bagdiff4 VALUES (1,100);
+INSERT INTO bagdiff4 VALUES (null,100);
+INSERT INTO bagdiff4 VALUES (null,100);
+/******************************************************************************
+******* 	SPJ and A data and table def	   ****************************
+******************************************************************************/
+DROP TABLE IF EXISTS muchcols CASCADE;
+NOTICE:  table "muchcols" does not exist, skipping
+CREATE TABLE muchcols (
+	one int,
+	two text,
+	three date,
+	four int8,
+	five text,
+	PRIMARY KEY (one, two)
+	);
+NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "muchcols_pkey" for table "muchcols"
+	
+INSERT INTO muchcols VALUES (1,'first','2007-01-01'::date, 4321212123545,'hello world');
+INSERT INTO muchcols VALUES (2,'second','2007-01-01'::date, 9898989,'hello');
+INSERT INTO muchcols VALUES (2,'third','2007-01-01'::date, 212123545,'world');
+INSERT INTO muchcols VALUES (3,'fourth','2007-01-01'::date, 12,'hhhhhhhh');
+/******************************************************************************
+******* 	unusual SQL features		   ****************************
+******************************************************************************/
+DROP TABLE IF EXISTS arraytest;
+NOTICE:  table "arraytest" does not exist, skipping
+DROP TABLE IF EXISTS structtest;
+NOTICE:  table "structtest" does not exist, skipping
+DROP TYPE IF EXISTS testtype;
+NOTICE:  type "testtype" does not exist, skipping
+-- struct
+CREATE TYPE testtype AS (
+	one int,
+	two text,
+	three int);
+	
+CREATE TABLE structtest (
+	one int,
+	two testtype);
+INSERT INTO structtest VALUES (1, '(1,"hello",1)');
+INSERT INTO structtest VALUES (2, '(2,"hello",1)');
+INSERT INTO structtest VALUES (3, '(3,"hello",2)');
+	
+-- array
+CREATE TABLE arraytest (
+	id int,
+	arr int[]
+	);
+	
+INSERT INTO arraytest VALUES (1, '{1,2,3}');
+INSERT INTO arraytest VALUES (2, '{2,4,5,6}');
+-- function calls
+/******************************************************************************
+******* 	views				   ****************************
+******************************************************************************/
+DROP VIEW IF EXISTS bagdiffivew;
+NOTICE:  view "bagdiffivew" does not exist, skipping
+DROP VIEW IF EXISTS complexview;
+NOTICE:  view "complexview" does not exist, skipping
+DROP VIEW IF EXISTS provview1;
+NOTICE:  view "provview1" does not exist, skipping
+CREATE VIEW bagdiffview AS SELECT * FROM bagdiff1;
+CREATE VIEW complexview AS SELECT m.one FROM muchcol m, (SELECT  * FROM bagdiff3) AS bag WHERE m.one >= bag.id;
+ERROR:  relation "muchcol" does not exist
+CREATE VIEW provview1 AS SELECT PROVENANCE * FROM bagdiff1;
+CREATE VIEW provview2 AS 
+	SELECT PROVENANCE zushop.name, topshots.last_name 
+	FROM (SELECT * FROM employee WHERE salary > 10000) AS topshots,
+		(SELECT * FROM shop WHERE shop.name LIKE '%Z%rich%') AS zushop, 
+		employee_works_at_shop wo
+	WHERE topshots.id = wo.employee_id
+		AND zushop.id = wo.shop_id;
+/******************************************************************************
+*******************************************************************************
+*******************************************************************************
+******* 	Queries		***********************************************
+*******************************************************************************
+*******************************************************************************
+******************************************************************************/
+/******************************************************************************
+******* 	SP Queries			   ****************************
+******************************************************************************/
+SELECT PROVENANCE * FROM bagdiff1;
+ id | prov_public_bagdiff1_id 
+----+-------------------------
+  1 |                       1
+  1 |                       1
+(2 rows)
+
+SELECT PROVENANCE one, four FROM muchcols WHERE one > 1;
+ one |   four    | prov_public_muchcols_one | prov_public_muchcols_two | prov_public_muchcols_three | prov_public_muchcols_four | prov_public_muchcols_five 
+-----+-----------+--------------------------+--------------------------+----------------------------+---------------------------+---------------------------
+   2 |   9898989 |                        2 | second                   | 01-01-2007                 |                   9898989 | hello
+   2 | 212123545 |                        2 | third                    | 01-01-2007                 |                 212123545 | world
+   3 |        12 |                        3 | fourth                   | 01-01-2007                 |                        12 | hhhhhhhh
+(3 rows)
+
+SELECT PROVENANCE (one * 100) AS res, two || four, (one * four) AS times FROM muchcols WHERE NOT (one > 1 AND five LIKE '%hhhh%');
+ res |      ?column?      |     times     | prov_public_muchcols_one | prov_public_muchcols_two | prov_public_muchcols_three | prov_public_muchcols_four | prov_public_muchcols_five 
+-----+--------------------+---------------+--------------------------+--------------------------+----------------------------+---------------------------+---------------------------
+ 100 | first4321212123545 | 4321212123545 |                        1 | first                    | 01-01-2007                 |             4321212123545 | hello world
+ 200 | second9898989      |      19797978 |                        2 | second                   | 01-01-2007                 |                   9898989 | hello
+ 200 | third212123545     |     424247090 |                        2 | third                    | 01-01-2007                 |                 212123545 | world
+(3 rows)
+
+/******************************************************************************
+******* 	SPJ Queries			   ****************************
+******************************************************************************/
+-- unrestricted join with projection
+SELECT PROVENANCE a.one, b.two FROM muchcols a, muchcols b;
+ one |  two   | prov_public_muchcols_one | prov_public_muchcols_two | prov_public_muchcols_three | prov_public_muchcols_four | prov_public_muchcols_five | prov_public_muchcols_1_one | prov_public_muchcols_1_two | prov_public_muchcols_1_three | prov_public_muchcols_1_four | prov_public_muchcols_1_five 
+-----+--------+--------------------------+--------------------------+----------------------------+---------------------------+---------------------------+----------------------------+----------------------------+------------------------------+-----------------------------+-----------------------------
+   1 | first  |                        1 | first                    | 01-01-2007                 |             4321212123545 | hello world               |                          1 | first                      | 01-01-2007                   |               4321212123545 | hello world
+   1 | second |                        1 | first                    | 01-01-2007                 |             4321212123545 | hello world               |                          2 | second                     | 01-01-2007                   |                     9898989 | hello
+   1 | third  |                        1 | first                    | 01-01-2007                 |             4321212123545 | hello world               |                          2 | third                      | 01-01-2007                   |                   212123545 | world
+   1 | fourth |                        1 | first                    | 01-01-2007                 |             4321212123545 | hello world               |                          3 | fourth                     | 01-01-2007                   |                          12 | hhhhhhhh
+   2 | first  |                        2 | second                   | 01-01-2007                 |                   9898989 | hello                     |                          1 | first                      | 01-01-2007                   |               4321212123545 | hello world
+   2 | second |                        2 | second                   | 01-01-2007                 |                   9898989 | hello                     |                          2 | second                     | 01-01-2007                   |                     9898989 | hello
+   2 | third  |                        2 | second                   | 01-01-2007                 |                   9898989 | hello                     |                          2 | third                      | 01-01-2007                   |                   212123545 | world
+   2 | fourth |                        2 | second                   | 01-01-2007                 |                   9898989 | hello                     |                          3 | fourth                     | 01-01-2007                   |                          12 | hhhhhhhh
+   2 | first  |                        2 | third                    | 01-01-2007                 |                 212123545 | world                     |                          1 | first                      | 01-01-2007                   |               4321212123545 | hello world
+   2 | second |                        2 | third                    | 01-01-2007                 |                 212123545 | world                     |                          2 | second                     | 01-01-2007                   |                     9898989 | hello
+   2 | third  |                        2 | third                    | 01-01-2007                 |                 212123545 | world                     |                          2 | third                      | 01-01-2007                   |                   212123545 | world
+   2 | fourth |                        2 | third                    | 01-01-2007                 |                 212123545 | world                     |                          3 | fourth                     | 01-01-2007                   |                          12 | hhhhhhhh
+   3 | first  |                        3 | fourth                   | 01-01-2007                 |                        12 | hhhhhhhh                  |                          1 | first                      | 01-01-2007                   |               4321212123545 | hello world
+   3 | second |                        3 | fourth                   | 01-01-2007                 |                        12 | hhhhhhhh                  |                          2 | second                     | 01-01-2007                   |                     9898989 | hello
+   3 | third  |                        3 | fourth                   | 01-01-2007                 |                        12 | hhhhhhhh                  |                          2 | third                      | 01-01-2007                   |                   212123545 | world
+   3 | fourth |                        3 | fourth                   | 01-01-2007                 |                        12 | hhhhhhhh                  |                          3 | fourth                     | 01-01-2007                   |                          12 | hhhhhhhh
+(16 rows)
+
+-- equality join
+SELECT PROVENANCE a.one, b.two FROM muchcols a, muchcols b WHERE a.one = b.one;
+ one |  two   | prov_public_muchcols_one | prov_public_muchcols_two | prov_public_muchcols_three | prov_public_muchcols_four | prov_public_muchcols_five | prov_public_muchcols_1_one | prov_public_muchcols_1_two | prov_public_muchcols_1_three | prov_public_muchcols_1_four | prov_public_muchcols_1_five 
+-----+--------+--------------------------+--------------------------+----------------------------+---------------------------+---------------------------+----------------------------+----------------------------+------------------------------+-----------------------------+-----------------------------
+   1 | first  |                        1 | first                    | 01-01-2007                 |             4321212123545 | hello world               |                          1 | first                      | 01-01-2007                   |               4321212123545 | hello world
+   2 | third  |                        2 | second                   | 01-01-2007                 |                   9898989 | hello                     |                          2 | third                      | 01-01-2007                   |                   212123545 | world
+   2 | second |                        2 | second                   | 01-01-2007                 |                   9898989 | hello                     |                          2 | second                     | 01-01-2007                   |                     9898989 | hello
+   2 | third  |                        2 | third                    | 01-01-2007                 |                 212123545 | world                     |                          2 | third                      | 01-01-2007                   |                   212123545 | world
+   2 | second |                        2 | third                    | 01-01-2007                 |                 212123545 | world                     |                          2 | second                     | 01-01-2007                   |                     9898989 | hello
+   3 | fourth |                        3 | fourth                   | 01-01-2007                 |                        12 | hhhhhhhh                  |                          3 | fourth                     | 01-01-2007                   |                          12 | hhhhhhhh
+(6 rows)
+
+SELECT PROVENANCE a.one, b.* FROM muchcols a, muchcols b WHERE a.one = b.one AND a.two = b.two;
+ one | one |  two   |   three    |     four      |    five     | prov_public_muchcols_one | prov_public_muchcols_two | prov_public_muchcols_three | prov_public_muchcols_four | prov_public_muchcols_five | prov_public_muchcols_1_one | prov_public_muchcols_1_two | prov_public_muchcols_1_three | prov_public_muchcols_1_four | prov_public_muchcols_1_five 
+-----+-----+--------+------------+---------------+-------------+--------------------------+--------------------------+----------------------------+---------------------------+---------------------------+----------------------------+----------------------------+------------------------------+-----------------------------+-----------------------------
+   1 |   1 | first  | 01-01-2007 | 4321212123545 | hello world |                        1 | first                    | 01-01-2007                 |             4321212123545 | hello world               |                          1 | first                      | 01-01-2007                   |               4321212123545 | hello world
+   2 |   2 | second | 01-01-2007 |       9898989 | hello       |                        2 | second                   | 01-01-2007                 |                   9898989 | hello                     |                          2 | second                     | 01-01-2007                   |                     9898989 | hello
+   2 |   2 | third  | 01-01-2007 |     212123545 | world       |                        2 | third                    | 01-01-2007                 |                 212123545 | world                     |                          2 | third                      | 01-01-2007                   |                   212123545 | world
+   3 |   3 | fourth | 01-01-2007 |            12 | hhhhhhhh    |                        3 | fourth                   | 01-01-2007                 |                        12 | hhhhhhhh                  |                          3 | fourth                     | 01-01-2007                   |                          12 | hhhhhhhh
+(4 rows)
+
+-- theta join
+SELECT PROVENANCE a.one, b.two FROM muchcols a, muchcols b WHERE a.one = b.one AND b.four < a.four AND a.five LIKE '%w%';
+ one |  two   | prov_public_muchcols_one | prov_public_muchcols_two | prov_public_muchcols_three | prov_public_muchcols_four | prov_public_muchcols_five | prov_public_muchcols_1_one | prov_public_muchcols_1_two | prov_public_muchcols_1_three | prov_public_muchcols_1_four | prov_public_muchcols_1_five 
+-----+--------+--------------------------+--------------------------+----------------------------+---------------------------+---------------------------+----------------------------+----------------------------+------------------------------+-----------------------------+-----------------------------
+   2 | second |                        2 | third                    | 01-01-2007                 |                 212123545 | world                     |                          2 | second                     | 01-01-2007                   |                     9898989 | hello
+(1 row)
+
+-- sub queries
+SELECT PROVENANCE zushop.name, topshots.last_name 
+	FROM (SELECT * FROM employee WHERE salary > 10000) AS topshots,
+		(SELECT * FROM shop WHERE shop.name LIKE '%Z%rich%') AS zushop, 
+		employee_works_at_shop wo
+	WHERE topshots.id = wo.employee_id
+		AND zushop.id = wo.shop_id;
+        name        | last_name | prov_public_employee_id | prov_public_employee_first_name | prov_public_employee_last_name | prov_public_employee_salary | prov_public_shop_id | prov_public_shop_name | prov_public_shop_location_id | prov_public_shop_manager_id | prov_public_employee_works_at_shop_employee_id | prov_public_employee_works_at_shop_shop_id 
+--------------------+-----------+-------------------------+---------------------------------+--------------------------------+-----------------------------+---------------------+-----------------------+------------------------------+-----------------------------+------------------------------------------------+--------------------------------------------
+ Zürich Altstetten | Gertsen   |                       6 | Gert                            | Gertsen                        |                       12000 |                   2 | Zürich Altstetten    |                            2 |                           2 |                                              6 |                                          2
+(1 row)
+
+		
+/******************************************************************************
+******* 	SP Setsem queries			   ****************************
+******************************************************************************/		
+SELECT PROVENANCE DISTINCT * FROM muchcols;
+ one |  two   |   three    |     four      |    five     | prov_public_muchcols_one | prov_public_muchcols_two | prov_public_muchcols_three | prov_public_muchcols_four | prov_public_muchcols_five 
+-----+--------+------------+---------------+-------------+--------------------------+--------------------------+----------------------------+---------------------------+---------------------------
+   1 | first  | 01-01-2007 | 4321212123545 | hello world |                        1 | first                    | 01-01-2007                 |             4321212123545 | hello world
+   2 | second | 01-01-2007 |       9898989 | hello       |                        2 | second                   | 01-01-2007                 |                   9898989 | hello
+   2 | third  | 01-01-2007 |     212123545 | world       |                        2 | third                    | 01-01-2007                 |                 212123545 | world
+   3 | fourth | 01-01-2007 |            12 | hhhhhhhh    |                        3 | fourth                   | 01-01-2007                 |                        12 | hhhhhhhh
+(4 rows)
+
+SELECT PROVENANCE DISTINCT * FROM bagdiff3;
+ id | prov_public_bagdiff3_id 
+----+-------------------------
+  1 |                       1
+  2 |                       2
+  3 |                       3
+(3 rows)
+
+SELECT PROVENANCE DISTINCT one, four FROM muchcols WHERE one > 1;
+ one |   four    | prov_public_muchcols_one | prov_public_muchcols_two | prov_public_muchcols_three | prov_public_muchcols_four | prov_public_muchcols_five 
+-----+-----------+--------------------------+--------------------------+----------------------------+---------------------------+---------------------------
+   2 |   9898989 |                        2 | second                   | 01-01-2007                 |                   9898989 | hello
+   2 | 212123545 |                        2 | third                    | 01-01-2007                 |                 212123545 | world
+   3 |        12 |                        3 | fourth                   | 01-01-2007                 |                        12 | hhhhhhhh
+(3 rows)
+
+SELECT PROVENANCE DISTINCT (one * 100) AS res, two || four, (one * four) AS times FROM muchcols WHERE NOT (one > 1 AND five LIKE '%hhhh%');
+ res |      ?column?      |     times     | prov_public_muchcols_one | prov_public_muchcols_two | prov_public_muchcols_three | prov_public_muchcols_four | prov_public_muchcols_five 
+-----+--------------------+---------------+--------------------------+--------------------------+----------------------------+---------------------------+---------------------------
+ 100 | first4321212123545 | 4321212123545 |                        1 | first                    | 01-01-2007                 |             4321212123545 | hello world
+ 200 | second9898989      |      19797978 |                        2 | second                   | 01-01-2007                 |                   9898989 | hello
+ 200 | third212123545     |     424247090 |                        2 | third                    | 01-01-2007                 |                 212123545 | world
+(3 rows)
+
+/******************************************************************************
+******* 	SPJ Setsem queries			   ****************************
+******************************************************************************/		
+-- unrestricted join with projection
+SELECT PROVENANCE DISTINCT a.one, b.two FROM muchcols a, muchcols b;
+ one |  two   | prov_public_muchcols_one | prov_public_muchcols_two | prov_public_muchcols_three | prov_public_muchcols_four | prov_public_muchcols_five | prov_public_muchcols_1_one | prov_public_muchcols_1_two | prov_public_muchcols_1_three | prov_public_muchcols_1_four | prov_public_muchcols_1_five 
+-----+--------+--------------------------+--------------------------+----------------------------+---------------------------+---------------------------+----------------------------+----------------------------+------------------------------+-----------------------------+-----------------------------
+   1 | first  |                        1 | first                    | 01-01-2007                 |             4321212123545 | hello world               |                          1 | first                      | 01-01-2007                   |               4321212123545 | hello world
+   1 | fourth |                        1 | first                    | 01-01-2007                 |             4321212123545 | hello world               |                          3 | fourth                     | 01-01-2007                   |                          12 | hhhhhhhh
+   1 | second |                        1 | first                    | 01-01-2007                 |             4321212123545 | hello world               |                          2 | second                     | 01-01-2007                   |                     9898989 | hello
+   1 | third  |                        1 | first                    | 01-01-2007                 |             4321212123545 | hello world               |                          2 | third                      | 01-01-2007                   |                   212123545 | world
+   2 | first  |                        2 | third                    | 01-01-2007                 |                 212123545 | world                     |                          1 | first                      | 01-01-2007                   |               4321212123545 | hello world
+   2 | first  |                        2 | second                   | 01-01-2007                 |                   9898989 | hello                     |                          1 | first                      | 01-01-2007                   |               4321212123545 | hello world
+   2 | fourth |                        2 | second                   | 01-01-2007                 |                   9898989 | hello                     |                          3 | fourth                     | 01-01-2007                   |                          12 | hhhhhhhh
+   2 | fourth |                        2 | third                    | 01-01-2007                 |                 212123545 | world                     |                          3 | fourth                     | 01-01-2007                   |                          12 | hhhhhhhh
+   2 | second |                        2 | second                   | 01-01-2007                 |                   9898989 | hello                     |                          2 | second                     | 01-01-2007                   |                     9898989 | hello
+   2 | second |                        2 | third                    | 01-01-2007                 |                 212123545 | world                     |                          2 | second                     | 01-01-2007                   |                     9898989 | hello
+   2 | third  |                        2 | second                   | 01-01-2007                 |                   9898989 | hello                     |                          2 | third                      | 01-01-2007                   |                   212123545 | world
+   2 | third  |                        2 | third                    | 01-01-2007                 |                 212123545 | world                     |                          2 | third                      | 01-01-2007                   |                   212123545 | world
+   3 | first  |                        3 | fourth                   | 01-01-2007                 |                        12 | hhhhhhhh                  |                          1 | first                      | 01-01-2007                   |               4321212123545 | hello world
+   3 | fourth |                        3 | fourth                   | 01-01-2007                 |                        12 | hhhhhhhh                  |                          3 | fourth                     | 01-01-2007                   |                          12 | hhhhhhhh
+   3 | second |                        3 | fourth                   | 01-01-2007                 |                        12 | hhhhhhhh                  |                          2 | second                     | 01-01-2007                   |                     9898989 | hello
+   3 | third  |                        3 | fourth                   | 01-01-2007                 |                        12 | hhhhhhhh                  |                          2 | third                      | 01-01-2007                   |                   212123545 | world
+(16 rows)
+
+-- equality join
+SELECT PROVENANCE DISTINCT a.one, b.two FROM muchcols a, muchcols b WHERE a.one = b.one;
+ one |  two   | prov_public_muchcols_one | prov_public_muchcols_two | prov_public_muchcols_three | prov_public_muchcols_four | prov_public_muchcols_five | prov_public_muchcols_1_one | prov_public_muchcols_1_two | prov_public_muchcols_1_three | prov_public_muchcols_1_four | prov_public_muchcols_1_five 
+-----+--------+--------------------------+--------------------------+----------------------------+---------------------------+---------------------------+----------------------------+----------------------------+------------------------------+-----------------------------+-----------------------------
+   1 | first  |                        1 | first                    | 01-01-2007                 |             4321212123545 | hello world               |                          1 | first                      | 01-01-2007                   |               4321212123545 | hello world
+   2 | second |                        2 | second                   | 01-01-2007                 |                   9898989 | hello                     |                          2 | second                     | 01-01-2007                   |                     9898989 | hello
+   2 | second |                        2 | third                    | 01-01-2007                 |                 212123545 | world                     |                          2 | second                     | 01-01-2007                   |                     9898989 | hello
+   2 | third  |                        2 | second                   | 01-01-2007                 |                   9898989 | hello                     |                          2 | third                      | 01-01-2007                   |                   212123545 | world
+   2 | third  |                        2 | third                    | 01-01-2007                 |                 212123545 | world                     |                          2 | third                      | 01-01-2007                   |                   212123545 | world
+   3 | fourth |                        3 | fourth                   | 01-01-2007                 |                        12 | hhhhhhhh                  |                          3 | fourth                     | 01-01-2007                   |                          12 | hhhhhhhh
+(6 rows)
+
+SELECT PROVENANCE DISTINCT  a.one, b.* FROM muchcols a, muchcols b WHERE a.one = b.one AND a.two = b.two;
+ one | one |  two   |   three    |     four      |    five     | prov_public_muchcols_one | prov_public_muchcols_two | prov_public_muchcols_three | prov_public_muchcols_four | prov_public_muchcols_five | prov_public_muchcols_1_one | prov_public_muchcols_1_two | prov_public_muchcols_1_three | prov_public_muchcols_1_four | prov_public_muchcols_1_five 
+-----+-----+--------+------------+---------------+-------------+--------------------------+--------------------------+----------------------------+---------------------------+---------------------------+----------------------------+----------------------------+------------------------------+-----------------------------+-----------------------------
+   1 |   1 | first  | 01-01-2007 | 4321212123545 | hello world |                        1 | first                    | 01-01-2007                 |             4321212123545 | hello world               |                          1 | first                      | 01-01-2007                   |               4321212123545 | hello world
+   2 |   2 | second | 01-01-2007 |       9898989 | hello       |                        2 | second                   | 01-01-2007                 |                   9898989 | hello                     |                          2 | second                     | 01-01-2007                   |                     9898989 | hello
+   2 |   2 | third  | 01-01-2007 |     212123545 | world       |                        2 | third                    | 01-01-2007                 |                 212123545 | world                     |                          2 | third                      | 01-01-2007                   |                   212123545 | world
+   3 |   3 | fourth | 01-01-2007 |            12 | hhhhhhhh    |                        3 | fourth                   | 01-01-2007                 |                        12 | hhhhhhhh                  |                          3 | fourth                     | 01-01-2007                   |                          12 | hhhhhhhh
+(4 rows)
+
+-- theta join
+SELECT PROVENANCE DISTINCT a.one, b.two FROM muchcols a, muchcols b WHERE a.one = b.one AND b.four < a.four AND a.five LIKE '%w%';
+ one |  two   | prov_public_muchcols_one | prov_public_muchcols_two | prov_public_muchcols_three | prov_public_muchcols_four | prov_public_muchcols_five | prov_public_muchcols_1_one | prov_public_muchcols_1_two | prov_public_muchcols_1_three | prov_public_muchcols_1_four | prov_public_muchcols_1_five 
+-----+--------+--------------------------+--------------------------+----------------------------+---------------------------+---------------------------+----------------------------+----------------------------+------------------------------+-----------------------------+-----------------------------
+   2 | second |                        2 | third                    | 01-01-2007                 |                 212123545 | world                     |                          2 | second                     | 01-01-2007                   |                     9898989 | hello
+(1 row)
+
+-- sub queries
+SELECT PROVENANCE DISTINCT zushop.name, topshots.last_name 
+	FROM (SELECT * FROM employee WHERE salary > 10000) AS topshots,
+		(SELECT * FROM shop WHERE shop.name LIKE '%Z%rich%') AS zushop, 
+		employee_works_at_shop wo
+	WHERE topshots.id = wo.employee_id
+		AND zushop.id = wo.shop_id;
+        name        | last_name | prov_public_employee_id | prov_public_employee_first_name | prov_public_employee_last_name | prov_public_employee_salary | prov_public_shop_id | prov_public_shop_name | prov_public_shop_location_id | prov_public_shop_manager_id | prov_public_employee_works_at_shop_employee_id | prov_public_employee_works_at_shop_shop_id 
+--------------------+-----------+-------------------------+---------------------------------+--------------------------------+-----------------------------+---------------------+-----------------------+------------------------------+-----------------------------+------------------------------------------------+--------------------------------------------
+ Zürich Altstetten | Gertsen   |                       6 | Gert                            | Gertsen                        |                       12000 |                   2 | Zürich Altstetten    |                            2 |                           2 |                                              6 |                                          2
+(1 row)
+
+		
+/******************************************************************************
+******* 	aggregation queries *******************************************
+******************************************************************************/
+SELECT PROVENANCE sum(one) FROM muchcols;
+ sum | prov_public_muchcols_one | prov_public_muchcols_two | prov_public_muchcols_three | prov_public_muchcols_four | prov_public_muchcols_five 
+-----+--------------------------+--------------------------+----------------------------+---------------------------+---------------------------
+   8 |                        1 | first                    | 01-01-2007                 |             4321212123545 | hello world
+   8 |                        2 | second                   | 01-01-2007                 |                   9898989 | hello
+   8 |                        2 | third                    | 01-01-2007                 |                 212123545 | world
+   8 |                        3 | fourth                   | 01-01-2007                 |                        12 | hhhhhhhh
+(4 rows)
+
+SELECT PROVENANCE sum(four) FROM muchcols GROUP BY one;
+      sum      | prov_public_muchcols_one | prov_public_muchcols_two | prov_public_muchcols_three | prov_public_muchcols_four | prov_public_muchcols_five 
+---------------+--------------------------+--------------------------+----------------------------+---------------------------+---------------------------
+ 4321212123545 |                        1 | first                    | 01-01-2007                 |             4321212123545 | hello world
+     222022534 |                        2 | second                   | 01-01-2007                 |                   9898989 | hello
+     222022534 |                        2 | third                    | 01-01-2007                 |                 212123545 | world
+            12 |                        3 | fourth                   | 01-01-2007                 |                        12 | hhhhhhhh
+(4 rows)
+
+SELECT PROVENANCE sum(four) AS sum FROM muchcols GROUP BY one HAVING sum(four) > 1000;
+      sum      | prov_public_muchcols_one | prov_public_muchcols_two | prov_public_muchcols_three | prov_public_muchcols_four | prov_public_muchcols_five 
+---------------+--------------------------+--------------------------+----------------------------+---------------------------+---------------------------
+ 4321212123545 |                        1 | first                    | 01-01-2007                 |             4321212123545 | hello world
+     222022534 |                        2 | second                   | 01-01-2007                 |                   9898989 | hello
+     222022534 |                        2 | third                    | 01-01-2007                 |                 212123545 | world
+(3 rows)
+
+SELECT PROVENANCE sum(sump) 
+	FROM (SELECT sum(i.price) AS sump
+		FROM item i,
+			sales s
+		WHERE i.id = s.item_id
+		GROUP BY s.shop_id) AS sub;
+ sum  | prov_public_item_id | prov_public_item_name | prov_public_item_price | prov_public_item_cost | prov_public_sales_item_id | prov_public_sales_shop_id | prov_public_sales_number_items | prov_public_sales_sales_date 
+------+---------------------+-----------------------+------------------------+-----------------------+---------------------------+---------------------------+--------------------------------+------------------------------
+ 2061 |                   1 | heckenschere          |                     25 |                    13 |                         1 |                         1 |                             25 | 01-01-2007
+ 2061 |                   1 | heckenschere          |                     25 |                    13 |                         1 |                         1 |                             11 | 05-01-2007
+ 2061 |                   1 | heckenschere          |                     25 |                    13 |                         1 |                         2 |                             46 | 01-01-2008
+ 2061 |                   1 | heckenschere          |                     25 |                    13 |                         1 |                         2 |                              2 | 10-01-2008
+ 2061 |                   1 | heckenschere          |                     25 |                    13 |                         1 |                         3 |                             33 | 01-01-2007
+ 2061 |                   1 | heckenschere          |                     25 |                    13 |                         1 |                         4 |                             20 | 01-01-2007
+ 2061 |                   3 | Gartenschlauch        |                     19 |                     5 |                         3 |                         1 |                              6 | 01-01-2009
+ 2061 |                   3 | Gartenschlauch        |                     19 |                     5 |                         3 |                         4 |                            100 | 01-01-2009
+ 2061 |                   3 | Gartenschlauch        |                     19 |                     5 |                         3 |                         4 |                              1 | 01-25-2009
+ 2061 |                   3 | Gartenschlauch        |                     19 |                     5 |                         3 |                         2 |                             13 | 01-01-2007
+ 2061 |                   3 | Gartenschlauch        |                     19 |                     5 |                         3 |                         2 |                             13 | 01-01-2010
+ 2061 |                   3 | Gartenschlauch        |                     19 |                     5 |                         3 |                         2 |                              3 | 01-15-2003
+ 2061 |                   2 | Rasenmäher           |                    599 |                   125 |                         2 |                         1 |                             20 | 01-01-2003
+ 2061 |                   2 | Rasenmäher           |                    599 |                   125 |                         2 |                         3 |                              1 | 01-01-2002
+ 2061 |                   2 | Rasenmäher           |                    599 |                   125 |                         2 |                         4 |                              1 | 01-01-2007
+(15 rows)
+
+-- aggstar
+SELECT PROVENANCE count(*) FROM bagdiff3;
+ count | prov_public_bagdiff3_id 
+-------+-------------------------
+     4 |                       1
+     4 |                       1
+     4 |                       2
+     4 |                       3
+(4 rows)
+
+--aggdistinct
+SELECT PROVENANCE count(DISTINCT id) FROM bagdiff4;
+ count | prov_public_bagdiff4_id | prov_public_bagdiff4_nonnu 
+-------+-------------------------+----------------------------
+     1 |                       1 |                        100
+     1 |                       1 |                        100
+     1 |                         |                        100
+     1 |                         |                        100
+(4 rows)
+
+-- group by an many attrs
+SELECT PROVENANCE count(*) FROM muchcols GROUP BY one,two, three;
+ count | prov_public_muchcols_one | prov_public_muchcols_two | prov_public_muchcols_three | prov_public_muchcols_four | prov_public_muchcols_five 
+-------+--------------------------+--------------------------+----------------------------+---------------------------+---------------------------
+     1 |                        1 | first                    | 01-01-2007                 |             4321212123545 | hello world
+     1 |                        2 | second                   | 01-01-2007                 |                   9898989 | hello
+     1 |                        2 | third                    | 01-01-2007                 |                 212123545 | world
+     1 |                        3 | fourth                   | 01-01-2007                 |                        12 | hhhhhhhh
+(4 rows)
+
+/************* real world example aggregation queries*************************/
+-- total sale per shop
+SELECT PROVENANCE sum(sa.price) AS total_sales 
+	FROM shop sh,
+		(SELECT i.price * s.number_items AS price, shop_id FROM item i, sales s WHERE i.id = s.item_id) AS sa
+	WHERE sh.id = sa.shop_id 
+	GROUP BY sh.id;
+ total_sales | prov_public_shop_id | prov_public_shop_name | prov_public_shop_location_id | prov_public_shop_manager_id | prov_public_item_id | prov_public_item_name | prov_public_item_price | prov_public_item_cost | prov_public_sales_item_id | prov_public_sales_shop_id | prov_public_sales_number_items | prov_public_sales_sales_date 
+-------------+---------------------+-----------------------+------------------------------+-----------------------------+---------------------+-----------------------+------------------------+-----------------------+---------------------------+---------------------------+--------------------------------+------------------------------
+       12994 |                   1 | Zürich city          |                            1 |                           1 |                   1 | heckenschere          |                     25 |                    13 |                         1 |                         1 |                             25 | 01-01-2007
+       12994 |                   1 | Zürich city          |                            1 |                           1 |                   1 | heckenschere          |                     25 |                    13 |                         1 |                         1 |                             11 | 05-01-2007
+        1751 |                   2 | Zürich Altstetten    |                            2 |                           2 |                   1 | heckenschere          |                     25 |                    13 |                         1 |                         2 |                             46 | 01-01-2008
+        1751 |                   2 | Zürich Altstetten    |                            2 |                           2 |                   1 | heckenschere          |                     25 |                    13 |                         1 |                         2 |                              2 | 10-01-2008
+        1424 |                   3 | Basel                 |                            3 |                           3 |                   1 | heckenschere          |                     25 |                    13 |                         1 |                         3 |                             33 | 01-01-2007
+        3018 |                   4 | Bern                  |                            4 |                           4 |                   1 | heckenschere          |                     25 |                    13 |                         1 |                         4 |                             20 | 01-01-2007
+       12994 |                   1 | Zürich city          |                            1 |                           1 |                   3 | Gartenschlauch        |                     19 |                     5 |                         3 |                         1 |                              6 | 01-01-2009
+        3018 |                   4 | Bern                  |                            4 |                           4 |                   3 | Gartenschlauch        |                     19 |                     5 |                         3 |                         4 |                            100 | 01-01-2009
+        3018 |                   4 | Bern                  |                            4 |                           4 |                   3 | Gartenschlauch        |                     19 |                     5 |                         3 |                         4 |                              1 | 01-25-2009
+        1751 |                   2 | Zürich Altstetten    |                            2 |                           2 |                   3 | Gartenschlauch        |                     19 |                     5 |                         3 |                         2 |                             13 | 01-01-2007
+        1751 |                   2 | Zürich Altstetten    |                            2 |                           2 |                   3 | Gartenschlauch        |                     19 |                     5 |                         3 |                         2 |                             13 | 01-01-2010
+        1751 |                   2 | Zürich Altstetten    |                            2 |                           2 |                   3 | Gartenschlauch        |                     19 |                     5 |                         3 |                         2 |                              3 | 01-15-2003
+       12994 |                   1 | Zürich city          |                            1 |                           1 |                   2 | Rasenmäher           |                    599 |                   125 |                         2 |                         1 |                             20 | 01-01-2003
+        1424 |                   3 | Basel                 |                            3 |                           3 |                   2 | Rasenmäher           |                    599 |                   125 |                         2 |                         3 |                              1 | 01-01-2002
+        3018 |                   4 | Bern                  |                            4 |                           4 |                   2 | Rasenmäher           |                    599 |                   125 |                         2 |                         4 |                              1 | 01-01-2007
+(15 rows)
+
+	
+-- total profit
+SELECT PROVENANCE avg(profit) AS avg_prof 
+	FROM 
+	(SELECT (sales - costs) AS profit 
+		FROM
+		(SELECT sum(sa.price) AS sales, sh.id AS shop_id
+			FROM shop sh,
+				(SELECT i.price * s.number_items AS price, 
+					shop_id FROM item i, sales s 
+					WHERE i.id = s.item_id) AS sa
+			WHERE sh.id = sa.shop_id 
+			GROUP BY sh.id) AS sales_per_shop,
+		(SELECT sum(em.salary) AS costs, sh.id AS shop_id
+			FROM shop sh,
+				employee em,
+				employee_works_at_shop wo
+			WHERE wo.employee_id = em.id AND wo.shop_id = sh.id 
+			GROUP BY sh.id) AS costs_per_shop
+		WHERE sales_per_shop.shop_id = costs_per_shop.shop_id) as prof;
+        avg_prof         | prov_public_shop_id | prov_public_shop_name | prov_public_shop_location_id | prov_public_shop_manager_id | prov_public_item_id | prov_public_item_name | prov_public_item_price | prov_public_item_cost | prov_public_sales_item_id | prov_public_sales_shop_id | prov_public_sales_number_items | prov_public_sales_sales_date | prov_public_shop_1_id | prov_public_shop_1_name | prov_public_shop_1_location_id | prov_public_shop_1_manager_id | prov_public_employee_id | prov_public_employee_first_name | prov_public_employee_last_name | prov_public_employee_salary | prov_public_employee_works_at_shop_employee_id | prov_public_employee_works_at_shop_shop_id 
+-------------------------+---------------------+-----------------------+------------------------------+-----------------------------+---------------------+-----------------------+------------------------+-----------------------+---------------------------+---------------------------+--------------------------------+------------------------------+-----------------------+-------------------------+--------------------------------+-------------------------------+-------------------------+---------------------------------+--------------------------------+-----------------------------+------------------------------------------------+--------------------------------------------
+ -11203.2500000000000000 |                   4 | Bern                  |                            4 |                           4 |                   1 | heckenschere          |                     25 |                    13 |                         1 |                         4 |                             20 | 01-01-2007                   |                     4 | Bern                    |                              4 |                             4 |                       4 | Fritz                           | Knoten                         |                        9000 |                                              4 |                                          4
+ -11203.2500000000000000 |                   4 | Bern                  |                            4 |                           4 |                   3 | Gartenschlauch        |                     19 |                     5 |                         3 |                         4 |                            100 | 01-01-2009                   |                     4 | Bern                    |                              4 |                             4 |                       4 | Fritz                           | Knoten                         |                        9000 |                                              4 |                                          4
+ -11203.2500000000000000 |                   4 | Bern                  |                            4 |                           4 |                   3 | Gartenschlauch        |                     19 |                     5 |                         3 |                         4 |                              1 | 01-25-2009                   |                     4 | Bern                    |                              4 |                             4 |                       4 | Fritz                           | Knoten                         |                        9000 |                                              4 |                                          4
+ -11203.2500000000000000 |                   4 | Bern                  |                            4 |                           4 |                   2 | Rasenmäher           |                    599 |                   125 |                         2 |                         4 |                              1 | 01-01-2007                   |                     4 | Bern                    |                              4 |                             4 |                       4 | Fritz                           | Knoten                         |                        9000 |                                              4 |                                          4
+ -11203.2500000000000000 |                   1 | Zürich city          |                            1 |                           1 |                   1 | heckenschere          |                     25 |                    13 |                         1 |                         1 |                             25 | 01-01-2007                   |                     1 | Zürich city            |                              1 |                             1 |                       5 | Boris                           | Heinzer                        |                        5000 |                                              5 |                                          1
+ -11203.2500000000000000 |                   1 | Zürich city          |                            1 |                           1 |                   1 | heckenschere          |                     25 |                    13 |                         1 |                         1 |                             11 | 05-01-2007                   |                     1 | Zürich city            |                              1 |                             1 |                       5 | Boris                           | Heinzer                        |                        5000 |                                              5 |                                          1
+ -11203.2500000000000000 |                   1 | Zürich city          |                            1 |                           1 |                   3 | Gartenschlauch        |                     19 |                     5 |                         3 |                         1 |                              6 | 01-01-2009                   |                     1 | Zürich city            |                              1 |                             1 |                       5 | Boris                           | Heinzer                        |                        5000 |                                              5 |                                          1
+ -11203.2500000000000000 |                   1 | Zürich city          |                            1 |                           1 |                   2 | Rasenmäher           |                    599 |                   125 |                         2 |                         1 |                             20 | 01-01-2003                   |                     1 | Zürich city            |                              1 |                             1 |                       5 | Boris                           | Heinzer                        |                        5000 |                                              5 |                                          1
+ -11203.2500000000000000 |                   1 | Zürich city          |                            1 |                           1 |                   1 | heckenschere          |                     25 |                    13 |                         1 |                         1 |                             25 | 01-01-2007                   |                     1 | Zürich city            |                              1 |                             1 |                       1 | Peter                           | Meter                          |                       10000 |                                              1 |                                          1
+ -11203.2500000000000000 |                   1 | Zürich city          |                            1 |                           1 |                   1 | heckenschere          |                     25 |                    13 |                         1 |                         1 |                             11 | 05-01-2007                   |                     1 | Zürich city            |                              1 |                             1 |                       1 | Peter                           | Meter                          |                       10000 |                                              1 |                                          1
+ -11203.2500000000000000 |                   1 | Zürich city          |                            1 |                           1 |                   3 | Gartenschlauch        |                     19 |                     5 |                         3 |                         1 |                              6 | 01-01-2009                   |                     1 | Zürich city            |                              1 |                             1 |                       1 | Peter                           | Meter                          |                       10000 |                                              1 |                                          1
+ -11203.2500000000000000 |                   1 | Zürich city          |                            1 |                           1 |                   2 | Rasenmäher           |                    599 |                   125 |                         2 |                         1 |                             20 | 01-01-2003                   |                     1 | Zürich city            |                              1 |                             1 |                       1 | Peter                           | Meter                          |                       10000 |                                              1 |                                          1
+ -11203.2500000000000000 |                   3 | Basel                 |                            3 |                           3 |                   1 | heckenschere          |                     25 |                    13 |                         1 |                         3 |                             33 | 01-01-2007                   |                     3 | Basel                   |                              3 |                             3 |                       8 | Walter                          | Ott                            |                        2000 |                                              8 |                                          3
+ -11203.2500000000000000 |                   3 | Basel                 |                            3 |                           3 |                   2 | Rasenmäher           |                    599 |                   125 |                         2 |                         3 |                              1 | 01-01-2002                   |                     3 | Basel                   |                              3 |                             3 |                       8 | Walter                          | Ott                            |                        2000 |                                              8 |                                          3
+ -11203.2500000000000000 |                   3 | Basel                 |                            3 |                           3 |                   1 | heckenschere          |                     25 |                    13 |                         1 |                         3 |                             33 | 01-01-2007                   |                     3 | Basel                   |                              3 |                             3 |                       3 | Heinz                           | Heller                         |                       15000 |                                              3 |                                          3
+ -11203.2500000000000000 |                   3 | Basel                 |                            3 |                           3 |                   2 | Rasenmäher           |                    599 |                   125 |                         2 |                         3 |                              1 | 01-01-2002                   |                     3 | Basel                   |                              3 |                             3 |                       3 | Heinz                           | Heller                         |                       15000 |                                              3 |                                          3
+ -11203.2500000000000000 |                   2 | Zürich Altstetten    |                            2 |                           2 |                   1 | heckenschere          |                     25 |                    13 |                         1 |                         2 |                             46 | 01-01-2008                   |                     2 | Zürich Altstetten      |                              2 |                             2 |                       7 | Doris                           | Dorissen                       |                        3000 |                                              7 |                                          2
+ -11203.2500000000000000 |                   2 | Zürich Altstetten    |                            2 |                           2 |                   1 | heckenschere          |                     25 |                    13 |                         1 |                         2 |                              2 | 10-01-2008                   |                     2 | Zürich Altstetten      |                              2 |                             2 |                       7 | Doris                           | Dorissen                       |                        3000 |                                              7 |                                          2
+ -11203.2500000000000000 |                   2 | Zürich Altstetten    |                            2 |                           2 |                   3 | Gartenschlauch        |                     19 |                     5 |                         3 |                         2 |                             13 | 01-01-2007                   |                     2 | Zürich Altstetten      |                              2 |                             2 |                       7 | Doris                           | Dorissen                       |                        3000 |                                              7 |                                          2
+ -11203.2500000000000000 |                   2 | Zürich Altstetten    |                            2 |                           2 |                   3 | Gartenschlauch        |                     19 |                     5 |                         3 |                         2 |                             13 | 01-01-2010                   |                     2 | Zürich Altstetten      |                              2 |                             2 |                       7 | Doris                           | Dorissen                       |                        3000 |                                              7 |                                          2
+ -11203.2500000000000000 |                   2 | Zürich Altstetten    |                            2 |                           2 |                   3 | Gartenschlauch        |                     19 |                     5 |                         3 |                         2 |                              3 | 01-15-2003                   |                     2 | Zürich Altstetten      |                              2 |                             2 |                       7 | Doris                           | Dorissen                       |                        3000 |                                              7 |                                          2
+ -11203.2500000000000000 |                   2 | Zürich Altstetten    |                            2 |                           2 |                   1 | heckenschere          |                     25 |                    13 |                         1 |                         2 |                             46 | 01-01-2008                   |                     2 | Zürich Altstetten      |                              2 |                             2 |                       6 | Gert                            | Gertsen                        |                       12000 |                                              6 |                                          2
+ -11203.2500000000000000 |                   2 | Zürich Altstetten    |                            2 |                           2 |                   1 | heckenschere          |                     25 |                    13 |                         1 |                         2 |                              2 | 10-01-2008                   |                     2 | Zürich Altstetten      |                              2 |                             2 |                       6 | Gert                            | Gertsen                        |                       12000 |                                              6 |                                          2
+ -11203.2500000000000000 |                   2 | Zürich Altstetten    |                            2 |                           2 |                   3 | Gartenschlauch        |                     19 |                     5 |                         3 |                         2 |                             13 | 01-01-2007                   |                     2 | Zürich Altstetten      |                              2 |                             2 |                       6 | Gert                            | Gertsen                        |                       12000 |                                              6 |                                          2
+ -11203.2500000000000000 |                   2 | Zürich Altstetten    |                            2 |                           2 |                   3 | Gartenschlauch        |                     19 |                     5 |                         3 |                         2 |                             13 | 01-01-2010                   |                     2 | Zürich Altstetten      |                              2 |                             2 |                       6 | Gert                            | Gertsen                        |                       12000 |                                              6 |                                          2
+ -11203.2500000000000000 |                   2 | Zürich Altstetten    |                            2 |                           2 |                   3 | Gartenschlauch        |                     19 |                     5 |                         3 |                         2 |                              3 | 01-15-2003                   |                     2 | Zürich Altstetten      |                              2 |                             2 |                       6 | Gert                            | Gertsen                        |                       12000 |                                              6 |                                          2
+ -11203.2500000000000000 |                   2 | Zürich Altstetten    |                            2 |                           2 |                   1 | heckenschere          |                     25 |                    13 |                         1 |                         2 |                             46 | 01-01-2008                   |                     2 | Zürich Altstetten      |                              2 |                             2 |                       2 | Getrud                          | Müller                        |                        8000 |                                              2 |                                          2
+ -11203.2500000000000000 |                   2 | Zürich Altstetten    |                            2 |                           2 |                   1 | heckenschere          |                     25 |                    13 |                         1 |                         2 |                              2 | 10-01-2008                   |                     2 | Zürich Altstetten      |                              2 |                             2 |                       2 | Getrud                          | Müller                        |                        8000 |                                              2 |                                          2
+ -11203.2500000000000000 |                   2 | Zürich Altstetten    |                            2 |                           2 |                   3 | Gartenschlauch        |                     19 |                     5 |                         3 |                         2 |                             13 | 01-01-2007                   |                     2 | Zürich Altstetten      |                              2 |                             2 |                       2 | Getrud                          | Müller                        |                        8000 |                                              2 |                                          2
+ -11203.2500000000000000 |                   2 | Zürich Altstetten    |                            2 |                           2 |                   3 | Gartenschlauch        |                     19 |                     5 |                         3 |                         2 |                             13 | 01-01-2010                   |                     2 | Zürich Altstetten      |                              2 |                             2 |                       2 | Getrud                          | Müller                        |                        8000 |                                              2 |                                          2
+ -11203.2500000000000000 |                   2 | Zürich Altstetten    |                            2 |                           2 |                   3 | Gartenschlauch        |                     19 |                     5 |                         3 |                         2 |                              3 | 01-15-2003                   |                     2 | Zürich Altstetten      |                              2 |                             2 |                       2 | Getrud                          | Müller                        |                        8000 |                                              2 |                                          2
+(31 rows)
+
+-- compare with original result
+SELECT DISTINCT (avg_prof = orig_avg_prof) FROM 
+(SELECT PROVENANCE avg(profit) AS avg_prof 
+	FROM 
+	(SELECT (sales - costs) AS profit 
+		FROM
+		(SELECT sum(sa.price) AS sales, sh.id AS shop_id
+			FROM shop sh,
+				(SELECT i.price * s.number_items AS price, 
+					shop_id FROM item i, sales s 
+					WHERE i.id = s.item_id) AS sa
+			WHERE sh.id = sa.shop_id 
+			GROUP BY sh.id) AS sales_per_shop,
+		(SELECT sum(em.salary) AS costs, sh.id AS shop_id
+			FROM shop sh,
+				employee em,
+				employee_works_at_shop wo
+			WHERE wo.employee_id = em.id AND wo.shop_id = sh.id 
+			GROUP BY sh.id) AS costs_per_shop
+		WHERE sales_per_shop.shop_id = costs_per_shop.shop_id) as prof
+	) AS prov,
+(SELECT avg(profit) AS orig_avg_prof 
+	FROM 
+	(SELECT (sales - costs) AS profit 
+		FROM
+		(SELECT sum(sa.price) AS sales, sh.id AS shop_id
+			FROM shop sh,
+				(SELECT i.price * s.number_items AS price,
+					shop_id FROM item i, sales s 
+					WHERE i.id = s.item_id) AS sa
+			WHERE sh.id = sa.shop_id 
+			GROUP BY sh.id) AS sales_per_shop,
+		(SELECT sum(em.salary) AS costs, sh.id AS shop_id
+			FROM shop sh,
+				employee em,
+				employee_works_at_shop wo
+			WHERE wo.employee_id = em.id AND wo.shop_id = sh.id 
+			GROUP BY sh.id) AS costs_per_shop
+		WHERE sales_per_shop.shop_id = costs_per_shop.shop_id) as prof
+	) AS orig;
+ ?column? 
+----------
+ t
+(1 row)
+
+/************* setsem aggregation queries*************************/
+SELECT PROVENANCE DISTINCT sum(id) FROM employee;		
+ sum | prov_public_employee_id | prov_public_employee_first_name | prov_public_employee_last_name | prov_public_employee_salary 
+-----+-------------------------+---------------------------------+--------------------------------+-----------------------------
+  36 |                       1 | Peter                           | Meter                          |                       10000
+  36 |                       2 | Getrud                          | Müller                        |                        8000
+  36 |                       3 | Heinz                           | Heller                         |                       15000
+  36 |                       4 | Fritz                           | Knoten                         |                        9000
+  36 |                       5 | Boris                           | Heinzer                        |                        5000
+  36 |                       6 | Gert                            | Gertsen                        |                       12000
+  36 |                       7 | Doris                           | Dorissen                       |                        3000
+  36 |                       8 | Walter                          | Ott                            |                        2000
+(8 rows)
+
+SELECT PROVENANCE DISTINCT * FROM (SELECT sum(id) FROM employee) AS sub;
+ sum | prov_public_employee_id | prov_public_employee_first_name | prov_public_employee_last_name | prov_public_employee_salary 
+-----+-------------------------+---------------------------------+--------------------------------+-----------------------------
+  36 |                       1 | Peter                           | Meter                          |                       10000
+  36 |                       2 | Getrud                          | Müller                        |                        8000
+  36 |                       3 | Heinz                           | Heller                         |                       15000
+  36 |                       4 | Fritz                           | Knoten                         |                        9000
+  36 |                       5 | Boris                           | Heinzer                        |                        5000
+  36 |                       6 | Gert                            | Gertsen                        |                       12000
+  36 |                       7 | Doris                           | Dorissen                       |                        3000
+  36 |                       8 | Walter                          | Ott                            |                        2000
+(8 rows)
+
+/******************************************************************************
+******* 	set operation Queries		   ****************************
+******************************************************************************/
+/************* set diff queries				**********************/
+SELECT PROVENANCE * FROM (SELECT * FROM bagdiff1 EXCEPT ALL SELECT * FROM bagdiff2) AS sub;
+ id | prov_public_bagdiff1_id | prov_public_bagdiff2_id 
+----+-------------------------+-------------------------
+  1 |                       1 |                        
+  1 |                       1 |                        
+(2 rows)
+
+SELECT PROVENANCE * FROM (SELECT * FROM bagdiff1 EXCEPT SELECT * FROM bagdiff2) AS sub;
+ id | prov_public_bagdiff1_id | prov_public_bagdiff2_id 
+----+-------------------------+-------------------------
+(0 rows)
+
+SELECT PROVENANCE * FROM (SELECT * FROM bagdiff3 EXCEPT ALL SELECT * FROM bagdiff2) AS sub;
+ id | prov_public_bagdiff3_id | prov_public_bagdiff2_id 
+----+-------------------------+-------------------------
+  1 |                       1 |                        
+  1 |                       1 |                        
+  2 |                       2 |                       1
+  3 |                       3 |                       1
+(4 rows)
+
+SELECT PROVENANCE * FROM (SELECT * FROM bagdiff3 EXCEPT SELECT * FROM bagdiff2) AS sub;
+ id | prov_public_bagdiff3_id | prov_public_bagdiff2_id 
+----+-------------------------+-------------------------
+  2 |                       2 |                       1
+  3 |                       3 |                       1
+(2 rows)
+
+SELECT PROVENANCE * FROM (SELECT * FROM bagdiff3 EXCEPT SELECT * FROM bagdiff1) AS sub;
+ id | prov_public_bagdiff3_id | prov_public_bagdiff1_id 
+----+-------------------------+-------------------------
+  2 |                       2 |                       1
+  2 |                       2 |                       1
+  3 |                       3 |                       1
+  3 |                       3 |                       1
+(4 rows)
+
+/************* union					**********************/
+SELECT PROVENANCE * FROM (SELECT * FROM bagdiff1 UNION SELECT * FROM bagdiff2) AS sub;
+ id | prov_public_bagdiff1_id | prov_public_bagdiff2_id 
+----+-------------------------+-------------------------
+  1 |                       1 |                       1
+  1 |                       1 |                       1
+(2 rows)
+
+SELECT PROVENANCE * FROM (SELECT * FROM bagdiff1 UNION ALL SELECT * FROM bagdiff2) AS sub;
+ id | prov_public_bagdiff1_id | prov_public_bagdiff2_id 
+----+-------------------------+-------------------------
+  1 |                       1 |                       1
+  1 |                       1 |                       1
+  1 |                       1 |                       1
+  1 |                       1 |                       1
+  1 |                       1 |                       1
+  1 |                       1 |                       1
+(6 rows)
+
+SELECT PROVENANCE * FROM (SELECT * FROM bagdiff1 UNION SELECT * FROM bagdiff3) AS sub;
+ id | prov_public_bagdiff1_id | prov_public_bagdiff3_id 
+----+-------------------------+-------------------------
+  1 |                       1 |                       1
+  1 |                       1 |                       1
+  1 |                       1 |                       1
+  1 |                       1 |                       1
+  2 |                         |                       2
+  3 |                         |                       3
+(6 rows)
+
+SELECT PROVENANCE * FROM (SELECT * FROM bagdiff2 UNION ALL SELECT * FROM bagdiff3) AS sub;
+ id | prov_public_bagdiff2_id | prov_public_bagdiff3_id 
+----+-------------------------+-------------------------
+  1 |                       1 |                       1
+  1 |                       1 |                       1
+  1 |                       1 |                       1
+  1 |                       1 |                       1
+  1 |                       1 |                       1
+  1 |                       1 |                       1
+  2 |                         |                       2
+  3 |                         |                       3
+(8 rows)
+
+/************* intersection				**********************/
+SELECT PROVENANCE * FROM (SELECT * FROM bagdiff3 INTERSECT SELECT * FROM bagdiff1) AS sub;
+ id | prov_public_bagdiff3_id | prov_public_bagdiff1_id 
+----+-------------------------+-------------------------
+  1 |                       1 |                       1
+  1 |                       1 |                       1
+  1 |                       1 |                       1
+  1 |                       1 |                       1
+(4 rows)
+
+SELECT PROVENANCE * FROM (SELECT * FROM bagdiff3 INTERSECT ALL SELECT * FROM bagdiff1) AS sub;
+ id | prov_public_bagdiff3_id | prov_public_bagdiff1_id 
+----+-------------------------+-------------------------
+  1 |                       1 |                       1
+  1 |                       1 |                       1
+  1 |                       1 |                       1
+  1 |                       1 |                       1
+  1 |                       1 |                       1
+  1 |                       1 |                       1
+  1 |                       1 |                       1
+  1 |                       1 |                       1
+(8 rows)
+
+SELECT PROVENANCE * FROM (SELECT * FROM bagdiff3 INTERSECT SELECT * FROM bagdiff2 INTERSECT SELECT * FROM bagdiff1) AS sub;
+ id | prov_public_bagdiff3_id | prov_public_bagdiff2_id | prov_public_bagdiff1_id 
+----+-------------------------+-------------------------+-------------------------
+  1 |                       1 |                       1 |                       1
+  1 |                       1 |                       1 |                       1
+  1 |                       1 |                       1 |                       1
+  1 |                       1 |                       1 |                       1
+(4 rows)
+
+/******** bigger set trees and association of set ops using brackets *********/
+SELECT PROVENANCE * FROM (SELECT * FROM bagdiff1 UNION SELECT * FROM bagdiff2 UNION SELECT * FROM bagdiff3) AS sub;
+ id | prov_public_bagdiff1_id | prov_public_bagdiff2_id | prov_public_bagdiff3_id 
+----+-------------------------+-------------------------+-------------------------
+  1 |                       1 |                       1 |                       1
+  1 |                       1 |                       1 |                       1
+  1 |                       1 |                       1 |                       1
+  1 |                       1 |                       1 |                       1
+  2 |                         |                         |                       2
+  3 |                         |                         |                       3
+(6 rows)
+
+SELECT PROVENANCE * FROM (SELECT * FROM bagdiff1 UNION (SELECT * FROM bagdiff2 UNION SELECT * FROM bagdiff3)) AS sub;
+ id | prov_public_bagdiff1_id | prov_public_bagdiff2_id | prov_public_bagdiff3_id 
+----+-------------------------+-------------------------+-------------------------
+  1 |                       1 |                       1 |                       1
+  1 |                       1 |                       1 |                       1
+  1 |                       1 |                       1 |                       1
+  1 |                       1 |                       1 |                       1
+  2 |                         |                         |                       2
+  3 |                         |                         |                       3
+(6 rows)
+
+-- except except test
+SELECT PROVENANCE * FROM (SELECT * FROM bagdiff1 EXCEPT ALL (SELECT * FROM bagdiff3 EXCEPT ALL SELECT * FROM bagdiff2)) AS sub;
+ id | prov_public_bagdiff1_id | prov_public_bagdiff3_id | prov_public_bagdiff2_id 
+----+-------------------------+-------------------------+-------------------------
+  1 |                       1 |                       2 |                       1
+  1 |                       1 |                       2 |                       1
+  1 |                       1 |                       3 |                       1
+  1 |                       1 |                       3 |                       1
+(4 rows)
+
+SELECT PROVENANCE * FROM (SELECT * FROM bagdiff2 EXCEPT ALL (SELECT * FROM bagdiff3 EXCEPT SELECT * FROM bagdiff2)) AS sub;
+ id | prov_public_bagdiff2_id | prov_public_bagdiff3_id | prov_public_bagdiff2_1_id 
+----+-------------------------+-------------------------+---------------------------
+  1 |                       1 |                       2 |                         1
+  1 |                       1 |                       3 |                         1
+(2 rows)
+
+--mixed operators
+SELECT PROVENANCE * FROM (SELECT * FROM bagdiff3 EXCEPT ALL (SELECT * FROM bagdiff1 UNION ALL SELECT * FROM bagdiff2)) AS sub; 
+ id | prov_public_bagdiff3_id | prov_public_bagdiff1_id | prov_public_bagdiff2_id 
+----+-------------------------+-------------------------+-------------------------
+  2 |                       2 |                       1 |                       1
+  2 |                       2 |                       1 |                       1
+  2 |                       2 |                       1 |                       1
+  2 |                       2 |                       1 |                       1
+  2 |                       2 |                       1 |                       1
+  2 |                       2 |                       1 |                       1
+  3 |                       3 |                       1 |                       1
+  3 |                       3 |                       1 |                       1
+  3 |                       3 |                       1 |                       1
+  3 |                       3 |                       1 |                       1
+  3 |                       3 |                       1 |                       1
+  3 |                       3 |                       1 |                       1
+(12 rows)
+
+SELECT PROVENANCE * FROM (SELECT * FROM bagdiff3 EXCEPT ALL (SELECT * FROM bagdiff1 UNION SELECT * FROM bagdiff2)) AS sub;
+ id | prov_public_bagdiff3_id | prov_public_bagdiff1_id | prov_public_bagdiff2_id 
+----+-------------------------+-------------------------+-------------------------
+  1 |                       1 |                         |                        
+  1 |                       1 |                         |                        
+  2 |                       2 |                       1 |                       1
+  2 |                       2 |                       1 |                       1
+  3 |                       3 |                       1 |                       1
+  3 |                       3 |                       1 |                       1
+(6 rows)
+
+SELECT PROVENANCE * FROM ((SELECT * FROM bagdiff1 UNION ALL SELECT * FROM bagdiff2) EXCEPT ALL (SELECT * FROM bagdiff3 UNION ALL SELECT * FROM bagdiff2)) AS sub; 
+ id | prov_public_bagdiff1_id | prov_public_bagdiff2_id | prov_public_bagdiff3_id | prov_public_bagdiff2_1_id 
+----+-------------------------+-------------------------+-------------------------+---------------------------
+(0 rows)
+
+/************* real world example set queries ********************************/
+SELECT PROVENANCE name 
+	FROM (SELECT name, address_id FROM customer 
+			UNION
+		SELECT name, location_id FROM shop) AS en,
+		address a
+	WHERE en.address_id = a.id AND a.city = 'Zürich';
+        name        | prov_public_customer_customer_id | prov_public_customer_name | prov_public_customer_address_id | prov_public_shop_id | prov_public_shop_name | prov_public_shop_location_id | prov_public_shop_manager_id | prov_public_address_id | prov_public_address_city | prov_public_address_street | prov_public_address_number 
+--------------------+----------------------------------+---------------------------+---------------------------------+---------------------+-----------------------+------------------------------+-----------------------------+------------------------+--------------------------+----------------------------+----------------------------
+ P. Kunde           |                                1 | P. Kunde                  |                               5 |                     |                       |                              |                             |                      5 | Zürich                  | Kundenstrasse              |                         23
+ Zürich Altstetten |                                  |                           |                                 |                   2 | Zürich Altstetten    |                            2 |                           2 |                      2 | Zürich                  | Altstettener Strasse       |                         25
+ Zürich city       |                                  |                           |                                 |                   1 | Zürich city          |                            1 |                           1 |                      1 | Zürich                  | Sihlquai                   |                        155
+(3 rows)
+
+/************* set op setsem queries		******************************/
+SELECT PROVENANCE DISTINCT * FROM (SELECT * FROM bagdiff2 UNION ALL SELECT * FROM bagdiff3) AS sub;
+ id | prov_public_bagdiff2_id | prov_public_bagdiff3_id 
+----+-------------------------+-------------------------
+  1 |                       1 |                       1
+  2 |                         |                       2
+  3 |                         |                       3
+(3 rows)
+
+SELECT PROVENANCE DISTINCT * FROM (SELECT * FROM bagdiff1 EXCEPT ALL SELECT * FROM bagdiff2) AS sub;
+ id | prov_public_bagdiff1_id | prov_public_bagdiff2_id 
+----+-------------------------+-------------------------
+  1 |                       1 |                        
+(1 row)
+
+SELECT PROVENANCE DISTINCT * FROM ((SELECT * FROM bagdiff1 UNION ALL SELECT * FROM bagdiff2) EXCEPT ALL (SELECT * FROM bagdiff3 UNION ALL SELECT * FROM bagdiff2)) AS sub;
+ id | prov_public_bagdiff1_id | prov_public_bagdiff2_id | prov_public_bagdiff3_id | prov_public_bagdiff2_1_id 
+----+-------------------------+-------------------------+-------------------------+---------------------------
+(0 rows)
+
+/******************************************************************************
+******* complex queries combing subqueries, aggregation and set ops ***********
+******************************************************************************/
+/******************************************************************************
+******* queries with unusual or postgres specific SQL features		*******
+******************************************************************************/
+-- array
+SELECT PROVENANCE * FROM arraytest;
+ id |    arr    | prov_public_arraytest_id | prov_public_arraytest_arr 
+----+-----------+--------------------------+---------------------------
+  1 | {1,2,3}   |                        1 | {1,2,3}
+  2 | {2,4,5,6} |                        2 | {2,4,5,6}
+(2 rows)
+
+SELECT PROVENANCE id, arr[1] FROM arraytest WHERE arr[2] < 5;
+ id | arr | prov_public_arraytest_id | prov_public_arraytest_arr 
+----+-----+--------------------------+---------------------------
+  1 |   1 |                        1 | {1,2,3}
+  2 |   2 |                        2 | {2,4,5,6}
+(2 rows)
+
+SELECT PROVENANCE sum(id) FROM arraytest GROUP BY arr[2];
+ sum | prov_public_arraytest_id | prov_public_arraytest_arr 
+-----+--------------------------+---------------------------
+   1 |                        1 | {1,2,3}
+   2 |                        2 | {2,4,5,6}
+(2 rows)
+
+SELECT PROVENANCE sum(arr[3]) FROM arraytest;				
+ sum | prov_public_arraytest_id | prov_public_arraytest_arr 
+-----+--------------------------+---------------------------
+   8 |                        1 | {1,2,3}
+   8 |                        2 | {2,4,5,6}
+(2 rows)
+
+SELECT PROVENANCE a.id FROM arraytest a, arraytest b WHERE a.arr[1] = b.arr[2];
+ id | prov_public_arraytest_id | prov_public_arraytest_arr | prov_public_arraytest_1_id | prov_public_arraytest_1_arr 
+----+--------------------------+---------------------------+----------------------------+-----------------------------
+  2 |                        2 | {2,4,5,6}                 |                          1 | {1,2,3}
+(1 row)
+
+SELECT PROVENANCE * FROM (SELECT arr[1] FROM arraytest UNION SELECT arr[2] FROM arraytest) AS sub;
+ arr | prov_public_arraytest_id | prov_public_arraytest_arr | prov_public_arraytest_1_id | prov_public_arraytest_1_arr 
+-----+--------------------------+---------------------------+----------------------------+-----------------------------
+   1 |                        1 | {1,2,3}                   |                            | 
+   2 |                        2 | {2,4,5,6}                 |                          1 | {1,2,3}
+   4 |                          |                           |                          2 | {2,4,5,6}
+(3 rows)
+
+-- struct
+SELECT PROVENANCE one, (two).one FROM structtest WHERE (two).one > 0;
+ one | one | prov_public_structtest_one | prov_public_structtest_two 
+-----+-----+----------------------------+----------------------------
+   1 |   1 |                          1 | (1,hello,1)
+   2 |   2 |                          2 | (2,hello,1)
+   3 |   3 |                          3 | (3,hello,2)
+(3 rows)
+
+SELECT PROVENANCE sum((two).one) FROM structtest;
+ sum | prov_public_structtest_one | prov_public_structtest_two 
+-----+----------------------------+----------------------------
+   6 |                          1 | (1,hello,1)
+   6 |                          2 | (2,hello,1)
+   6 |                          3 | (3,hello,2)
+(3 rows)
+
+SELECT PROVENANCE sum((two).one) FROM structtest GROUP BY (two).three;
+ sum | prov_public_structtest_one | prov_public_structtest_two 
+-----+----------------------------+----------------------------
+   3 |                          1 | (1,hello,1)
+   3 |                          2 | (2,hello,1)
+   3 |                          3 | (3,hello,2)
+(3 rows)
+
+SELECT PROVENANCE a.one FROM structtest a, structtest b WHERE (a.two).one = (b.two).three;
+ one | prov_public_structtest_one | prov_public_structtest_two | prov_public_structtest_1_one | prov_public_structtest_1_two 
+-----+----------------------------+----------------------------+------------------------------+------------------------------
+   1 |                          1 | (1,hello,1)                |                            1 | (1,hello,1)
+   1 |                          1 | (1,hello,1)                |                            2 | (2,hello,1)
+   2 |                          2 | (2,hello,1)                |                            3 | (3,hello,2)
+(3 rows)
+
+SELECT PROVENANCE * FROM (SELECT (two).one FROM structtest UNION SELECT (two).three FROM structtest) AS sub;
+ one | prov_public_structtest_one | prov_public_structtest_two | prov_public_structtest_1_one | prov_public_structtest_1_two 
+-----+----------------------------+----------------------------+------------------------------+------------------------------
+   1 |                          1 | (1,hello,1)                |                            1 | (1,hello,1)
+   1 |                          1 | (1,hello,1)                |                            2 | (2,hello,1)
+   2 |                          2 | (2,hello,1)                |                            3 | (3,hello,2)
+   3 |                          3 | (3,hello,2)                |                              | 
+(4 rows)
+
+--ORDER BY
+SELECT PROVENANCE * FROM muchcols ORDER BY one;
+ one |  two   |   three    |     four      |    five     | prov_public_muchcols_one | prov_public_muchcols_two | prov_public_muchcols_three | prov_public_muchcols_four | prov_public_muchcols_five 
+-----+--------+------------+---------------+-------------+--------------------------+--------------------------+----------------------------+---------------------------+---------------------------
+   1 | first  | 01-01-2007 | 4321212123545 | hello world |                        1 | first                    | 01-01-2007                 |             4321212123545 | hello world
+   2 | second | 01-01-2007 |       9898989 | hello       |                        2 | second                   | 01-01-2007                 |                   9898989 | hello
+   2 | third  | 01-01-2007 |     212123545 | world       |                        2 | third                    | 01-01-2007                 |                 212123545 | world
+   3 | fourth | 01-01-2007 |            12 | hhhhhhhh    |                        3 | fourth                   | 01-01-2007                 |                        12 | hhhhhhhh
+(4 rows)
+
+SELECT PROVENANCE * FROM (SELECT sum(four) AS sumf FROM  muchcols GROUP BY one) AS t ORDER BY sumf;
+     sumf      | prov_public_muchcols_one | prov_public_muchcols_two | prov_public_muchcols_three | prov_public_muchcols_four | prov_public_muchcols_five 
+---------------+--------------------------+--------------------------+----------------------------+---------------------------+---------------------------
+            12 |                        3 | fourth                   | 01-01-2007                 |                        12 | hhhhhhhh
+     222022534 |                        2 | second                   | 01-01-2007                 |                   9898989 | hello
+     222022534 |                        2 | third                    | 01-01-2007                 |                 212123545 | world
+ 4321212123545 |                        1 | first                    | 01-01-2007                 |             4321212123545 | hello world
+(4 rows)
+
+SELECT PROVENANCE * FROM (SELECT * FROM bagdiff1 UNION SELECT * FROM bagdiff3) AS sub ORDER BY id;
+ id | prov_public_bagdiff1_id | prov_public_bagdiff3_id 
+----+-------------------------+-------------------------
+  1 |                       1 |                       1
+  1 |                       1 |                       1
+  1 |                       1 |                       1
+  1 |                       1 |                       1
+  2 |                         |                       2
+  3 |                         |                       3
+(6 rows)
+
+SELECT PROVENANCE sum(four) AS sumf FROM muchcols GROUP BY one ORDER BY sumf;
+     sumf      | prov_public_muchcols_one | prov_public_muchcols_two | prov_public_muchcols_three | prov_public_muchcols_four | prov_public_muchcols_five 
+---------------+--------------------------+--------------------------+----------------------------+---------------------------+---------------------------
+            12 |                        3 | fourth                   | 01-01-2007                 |                        12 | hhhhhhhh
+     222022534 |                        2 | second                   | 01-01-2007                 |                   9898989 | hello
+     222022534 |                        2 | third                    | 01-01-2007                 |                 212123545 | world
+ 4321212123545 |                        1 | first                    | 01-01-2007                 |             4321212123545 | hello world
+(4 rows)
+
+-- function calls
+SELECT PROVENANCE char_length(two) FROM muchcols;
+ char_length | prov_public_muchcols_one | prov_public_muchcols_two | prov_public_muchcols_three | prov_public_muchcols_four | prov_public_muchcols_five 
+-------------+--------------------------+--------------------------+----------------------------+---------------------------+---------------------------
+           5 |                        1 | first                    | 01-01-2007                 |             4321212123545 | hello world
+           6 |                        2 | second                   | 01-01-2007                 |                   9898989 | hello
+           5 |                        2 | third                    | 01-01-2007                 |                 212123545 | world
+           6 |                        3 | fourth                   | 01-01-2007                 |                        12 | hhhhhhhh
+(4 rows)
+
+SELECT PROVENANCE one FROM muchcols WHERE char_length(two) > 5;
+ one | prov_public_muchcols_one | prov_public_muchcols_two | prov_public_muchcols_three | prov_public_muchcols_four | prov_public_muchcols_five 
+-----+--------------------------+--------------------------+----------------------------+---------------------------+---------------------------
+   2 |                        2 | second                   | 01-01-2007                 |                   9898989 | hello
+   3 |                        3 | fourth                   | 01-01-2007                 |                        12 | hhhhhhhh
+(2 rows)
+
+SELECT PROVENANCE sum(char_length(two)) FROM muchcols;		
+ sum | prov_public_muchcols_one | prov_public_muchcols_two | prov_public_muchcols_three | prov_public_muchcols_four | prov_public_muchcols_five 
+-----+--------------------------+--------------------------+----------------------------+---------------------------+---------------------------
+  22 |                        1 | first                    | 01-01-2007                 |             4321212123545 | hello world
+  22 |                        2 | second                   | 01-01-2007                 |                   9898989 | hello
+  22 |                        2 | third                    | 01-01-2007                 |                 212123545 | world
+  22 |                        3 | fourth                   | 01-01-2007                 |                        12 | hhhhhhhh
+(4 rows)
+
+SELECT PROVENANCE sum(one) FROM muchcols GROUP BY char_length(two);
+ sum | prov_public_muchcols_one | prov_public_muchcols_two | prov_public_muchcols_three | prov_public_muchcols_four | prov_public_muchcols_five 
+-----+--------------------------+--------------------------+----------------------------+---------------------------+---------------------------
+   3 |                        1 | first                    | 01-01-2007                 |             4321212123545 | hello world
+   5 |                        2 | second                   | 01-01-2007                 |                   9898989 | hello
+   3 |                        2 | third                    | 01-01-2007                 |                 212123545 | world
+   5 |                        3 | fourth                   | 01-01-2007                 |                        12 | hhhhhhhh
+(4 rows)
+
+SELECT PROVENANCE a.one FROM muchcols a, muchcols b WHERE char_length(a.two) = char_length(b.two);
+ one | prov_public_muchcols_one | prov_public_muchcols_two | prov_public_muchcols_three | prov_public_muchcols_four | prov_public_muchcols_five | prov_public_muchcols_1_one | prov_public_muchcols_1_two | prov_public_muchcols_1_three | prov_public_muchcols_1_four | prov_public_muchcols_1_five 
+-----+--------------------------+--------------------------+----------------------------+---------------------------+---------------------------+----------------------------+----------------------------+------------------------------+-----------------------------+-----------------------------
+   1 |                        1 | first                    | 01-01-2007                 |             4321212123545 | hello world               |                          1 | first                      | 01-01-2007                   |               4321212123545 | hello world
+   1 |                        1 | first                    | 01-01-2007                 |             4321212123545 | hello world               |                          2 | third                      | 01-01-2007                   |                   212123545 | world
+   2 |                        2 | third                    | 01-01-2007                 |                 212123545 | world                     |                          1 | first                      | 01-01-2007                   |               4321212123545 | hello world
+   2 |                        2 | third                    | 01-01-2007                 |                 212123545 | world                     |                          2 | third                      | 01-01-2007                   |                   212123545 | world
+   2 |                        2 | second                   | 01-01-2007                 |                   9898989 | hello                     |                          2 | second                     | 01-01-2007                   |                     9898989 | hello
+   2 |                        2 | second                   | 01-01-2007                 |                   9898989 | hello                     |                          3 | fourth                     | 01-01-2007                   |                          12 | hhhhhhhh
+   3 |                        3 | fourth                   | 01-01-2007                 |                        12 | hhhhhhhh                  |                          2 | second                     | 01-01-2007                   |                     9898989 | hello
+   3 |                        3 | fourth                   | 01-01-2007                 |                        12 | hhhhhhhh                  |                          3 | fourth                     | 01-01-2007                   |                          12 | hhhhhhhh
+(8 rows)
+
+SELECT PROVENANCE * FROM (SELECT char_length(two) FROM muchcols UNION SELECT char_length(two) FROM muchcols) AS sub;
+ char_length | prov_public_muchcols_one | prov_public_muchcols_two | prov_public_muchcols_three | prov_public_muchcols_four | prov_public_muchcols_five | prov_public_muchcols_1_one | prov_public_muchcols_1_two | prov_public_muchcols_1_three | prov_public_muchcols_1_four | prov_public_muchcols_1_five 
+-------------+--------------------------+--------------------------+----------------------------+---------------------------+---------------------------+----------------------------+----------------------------+------------------------------+-----------------------------+-----------------------------
+           5 |                        1 | first                    | 01-01-2007                 |             4321212123545 | hello world               |                          1 | first                      | 01-01-2007                   |               4321212123545 | hello world
+           5 |                        2 | third                    | 01-01-2007                 |                 212123545 | world                     |                          1 | first                      | 01-01-2007                   |               4321212123545 | hello world
+           5 |                        1 | first                    | 01-01-2007                 |             4321212123545 | hello world               |                          2 | third                      | 01-01-2007                   |                   212123545 | world
+           5 |                        2 | third                    | 01-01-2007                 |                 212123545 | world                     |                          2 | third                      | 01-01-2007                   |                   212123545 | world
+           6 |                        2 | second                   | 01-01-2007                 |                   9898989 | hello                     |                          2 | second                     | 01-01-2007                   |                     9898989 | hello
+           6 |                        3 | fourth                   | 01-01-2007                 |                        12 | hhhhhhhh                  |                          2 | second                     | 01-01-2007                   |                     9898989 | hello
+           6 |                        2 | second                   | 01-01-2007                 |                   9898989 | hello                     |                          3 | fourth                     | 01-01-2007                   |                          12 | hhhhhhhh
+           6 |                        3 | fourth                   | 01-01-2007                 |                        12 | hhhhhhhh                  |                          3 | fourth                     | 01-01-2007                   |                          12 | hhhhhhhh
+(8 rows)
+
+-- constants as TLEs 
+SELECT PROVENANCE 1;
+ ?column? 
+----------
+        1
+(1 row)
+
+SELECT PROVENANCE 1, id FROM bagdiff1;
+ ?column? | id | prov_public_bagdiff1_id 
+----------+----+-------------------------
+        1 |  1 |                       1
+        1 |  1 |                       1
+(2 rows)
+
+/******************************************************************************
+******* 	check order of provenance attrs    ****************************
+******************************************************************************/
+SELECT PROVENANCE i.id, j.id * 10, k.id * 100 FROM bagdiff3 i, bagdiff3 j, bagdiff3 k WHERE i.id = 1 AND j.id = 2 AND k.id = 3;
+ id | ?column? | ?column? | prov_public_bagdiff3_id | prov_public_bagdiff3_1_id | prov_public_bagdiff3_2_id 
+----+----------+----------+-------------------------+---------------------------+---------------------------
+  1 |       20 |      300 |                       1 |                         2 |                         3
+  1 |       20 |      300 |                       1 |                         2 |                         3
+(2 rows)
+
+SELECT PROVENANCE * FROM (SELECT id FROM bagdiff1 UNION SELECT (id * 10) FROM bagdiff1 UNION SELECT (id * 100) FROM bagdiff1) AS sub;
+ id  | prov_public_bagdiff1_id | prov_public_bagdiff1_1_id | prov_public_bagdiff1_2_id 
+-----+-------------------------+---------------------------+---------------------------
+   1 |                       1 |                           |                          
+   1 |                       1 |                           |                          
+  10 |                         |                         1 |                          
+  10 |                         |                         1 |                          
+ 100 |                         |                           |                         1
+ 100 |                         |                           |                         1
+(6 rows)
+
+--mixed base relation and subqueries
+SELECT PROVENANCE * FROM (SELECT id * 100 FROM bagdiff3 WHERE id = 2) AS i, bagdiff1 AS j;
+ ?column? | id | prov_public_bagdiff3_id | prov_public_bagdiff1_id 
+----------+----+-------------------------+-------------------------
+      200 |  1 |                       2 |                       1
+      200 |  1 |                       2 |                       1
+(2 rows)
+
+SELECT PROVENANCE * FROM bagdiff1 AS j, (SELECT id * 100 FROM bagdiff3 WHERE id = 2) AS i;
+ id | ?column? | prov_public_bagdiff1_id | prov_public_bagdiff3_id 
+----+----------+-------------------------+-------------------------
+  1 |      200 |                       1 |                       2
+  1 |      200 |                       1 |                       2
+(2 rows)
+
+/******************************************************************************
+******* 	check queries on views	and provenance views 	***************
+******************************************************************************/
+SELECT PROVENANCE * FROM bagdiffview;
+ id | prov_public_bagdiff1_id 
+----+-------------------------
+  1 |                       1
+  1 |                       1
+(2 rows)
+
+SELECT PROVENANCE id FROM bagdiffview WHERE id > 1;
+ id | prov_public_bagdiff1_id 
+----+-------------------------
+(0 rows)
+
+SELECT PROVENANCE * FROM complexview;
+ERROR:  relation "complexview" does not exist
+SELECT PROVENANCE (one * 100) FROM complexview WHERE one != 0;
+ERROR:  relation "complexview" does not exist
+SELECT * FROM provview1;
+ id | prov_public_bagdiff1_id 
+----+-------------------------
+  1 |                       1
+  1 |                       1
+(2 rows)
+
+SELECT * FROM provview2;
+        name        | last_name | prov_public_employee_id | prov_public_employee_first_name | prov_public_employee_last_name | prov_public_employee_salary | prov_public_shop_id | prov_public_shop_name | prov_public_shop_location_id | prov_public_shop_manager_id | prov_public_employee_works_at_shop_employee_id | prov_public_employee_works_at_shop_shop_id 
+--------------------+-----------+-------------------------+---------------------------------+--------------------------------+-----------------------------+---------------------+-----------------------+------------------------------+-----------------------------+------------------------------------------------+--------------------------------------------
+ Zürich Altstetten | Gertsen   |                       6 | Gert                            | Gertsen                        |                       12000 |                   2 | Zürich Altstetten    |                            2 |                           2 |                                              6 |                                          2
+(1 row)
+
+SELECT id FROM provview1 WHERE prov_public_bagdiff1_id = 1;
+ id 
+----
+  1
+  1
+(2 rows)
+
+/******************************************************************************
+*******************************************************************************
+*******************************************************************************
+******* 	clean up	***********************************************
+*******************************************************************************
+*******************************************************************************
+******************************************************************************/
+/*DROP TABLE IF EXISTS address CASCADE;
+DROP TABLE IF EXISTS employee CASCADE;
+DROP TABLE IF EXISTS shop CASCADE;
+DROP TABLE IF EXISTS item CASCADE;
+DROP TABLE IF EXISTS sales CASCADE;
+DROP TABLE IF EXISTS employee_works_at_shop CASCADE;
+DROP TABLE IF EXISTS customer CASCADE;
+DROP TABLE IF EXISTS bagdiff1 CASCADE;
+DROP TABLE IF EXISTS bagdiff2 CASCADE;
+DROP TABLE IF EXISTS bagdiff3 CASCADE;
+DROP TABLE IF EXISTS muchcols CASCADE;
+DROP TABLE IF EXISTS arraytest;
+DROP TABLE IF EXISTS structtest;
+
+DROP TYPE IF EXISTS testtype;*/
