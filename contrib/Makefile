@@ -9,19 +9,6 @@ WANTED_DIRS = \
 		spi		\
 		xml2
 
-ifeq ($(with_openssl),yes)
-WANTED_DIRS += sslinfo
-endif
-
-ifeq ($(with_ossp_uuid),yes)
-WANTED_DIRS += uuid-ossp
-endif
-
-ifeq ($(with_libxml),yes)
-ifeq ($(with_libxslt),yes)
-WANTED_DIRS += xml2
-endif
-endif
 
 # Missing:
 #		start-scripts	\ (does not have a makefile)
