@@ -23,6 +23,7 @@
 #include "parser/parse_expr.h"
 #include "parser/parse_oper.h"			// defintion of Operator type and convience routines for operator lookup
 #include "parser/parse_relation.h"
+#include "parser/parse_coerce.h"
 #include "optimizer/clauses.h"
 #include "utils/syscache.h"				// used to release heap tuple references
 #include "utils/lsyscache.h"
@@ -731,30 +732,88 @@ createComparison (Node *left, Node *right, ComparisonType type)
 	Form_pg_operator operator;
 	OpExpr *equal;
 	Operator operTuple;
+	Oid leftType;
+	Oid rightType;
+	List *opName;
+	leftType = exprType(left);
+	rightType = exprType(right);
 
-	switch(type)
-	{
-		case COMP_SMALLER:
-			operTuple = ordering_oper (exprType(left), true);
-		break;
-		case COMP_SMALLEREQ:
-			operTuple = compatible_oper(NULL, list_make1(makeString("<=")), exprType(left), exprType(right), false, -1);
-		break;
-		case COMP_BIGGER:
-			operTuple = reverse_ordering_oper (exprType(left), true);
-		break;
-		case COMP_BIGGEREQ:
-			operTuple = compatible_oper(NULL, list_make1(makeString(">=")), exprType(left), exprType(right), false, -1);
-		break;
-		case COMP_EQUAL:
-			operTuple = equality_oper (exprType(left), true);
-		break;
-		default:
-			//TODO error
-		break;
-	}
+        switch(type)
+        {
+        case COMP_SMALLER:
+          opName = list_make1(makeString("<"));
+            break;
+        case COMP_SMALLEREQ:
+          opName = list_make1(makeString("<="));
+          break;
+        case COMP_BIGGER:
+          opName = list_make1(makeString(">"));
+          break;
+        case COMP_BIGGEREQ:
+          opName = list_make1(makeString(">="));
+          break;
+        case COMP_EQUAL:
+          opName = list_make1(makeString("="));
+          break;
+        default:
+          //TODO error
+            break;
+        }
 
-	operator = (Form_pg_operator) GETSTRUCT(operTuple);
+        // both types are the same use simple approach
+	if (leftType == rightType)
+        {
+          switch(type)
+          {
+          case COMP_SMALLER:
+            operTuple = ordering_oper (leftType, false);
+              break;
+          case COMP_BIGGER:
+            operTuple = reverse_ordering_oper (leftType, false);
+            break;
+          case COMP_EQUAL:
+            operTuple = equality_oper (leftType, false);
+            break;
+          case COMP_SMALLEREQ:
+          case COMP_BIGGEREQ:
+            operTuple = compatible_oper(NULL, opName, leftType, rightType, false, -1);
+            break;
+          default:
+              break;
+          }
+
+          operator = (Form_pg_operator) GETSTRUCT(operTuple);
+        }
+        // different types, try first to get an oper if they are binary
+        // otherwise the nodes have be coerced first.
+	else
+        {
+	  operTuple = compatible_oper(NULL, opName, leftType, rightType, true, -1);
+
+	  // try to find operator that would work with type coercion
+	  if (operTuple == NULL)
+          {
+	    operTuple = oper(NULL, opName, leftType, rightType, true, -1);
+
+	    // did not work out
+            if (operTuple == NULL)
+              elog(ERROR,
+                  "Could not find an operator %s for types %d, %d",
+                  strVal(((Value *) linitial(opName))),
+                  leftType,
+                  rightType);
+	  }
+
+          // add cast if necessary
+	  operator = (Form_pg_operator) GETSTRUCT(operTuple);
+	  left = coerce_to_target_type(NULL, left, leftType, operator->oprleft,
+                                      -1, COERCION_EXPLICIT, COERCE_DONTCARE);
+          right = coerce_to_target_type(NULL, right, rightType, operator->oprright,
+                                      -1, COERCION_EXPLICIT, COERCE_DONTCARE);
+        }
+
+	// create a node for the operator
+
 
 	equal = makeNode (OpExpr);
 	equal->args = list_make2(left, right);

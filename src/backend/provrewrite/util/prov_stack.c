@@ -799,7 +799,7 @@ removeElems (List **list, List *pos)
 	before = NULL;
 
 	/* walk trough list, keeping track of current position, and remove any cell at a position from pos */
-	foreachi(lc, i, pos)
+	foreachi(lc, i, *list)
 	{
 		if (i == lfirst_int(posLc))	//TODO free cell
 		{
@@ -878,6 +878,28 @@ removeNodeForPred (List *list, bool (*predicate) (Node *node, void *context), vo
 		}
 
 		before = lc;
+	}
+}
+
+/*
+ * Remove all list elements after position pos
+ */
+
+void
+removeAfterPos (List *list, int pos)
+{
+	ListCell *lc;
+	int i;
+
+	foreachi(lc, i , list)
+	{
+		if (i == pos - 1)
+		{
+			lc->next = NULL;
+			list->tail = lc;
+			list->length = pos;
+			break;
+		}
 	}
 }
 

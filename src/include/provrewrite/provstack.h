@@ -69,5 +69,6 @@ extern int compareCopyMapRelEntryOnRtindex (void *left, void *right);
 extern List *removeElems (List **list, List *pos);
 extern void removeNodeElem (List *list, Node *node);
 extern void removeNodeForPred (List *list, bool (*predicate) (Node *node, void *context), void *context);
+extern void removeAfterPos (List *list, int pos);
 
 #endif /*PROVSTACK_H_*/

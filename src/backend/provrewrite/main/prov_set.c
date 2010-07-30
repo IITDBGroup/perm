@@ -43,6 +43,9 @@
 
 
 /* Function declarations */
+static void rewriteUnionWithWLCS (Query *query);
+static void addDummyProvAttrs (RangeTblEntry *rte, List *subProv, int pos);
+static void adaptSetProvenanceAttrs (Query *query);
 static void replaceSetOperationSubTrees (Query *query, Node *node, Node **parentPointer, SetOperation rootType);
 static void replaceSetOperatorSubtree (Query *query, SetOperationStmt *setOp, Node **parent);
 static void rewriteRTEs (Query *newTop);
@@ -80,6 +83,17 @@ rewriteSetQuery (Query * query)
 
 	/* restructure set operation tree if necessary */
 	replaceSetOperationSubTrees (query, query->setOperations, &(query->setOperations), ((SetOperationStmt *) query->setOperations)->op);
+
+	/* check if the alternative union semantics is activate
+	 * and we are rewriting a union node. If so use all the join
+	 * stuff falls apart and we just have to rewrite the original query
+	 */
+	if (prov_use_wl_union_semantics && ((SetOperationStmt *) query->setOperations)->op == SETOP_UNION)
+	{
+		rewriteUnionWithWLCS (query);
+
+		return query;
+	}
 
 	/* create new top query node */
 	newTop = makeQuery();
@@ -158,6 +172,143 @@ removeDummyRewriterRTEs (Query *query)
 		/* adapt set operation tree */
 		substractRangeTblRefValuesWalker (query->setOperations, NULL);
 	}
+}
+
+/*
+ *
+ */
+
+static void
+rewriteUnionWithWLCS (Query *query)
+{
+	List *subProvs = NIL;
+	List *pList = NIL;
+	RangeTblEntry *rte;
+	ListCell *lc;
+	int i;
+
+	// rewrite the range table entries and fetch their provenance attrs
+	foreach(lc, query->rtable)
+	{
+		rte = (RangeTblEntry *) lfirst(lc);
+		rte->subquery = rewriteQueryNode(rte->subquery);
+		subProvs = lappend(subProvs, linitial(pStack));
+	}
+
+	// add projections on NULL to each subquery to generate
+	// the same schema for each subquery.
+	foreachi(lc, i, query->rtable)
+	{
+		rte = (RangeTblEntry *) lfirst(lc);
+		addDummyProvAttrs(rte, subProvs, i);
+	}
+
+	correctSubQueryAlias(query);
+
+	// push provenance list on stack and add provenance attrs to query
+	pList = addProvenanceAttrsForRange(query, 1, list_length(query->rtable) + 1, pList);
+	push(&pStack, pList);
+
+	// adapt set operation query provenance attributes
+	adaptSetProvenanceAttrs(query);
+}
+
+/*
+ *
+ */
+
+static void
+addDummyProvAttrs (RangeTblEntry *rte, List *subProv, int pos)
+{
+	List *result = NIL;
+	Query *query;
+	int i;
+	ListCell *lc;
+	ListCell *innerLc;
+	List *curProvList;
+	List *ownProv;
+	TargetEntry *newTe;
+	TargetEntry *te;
+	Expr *newExpr;
+	int numSelfProvAttrs;
+	int curResno;
+
+	query = rte->subquery;
+
+	// get number of provenance attributes for the rte
+	// and remove the provenance attributes from target list
+	curProvList = (List *) list_nth(subProv, pos);
+	numSelfProvAttrs = list_length(curProvList);
+	ownProv = list_copy_tail(query->targetList,
+							list_length(query->targetList) - numSelfProvAttrs);
+	removeAfterPos(query->targetList, list_length(query->targetList) - numSelfProvAttrs);
+	result = query->targetList;
+	curResno = list_length(result) + 1;
+
+	foreachi(lc,i,subProv)
+	{
+		curProvList = (List *) lfirst(lc);
+
+		// for own provenance use the original provenance attrs
+		if (i == pos)
+		{
+			foreach(innerLc, ownProv)
+			{
+				te = (TargetEntry *) lfirst(innerLc);
+				te->resno = curResno++;
+				result = lappend(result, te);
+			}
+		}
+		// create null constants for provenance of other subqueries
+		else
+		{
+			foreach(innerLc, curProvList)
+			{
+				te = (TargetEntry *) lfirst(innerLc);
+
+				newExpr = (Expr *) makeNullConst (exprType ((Node *) te->expr),
+						exprTypmod ((Node *) te->expr));
+				newTe = makeTargetEntry(newExpr, curResno++, te->resname, false);
+
+				result = lappend(result, newTe);
+			}
+		}
+	}
+
+	query->targetList = result;
+
+	list_free(ownProv);
+}
+
+
+/*
+ *
+ */
+static void
+adaptSetProvenanceAttrs (Query *query)
+{
+	TargetEntry *te;
+	Var *var;
+	ListCell *lc;
+	int curAttno = 1;
+	SetOperationStmt *stmt;
+
+	stmt = (SetOperationStmt *) query->setOperations;
+	stmt->colTypes = NIL;
+	stmt->colTypmods = NIL;
+
+	foreach(lc, query->targetList)
+	{
+		te = (TargetEntry *) lfirst(lc);
+		var = (Var *) te->expr;
+		var->varno = 1;
+		var->varattno = curAttno++;
+		stmt->colTypes = lappend_oid(stmt->colTypes, var->vartype);
+		stmt->colTypmods = lappend_int(stmt->colTypmods, var->vartypmod);
+	}
+
+
+
 }
 
 /*

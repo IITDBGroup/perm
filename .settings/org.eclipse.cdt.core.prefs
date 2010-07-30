@@ -1,4 +1,4 @@
-#Wed Mar 31 12:54:36 CEST 2010
+#Fri Jul 30 14:42:49 EDT 2010
 eclipse.preferences.version=1
 org.eclipse.cdt.core.formatter.alignment_for_arguments_in_method_invocation=16
 org.eclipse.cdt.core.formatter.alignment_for_base_clause_in_type_declaration=80
@@ -31,7 +31,7 @@ org.eclipse.cdt.core.formatter.indent_statements_compare_to_block=true
 org.eclipse.cdt.core.formatter.indent_statements_compare_to_body=true
 org.eclipse.cdt.core.formatter.indent_switchstatements_compare_to_cases=true
 org.eclipse.cdt.core.formatter.indent_switchstatements_compare_to_switch=false
-org.eclipse.cdt.core.formatter.indentation.size=8
+org.eclipse.cdt.core.formatter.indentation.size=4
 org.eclipse.cdt.core.formatter.insert_new_line_after_opening_brace_in_array_initializer=do not insert
 org.eclipse.cdt.core.formatter.insert_new_line_after_template_declaration=insert
 org.eclipse.cdt.core.formatter.insert_new_line_at_end_of_file_if_missing=do not insert
@@ -147,6 +147,6 @@ org.eclipse.cdt.core.formatter.keep_then_statement_on_same_line=false
 org.eclipse.cdt.core.formatter.lineSplit=80
 org.eclipse.cdt.core.formatter.number_of_empty_lines_to_preserve=1
 org.eclipse.cdt.core.formatter.put_empty_statement_on_new_line=true
-org.eclipse.cdt.core.formatter.tabulation.char=space
-org.eclipse.cdt.core.formatter.tabulation.size=2
+org.eclipse.cdt.core.formatter.tabulation.char=tab
+org.eclipse.cdt.core.formatter.tabulation.size=4
 org.eclipse.cdt.core.formatter.use_tabs_only_for_leading_indentations=false
