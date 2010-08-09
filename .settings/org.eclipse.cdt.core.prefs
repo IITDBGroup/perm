@@ -1,4 +1,4 @@
-#Fri Jul 30 14:42:49 EDT 2010
+#Tue Aug 03 15:31:09 EDT 2010
 eclipse.preferences.version=1
 org.eclipse.cdt.core.formatter.alignment_for_arguments_in_method_invocation=16
 org.eclipse.cdt.core.formatter.alignment_for_base_clause_in_type_declaration=80
@@ -11,11 +11,11 @@ org.eclipse.cdt.core.formatter.alignment_for_expressions_in_array_initializer=16
 org.eclipse.cdt.core.formatter.alignment_for_parameters_in_method_declaration=16
 org.eclipse.cdt.core.formatter.alignment_for_throws_clause_in_method_declaration=16
 org.eclipse.cdt.core.formatter.brace_position_for_array_initializer=next_line_shifted
-org.eclipse.cdt.core.formatter.brace_position_for_block=next_line_shifted
-org.eclipse.cdt.core.formatter.brace_position_for_block_in_case=next_line_shifted
+org.eclipse.cdt.core.formatter.brace_position_for_block=next_line
+org.eclipse.cdt.core.formatter.brace_position_for_block_in_case=next_line
 org.eclipse.cdt.core.formatter.brace_position_for_method_declaration=next_line
 org.eclipse.cdt.core.formatter.brace_position_for_namespace_declaration=next_line
-org.eclipse.cdt.core.formatter.brace_position_for_switch=next_line_shifted
+org.eclipse.cdt.core.formatter.brace_position_for_switch=next_line
 org.eclipse.cdt.core.formatter.brace_position_for_type_declaration=next_line
 org.eclipse.cdt.core.formatter.compact_else_if=true
 org.eclipse.cdt.core.formatter.continuation_indentation=2

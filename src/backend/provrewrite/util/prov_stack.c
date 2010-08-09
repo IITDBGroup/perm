@@ -239,7 +239,7 @@ getListAndReverse (List *stack, int numElem)
 
 	Assert(list_length(stack) >= numElem);
 
-	logDebug("gLaR    -- START");
+	LOGDEBUG("gLaR    -- START");
 
 	result = NIL;
 	for (i = 0; i < numElem; i++)

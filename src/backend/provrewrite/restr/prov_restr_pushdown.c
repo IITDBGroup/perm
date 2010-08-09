@@ -80,7 +80,7 @@ pushdownSelections (Query *query)
 
 	/* rewrite and move around selections */
 	//pushdownQueryNode(query, getExprHandlers(), NULL);
-	logNode(query,"selections pushed down");
+	LOGNODE(query,"selections pushed down");
 
 	/* replace query selections with generated selections */
 	finalizeSelections(query);

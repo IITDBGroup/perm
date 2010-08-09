@@ -45,15 +45,19 @@
 
 
 /* functions */
+static void reduceRtindexForTrans(TransSubInfo *info);
 static void rewriteUnionWithWlCS (Query *query, RangeTblEntry *queryRte);
 static void addTransProvToSetOp (SetOperationStmt *setOp, Index attrNum);
-static void addBitsetsToChildren (Query *query, TransSubInfo *subInfo, Datum bitset);
-static void restructureSetOperationQueryNode
-		(Query *query, Node *node, TransSubInfo *nodeInfo, Node **infoPointer, Node **parentPointer, SetOperation rootType);
-static void replaceSetOperatorSubtree
-		(Query *query, SetOperationStmt *setOp, Node **parent, TransSubInfo *nodeInfo, Node **infoPointer);
+static void addBitsetsToChildren (Query *query, TransSubInfo *subInfo,
+		Datum bitset);
+static void restructureSetOperationQueryNode (Query *query, Node *node,
+		TransSubInfo *nodeInfo, Node **infoPointer, Node **parentPointer,
+		SetOperation rootType);
+static void replaceSetOperatorSubtree (Query *query, SetOperationStmt *setOp,
+		Node **parent, TransSubInfo *nodeInfo, Node **infoPointer);
 static void findSetOpInfo (TransSubInfo *node, List **result);
-static void rewriteUsingSubInfo (TransSubInfo *setInfo, Query *query, Index offset);
+static void rewriteUsingSubInfo (TransSubInfo *setInfo, Query *query,
+		Index offset);
 static void createJoins (Query *top, Query *query);
 static void createSetTransProvAttr (Query *newTop);
 static Node *buildComputationForSetOps (Query *query, Node *setInfo);
@@ -69,23 +73,31 @@ rewriteTransSet (Query *query, Node **parent, RangeTblEntry *queryRte)
 	Query *orig;
 	TransProvInfo *info;
 	TransProvInfo *topInfo;
+	int beforeRteNum;
 
 	orig = copyObject(query);
 	info = GET_TRANS_INFO(query);
 
+	/* remove dummy RTEs produced by postgres view expansion */
+	beforeRteNum = list_length(query->rtable);
+	removeDummyRewriterRTEs(query);
+	if (list_length(query->rtable) != beforeRteNum)
+		reduceRtindexForTrans((TransSubInfo *) info->root);
+
 	/* if necessary spread the set operation tree over several query nodes */
 	restructureSetOperationQueryNode(query,
-								query->setOperations,
-								(TransSubInfo *) info->root,
-								(Node **) &info->root,
-								&query->setOperations,
-								((SetOperationStmt *) query->setOperations)->op);
+			query->setOperations,
+			(TransSubInfo *) info->root,
+			(Node **) &info->root,
+			&query->setOperations,
+			((SetOperationStmt *) query->setOperations)->op);
 
 	/* check if the alternative union semantics is activate
 	 * and we are rewriting a union node. If so use all the join
 	 * stuff falls apart and we just have to rewrite the original query
 	 */
-	if (prov_use_wl_union_semantics && ((SetOperationStmt *) query->setOperations)->op == SETOP_UNION)
+	if (prov_use_wl_union_semantics &&
+			((SetOperationStmt *) query->setOperations)->op == SETOP_UNION)
 	{
 		rewriteUnionWithWlCS (query, queryRte);
 
@@ -99,15 +111,21 @@ rewriteTransSet (Query *query, Node **parent, RangeTblEntry *queryRte)
 	topInfo->rtIndex = info->rtIndex;
 	info->rtIndex = 1;
 
-
 	/* create rtable and attrs of new top query node */
-	newTop->rtable = copyObject(query->rtable);
+
+	/* if set operation is a set difference only add the first range table
+	 * entry. */
+	if (((SetOperationStmt *) query->setOperations)->op == SETOP_EXCEPT)
+		newTop->rtable = list_make1(copyObject(linitial(query->rtable)));
+	else
+		newTop->rtable = copyObject(query->rtable);
 	newTop->targetList = copyObject(query->targetList);
 	newTop->intoClause = copyObject(query->intoClause);
 	SetSublinkRewritten(newTop, true);
 
 	/* add original query as first range table entry */
-	addSubqueryToRTWithParam (newTop, orig, "originalSet", false, ACL_NO_RIGHTS, false);
+	addSubqueryToRTWithParam (newTop, orig, "originalSet", false,
+			ACL_NO_RIGHTS, false);
 
 	/* rewrite RTEs of query */
 	rewriteUsingSubInfo((TransSubInfo *) info->root, newTop, 1);
@@ -128,6 +146,38 @@ rewriteTransSet (Query *query, Node **parent, RangeTblEntry *queryRte)
 /*
  *
  */
+static void
+reduceRtindexForTrans(TransSubInfo *info)
+{
+	ListCell *lc;
+	Node *child;
+	TransSubInfo *subChild;
+	TransProvInfo *infoChild;
+
+	if (info->rtIndex > 1)
+		info->rtIndex -= 2;
+
+	foreach(lc, info->children)
+	{
+		child = (Node *) lfirst(lc);
+
+		if (IsA(child, TransProvInfo))
+		{
+			infoChild = (TransProvInfo *) child;
+			if (infoChild->rtIndex > 1)
+				infoChild->rtIndex -= 2;
+		}
+		else
+		{
+			subChild = (TransSubInfo *) child;
+			reduceRtindexForTrans(subChild);
+		}
+	}
+}
+
+/*
+ *
+ */
 
 Query *
 rewriteStaticSetOp (Query *query, Node **parentInfo)
@@ -137,7 +187,8 @@ rewriteStaticSetOp (Query *query, Node **parentInfo)
 	TransProvInfo *info;
 
 	newTop = makeQuery();
-	addSubqueryToRT(newTop, query, appendIdToString("originalSet", &curUniqueRelNum));
+	addSubqueryToRT(newTop, query, appendIdToString("originalSet",
+			&curUniqueRelNum));
 	addSubqueryTargetListToTargetList(query, 1);
 
 	SET_TRANS_INFO(newTop);
@@ -177,7 +228,8 @@ rewriteUnionWithWlCS (Query *query, RangeTblEntry *queryRte)
 	addBitsetsToChildren(query, root, 0);
 
 	/* add the trans prov attr to the set operations */
-	addTransProvToSetOp ((SetOperationStmt *) query->setOperations, list_length(query->targetList) + 1);
+	addTransProvToSetOp ((SetOperationStmt *) query->setOperations,
+			list_length(query->targetList) + 1);
 
 	/* correct alias of rewritten subqueries */
 	correctSubQueryAlias (query);
@@ -190,7 +242,8 @@ rewriteUnionWithWlCS (Query *query, RangeTblEntry *queryRte)
 	query->targetList = lappend(query->targetList, newTarget);
 	GET_TRANS_INFO(query)->transProvAttrNum = list_length(query->targetList);
 
-	queryRte->eref->colnames = lappend(queryRte->eref->colnames, makeString(newTarget->resname));
+	queryRte->eref->colnames = lappend(queryRte->eref->colnames,
+			makeString(newTarget->resname));
 }
 
 /*
@@ -239,7 +292,8 @@ addBitsetsToChildren (Query *query, TransSubInfo *subInfo, Datum bitset)
 			childInfo = (TransProvInfo *) child;
 			rte = rt_fetch(childInfo->rtIndex, query->rtable);
 
-			te = (TargetEntry *) list_nth(rte->subquery->targetList, childInfo->transProvAttrNum - 1);
+			te = (TargetEntry *) list_nth(rte->subquery->targetList,
+					childInfo->transProvAttrNum - 1);
 			te->expr = (Expr *) MAKE_SETOR_FUNC(list_make2(
 					te->expr,
 					MAKE_VARBIT_CONST(newBitSet)));
@@ -272,7 +326,8 @@ rewriteUsingSubInfo (TransSubInfo *setInfo, Query *query, Index offset)
 			TRANS_SET_RTINDEX(child, rtIndex);
 			rte = rt_fetch(rtIndex, query->rtable);
 			SET_TRANS_INFO_TO(rte->subquery, child);
-			rte->subquery = rewriteQueryNodeTrans (rte->subquery, rte, (Node **) &(lc->data.ptr_value));
+			rte->subquery = rewriteQueryNodeTrans (rte->subquery, rte,
+					(Node **) &(lc->data.ptr_value));
 		}
 		else
 			rewriteUsingSubInfo((TransSubInfo *) child, query, offset);
@@ -328,14 +383,16 @@ createJoins (Query *top, Query *query)
 
 
 /*
- * Walks through a set operation tree of a query. If only one type of operators (union or intersection) is found
- * nothing is done. If a different operator or a set difference operator is found, the whole subtree under this operator is extracted into
- * a new query node.
+ * Walks through a set operation tree of a query. If only one type of operators
+ * (union or intersection) is found nothing is done. If a different operator or
+ * a set difference operator is found, the whole subtree under this operator is
+ * extracted into a new query node.
  */
 
 static void
 restructureSetOperationQueryNode
-		(Query *query, Node *node, TransSubInfo *nodeInfo, Node **infoPointer, Node **parentPointer, SetOperation rootType)
+		(Query *query, Node *node, TransSubInfo *nodeInfo, Node **infoPointer,
+				Node **parentPointer, SetOperation rootType)
 {
 	SetOperationStmt *setOp;
 
@@ -346,22 +403,26 @@ restructureSetOperationQueryNode
 	/* cast to set operation stmt */
 	setOp = (SetOperationStmt *) node;
 
-	/* if the user deactivated the optimized set operation rewrites we outsource each set operation into
-	 * a separate query.
-	 */
+	/* if the user deactivated the optimized set operation rewrites we
+	 * outsource each set operation into a separate query. */
 	if (!prov_use_set_optimization)
 	{
 		if (IsA(setOp->larg, SetOperationStmt))
-			replaceSetOperatorSubtree (query, (SetOperationStmt *) setOp->larg, &(setOp->larg), TSET_LARG(nodeInfo), ASET_LARG(nodeInfo));
+			replaceSetOperatorSubtree (query, (SetOperationStmt *) setOp->larg,
+					&(setOp->larg), TSET_LARG(nodeInfo), ASET_LARG(nodeInfo));
 
 		if (IsA(setOp->rarg, SetOperationStmt))
-			replaceSetOperatorSubtree (query, (SetOperationStmt *) setOp->rarg, &(setOp->rarg), TSET_RARG(nodeInfo), ASET_RARG(nodeInfo));
+			replaceSetOperatorSubtree (query, (SetOperationStmt *) setOp->rarg,
+					&(setOp->rarg), TSET_RARG(nodeInfo), ASET_RARG(nodeInfo));
 	}
 
 	/*
-	 *  Optimization is activated. Keep original set operation tree, if it just contains only union or only intersection operations.
-	 *  For a set difference operation both operands are outsourced into a separate query (If they are not simple range table references).
-	 *  For a mixed unions and intersections we have to outsource sub trees under set operations differend from the root set operation.
+	 *  Optimization is activated. Keep original set operation tree, if it
+	 *  just contains only union or only intersection operations. For a set
+	 *  difference operation both operands are outsourced into a separate query
+	 *  (If they are not simple range table references). For a mixed unions
+	 *  and intersections we have to outsource sub trees under set operations
+	 *  different from the root set operation.
 	 */
 
 	switch (setOp->op)
@@ -372,26 +433,36 @@ restructureSetOperationQueryNode
 			/* check if of the same type as parent */
 			if (setOp->op == rootType)
 			{
-				restructureSetOperationQueryNode (query, setOp->larg, TSET_LARG(nodeInfo), ASET_LARG(nodeInfo), &(setOp->larg), rootType);
-				restructureSetOperationQueryNode (query, setOp->rarg, TSET_RARG(nodeInfo), ASET_RARG(nodeInfo), &(setOp->rarg), rootType);
+				restructureSetOperationQueryNode (query, setOp->larg,
+						TSET_LARG(nodeInfo), ASET_LARG(nodeInfo),
+						&(setOp->larg), rootType);
+				restructureSetOperationQueryNode (query, setOp->rarg,
+						TSET_RARG(nodeInfo), ASET_RARG(nodeInfo),
+						&(setOp->rarg), rootType);
 			}
 			/* another type replace subtree */
 			else
-				replaceSetOperatorSubtree(query, setOp, parentPointer, nodeInfo, infoPointer);
+				replaceSetOperatorSubtree(query, setOp, parentPointer,
+						nodeInfo, infoPointer);
 		break;
 		/* set difference, replace subtree with new query node */
 		case SETOP_EXCEPT:
-			/* if is root set diff operation replace left and rigth sub trees */
+			/* if is root set diff operation replace left and right sub trees */
 			if (rootType == SETOP_EXCEPT) {
 				if (IsA(setOp->larg, SetOperationStmt))
-					replaceSetOperatorSubtree (query, (SetOperationStmt *) setOp->larg, &(setOp->larg), TSET_LARG(nodeInfo), ASET_LARG(nodeInfo));
+					replaceSetOperatorSubtree (query, (SetOperationStmt *)
+							setOp->larg, &(setOp->larg), TSET_LARG(nodeInfo),
+							ASET_LARG(nodeInfo));
 
 				if (IsA(setOp->rarg, SetOperationStmt))
-					replaceSetOperatorSubtree (query, (SetOperationStmt *) setOp->rarg, &(setOp->rarg), TSET_RARG(nodeInfo), ASET_RARG(nodeInfo));
+					replaceSetOperatorSubtree (query, (SetOperationStmt *)
+							setOp->rarg, &(setOp->rarg), TSET_RARG(nodeInfo),
+							ASET_RARG(nodeInfo));
 			}
 			/* is not root operation process as for operator change */
 			else {
-				replaceSetOperatorSubtree(query, setOp, parentPointer, nodeInfo, infoPointer);
+				replaceSetOperatorSubtree(query, setOp, parentPointer,
+						nodeInfo, infoPointer);
 			}
 		break;
 		default:
@@ -401,13 +472,13 @@ restructureSetOperationQueryNode
 }
 
 /*
- * Replaces a subtree in an set operation tree with a new subquery that represents the
- * set operations performed by the sub tree.
+ * Replaces a subtree in an set operation tree with a new subquery that
+ * represents the set operations performed by the sub tree.
  */
 
 static void
-replaceSetOperatorSubtree
-		(Query *query, SetOperationStmt *setOp, Node **parent, TransSubInfo *nodeInfo, Node **infoPointer)
+replaceSetOperatorSubtree (Query *query, SetOperationStmt *setOp,
+		Node **parent, TransSubInfo *nodeInfo, Node **infoPointer)
 {
 	ListCell *lc;
 	ListCell *rLc;
@@ -444,11 +515,13 @@ replaceSetOperatorSubtree
 	newSub->rtable = NIL;
 	newSub->setOperations = (Node *) copyObject(setOp); //CHECK necessary
 
-	/* create range table entries for range table entries referenced from set operation in subtree */
+	/* create range table entries for range table entries referenced from set
+	 * operation in subtree */
 	foreach(lc,subTreeRTEs)
 	{
 		rte = (RangeTblEntry *) lfirst(lc);
-		newSub->rtable = lappend(newSub->rtable, (RangeTblEntry *) copyObject(rte));
+		newSub->rtable = lappend(newSub->rtable,
+				(RangeTblEntry *) copyObject(rte));
 	}
 
 	/* adapt RTErefs in sub tree */
@@ -468,13 +541,14 @@ replaceSetOperatorSubtree
 	}
 
 	/* add new sub query to range table */
-	addSubqueryToRTWithParam (query, newSub, "newSub", false, ACL_NO_RIGHTS, true);
+	addSubqueryToRTWithParam (query, newSub, "newSub", false, ACL_NO_RIGHTS,
+			true);
 
 	/* replace subtree with RTE reference */
 	MAKE_RTREF(rtRef, list_length(query->rtable));
 	*parent = (Node *) rtRef;
 
-	logNode(query, "before range table adapt");
+	LOGNODE(query, "before range table adapt");
 
 	/* adapt range table and rteRefs for query */
 	newRtable = NIL;
@@ -544,7 +618,8 @@ createSetTransProvAttr (Query *newTop)
 	topInfo = GET_TRANS_INFO(newTop);
 	info = (TransProvInfo *) topInfo->root;
 
-	te = MAKE_TRANS_PROV_ATTR(newTop, buildComputationForSetOps (newTop, info->root));
+	te = MAKE_TRANS_PROV_ATTR(newTop,
+			buildComputationForSetOps (newTop, info->root));
 	newTop->targetList = lappend(newTop->targetList, te);
 	topInfo->transProvAttrNum = list_length(newTop->targetList);
 }

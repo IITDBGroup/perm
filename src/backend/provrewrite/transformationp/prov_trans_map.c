@@ -122,7 +122,7 @@ unionBitsets (TransSubInfo *info, List *bitsets, List *annotations)
 		if (listPos != -1)
 		{
 			bitSet = (VarBit *) list_nth(bitsets, listPos);
-			VARBITP_OR(bitSet, info->setForNode);
+			//VARBITP_OR(bitSet, info->setForNode);
 		}
 	}
 

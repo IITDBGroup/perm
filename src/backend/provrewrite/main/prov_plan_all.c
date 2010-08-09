@@ -103,7 +103,7 @@ generateCheapestQueryAndPlan (Query *query, int cursorOptions, ParamListInfo bou
 	/* try all applicable rewrite methods */
 	*cheapestPlan = NULL;
 
-	logNotice("-------------- optimize statement");
+	LOGNOTICE("-------------- optimize statement");
 	for(i = 0; i < NUM_OPTIONS; i++)
 	{
 		logNotice("--next plan");
@@ -118,7 +118,7 @@ generateCheapestQueryAndPlan (Query *query, int cursorOptions, ParamListInfo bou
 		curPlan = standard_planner(copyObject(rewrittenQuery), cursorOptions, boundParams);
 		if (!(*cheapestPlan) || curPlan->planTree->total_cost < minCost)
 		{
-			logNotice("------- is cheapest");
+			LOGNOTICE("------- is cheapest");
 			if (*cheapestPlan)
 				pfree(*cheapestPlan);
 

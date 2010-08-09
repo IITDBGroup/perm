@@ -1,7 +1,8 @@
 /*-------------------------------------------------------------------------
  *
  * prov_sublink_unnest.c
- *	  PERM C unnests and decorrelates sublinks for provenance rewrite. The following rewrite strategies are implemented
+ *	  PERM C - unnests and decorrelates sublinks for provenance rewrite.
+ *	  The following rewrite strategies are implemented
  *	  in this file:
  *	  		1) JA strategy
  *	  		2) EXISTS strategy
@@ -38,31 +39,44 @@
 
 /* prototypes */
 static bool checkCorrVarsInEqualityWhere (SublinkInfo *info);
+static bool hasCorrVarsBelowAggOrSet (SublinkInfo *info);
+static bool hasCorrSkippingSublinks (SublinkInfo *info);
 static bool checkCorrVarsInOpWhere (SublinkInfo *info);
 static bool existsOrNotExistsInAnd (SublinkInfo *info);
 
-static RangeTblRef *rewriteAggregateSublinkQuery (Query *query, SublinkInfo *info, Index subList[], List **corrPos);
-static RangeTblRef *rewriteExistsSublinkQuery (Query *query, SublinkInfo *info, Index subList[]);
+static RangeTblRef *rewriteAggregateSublinkQuery (Query *query,
+		SublinkInfo *info, Index subList[], List **corrPos);
+static RangeTblRef *rewriteExistsSublinkQuery (Query *query, SublinkInfo *info,
+		Index subList[]);
 static Query *rewriteExistsWithoutInject (Query *query, SublinkInfo *info);
-static RangeTblRef *rewriteNotToLeftJoin (Query *query, SublinkInfo *info, Index subList[], bool exists);
-static Node *createCorrelationPredicates (SublinkInfo *info, List *corrVarPos, Index rangeTblPos);
-static Query *rewriteWithInject (Query *query, SublinkInfo *info, List **corrPos);
-static Query *rewriteWithoutInject (Query *query, SublinkInfo *info, List **corrPos);
+static RangeTblRef *rewriteNotToLeftJoin (Query *query, SublinkInfo *info,
+		Index subList[], bool exists);
+static Node *createCorrelationPredicates (SublinkInfo *info, List *corrVarPos,
+		Index rangeTblPos);
+static Query *rewriteWithInject (Query *query, SublinkInfo *info,
+		List **corrPos);
+static Query *rewriteWithoutInject (Query *query, SublinkInfo *info,
+		List **corrPos);
 static Query *rewriteExistsWithInject (Query *query, SublinkInfo *info);
 static List *generateGroupBy (SublinkInfo *info);
-static void replaceSubExprInJoinTree (Query *query, List *searchList, List *replaceList);
+static void replaceSubExprInJoinTree (Query *query, List *searchList,
+		List *replaceList);
 static List *generateGroupByForExists (SublinkInfo *info);
 static Node *generateCsubPlus (SublinkInfo *info, Index rtIndex, Query *query);
-static void replaceSublinkWithLeftJoinForExists (SublinkInfo *info, Query *query, RangeTblRef *rtRef, List *corrPos);
-static void replaceSublinkWithCsubPlus(SublinkInfo *info, Query *query, RangeTblRef *rtRef, List *corrPos);
-static void replaceSublinkWithCsubPlusForExists (SublinkInfo *info, Query *query, RangeTblRef *rtRef);
+static void replaceSublinkWithLeftJoinForExists (SublinkInfo *info,
+		Query *query, RangeTblRef *rtRef, List *corrPos);
+static void replaceSublinkWithCsubPlus(SublinkInfo *info, Query *query,
+		RangeTblRef *rtRef, List *corrPos);
+static void replaceSublinkWithCsubPlusForExists (SublinkInfo *info, Query *query,
+		RangeTblRef *rtRef);
 static bool parentIsNot (SublinkInfo *info);
 static bool rewriteNeedsInject (SublinkInfo *info);
 static Node *replaceSublinksWithTrueMutator (Node *node, void *context);
 static List *addJoinForCorrelationPredicates (Query *query, SublinkInfo *info);
 static List *generateGroupByForInject (SublinkInfo *info, List *predVars);
 static List *generateGroupByForExistsInject (SublinkInfo *info, List *predVars);
-static Query *generateInjectQuery (Query *query, SublinkInfo *info, Index *newCorrVarnos, Index *newCorrAttrNums);
+static Query *generateInjectQuery (Query *query, SublinkInfo *info,
+		Index *newCorrVarnos, Index *newCorrAttrNums);
 static bool checkInjectNeedsOnlyCorrelatedRTEs (Query *query, SublinkInfo *info);
 static Node *replaceAggsWithConstsMutator (Node *node, void *context);
 static Node *replaceParamsWithNodeMutator (Node *node, Node *context);
@@ -74,25 +88,30 @@ static Node *replaceParamsWithNodeMutator (Node *node, Node *context);
  *		1) Sublink is an ANY- or EXPR-sublink or EXISTS sublink
  *		2) The Sublink's query is an aggregation without group by and having
  *		3) The sublink is used in WHERE in an AND-tree
- *		4) All correlation predicates are equality and are used in WHERE in an AND tree.
- *		5) Sublink is correlated (no required precondition for applicability of the method, but if the Sublink is uncorrelated we can use another more efficient method)
- *		6) Sublink does not contain sublinks that have to be rewritten using GEN-strategy (the correlations used
- *			there wouldn't work in a FROM-caluse item)
+ *		4) All correlation predicates are equality and are used in WHERE in an
+ *			AND tree.
+ *		5) Sublink is correlated (no required precondition for applicability of
+ *			the method, but if the Sublink is uncorrelated we can use another
+ *			more efficient method)
+ *		6) Sublink does not contain sublinks that have to be rewritten using
+ *			GEN-strategy (the correlations used there wouldn't work in a
+ *			FROM-clause item)
  *		7) Test expression of sublink does not contain a sublink
  */
 
 bool
-checkJAstrategyPreconditions (SublinkInfo *info)
+checkJAstrategyPreconditions(SublinkInfo *info)
 {
 	bool result;
 
 	result = info->category == SUBCAT_CORRELATED;
 	result = result && info->location == SUBLOC_WHERE;
-	result = result && SublinkInAndOrTop (info);
+	result = result && SublinkInAndOrTop(info);
 	result = result && (info->sublink->subLinkType == ANY_SUBLINK
-					|| info->sublink->subLinkType == EXPR_SUBLINK
-					|| info->sublink->subLinkType == EXISTS_SUBLINK);
-	result = result && queryIsAggWithoutGroupBy((Query *) info->sublink->subselect);
+			|| info->sublink->subLinkType == EXPR_SUBLINK
+			|| info->sublink->subLinkType == EXISTS_SUBLINK);
+	result = result && queryIsAggWithoutGroupBy(
+			(Query *) info->sublink->subselect);
 	result = result && checkCorrVarsInOpWhere(info);
 	result = result && !containsGenCorrSublink(info);
 	result = result && !sublinkHasSublinksInTestOrInTest(info);
@@ -106,35 +125,41 @@ checkJAstrategyPreconditions (SublinkInfo *info)
  * These are:
  * 		1) Sublink is an EXISTS sublink
  * 		2) The sublink's query is not an aggregation
- * 		3) The sublink is used in WHERE in an AND-tree (a NOT a parent of the sublink is allowed)
- * 		4) All correlation predicates are equality and are used in WHERE in an AND tree.
- * 		5) Sublink is correlated (no required precondition for the method, but is the Sublink is
- * 			uncorrelated we can use another more efficient method)
- *		6) Sublink does not contain sublinks that have to be rewritten using GEN-strategy (the correlations used
- *			there wouldn't work in a FROM-clause item)
+ * 		3) The sublink is used in WHERE in an AND-tree (a NOT a parent of the
+ * 			sublink is allowed)
+ * 		4) All correlation predicates are equality and are used in WHERE in an
+ * 			AND tree.
+ * 		5) Sublink is correlated (no required precondition for the method, but
+ * 			is the Sublink is uncorrelated we can use another more efficient
+ * 			method)
+ *		6) Sublink does not contain sublinks that have to be rewritten using
+ *			GEN-strategy (the correlations used there wouldn't work in a
+ *			FROM-clause item)
  */
 
 bool
-checkEXISTSstrategyPreconditions (SublinkInfo *info)
+checkEXISTSstrategyPreconditions(SublinkInfo *info)
 {
 	bool result;
 
 	result = info->category == SUBCAT_CORRELATED;
 	result = result && info->location == SUBLOC_WHERE;
 	result = result && existsOrNotExistsInAnd(info);
-	result = result && !((Query *) info->sublink->subselect)->hasAggs;
+	result = result && !hasCorrVarsBelowAggOrSet(info);
 	result = result && checkCorrVarsInOpWhere(info);
+	result = result && !hasCorrSkippingSublinks(info);
 	result = result && !containsGenCorrSublink(info);
 
 	return result;
 }
 
 /*
- * Checks if sublink is an EXISTS sublink in an AND tree (with direct parent allowed to be a NOT).
+ * Checks if sublink is an EXISTS sublink in an AND tree (with direct parent
+ * allowed to be a NOT).
  */
 
 static bool
-existsOrNotExistsInAnd (SublinkInfo *info)
+existsOrNotExistsInAnd(SublinkInfo *info)
 {
 	BoolExpr *expr;
 
@@ -155,12 +180,12 @@ existsOrNotExistsInAnd (SublinkInfo *info)
 }
 
 /*
- *	Checks if all correlated variables of a sublink are used in the WHERE clause in an
- *	equality condition.
+ *	Checks if all correlated variables of a sublink are used in the WHERE
+ *	clause in an equality condition.
  */
 
 static bool
-checkCorrVarsInEqualityWhere (SublinkInfo *info)
+checkCorrVarsInEqualityWhere(SublinkInfo *info)
 {
 	ListCell *lc;
 	CorrVarInfo *corrVar;
@@ -179,12 +204,53 @@ checkCorrVarsInEqualityWhere (SublinkInfo *info)
 }
 
 /*
+ *
+ */
+
+static bool
+hasCorrSkippingSublinks(SublinkInfo *info)
+{
+	ListCell *lc;
+	CorrVarInfo *corrVar;
+
+	foreach(lc, info->corrVarInfos)
+	{
+		corrVar = (CorrVarInfo *) lfirst(lc);
+		if (corrVar->trueVarLevelsUp > 1)
+			return true;
+	}
+
+	return false;
+}
+
+/*
+ * Checks if at least one of the correlated variables is below an aggregation
+ * or set operation.
+ */
+
+static bool
+hasCorrVarsBelowAggOrSet(SublinkInfo *info)
+{
+	ListCell *lc;
+	CorrVarInfo *corrVar;
+
+	foreach(lc, info->corrVarInfos)
+	{
+		corrVar = (CorrVarInfo *) lfirst(lc);
+		if (corrVar->belowAgg || corrVar->belowSet)
+			return true;
+	}
+
+	return false;
+}
+
+/*
  * Checks if all correlated variables of a sublink are used in the WHERE
  * clause in an op.
  */
 
 static bool
-checkCorrVarsInOpWhere (SublinkInfo *info)
+checkCorrVarsInOpWhere(SublinkInfo *info)
 {
 	ListCell *lc;
 	CorrVarInfo *corrVar;
@@ -202,13 +268,12 @@ checkCorrVarsInOpWhere (SublinkInfo *info)
 	return true;
 }
 
-
 /*
  * Transforms a JA-Query into a join.
  */
 
 Query *
-rewriteJAstrategy (Query *query, SublinkInfo *info, Index subList[])
+rewriteJAstrategy(Query *query, SublinkInfo *info, Index subList[])
 {
 	RangeTblRef *rtRef;
 	List *corrPos;
@@ -216,9 +281,10 @@ rewriteJAstrategy (Query *query, SublinkInfo *info, Index subList[])
 	corrPos = NIL;
 
 	info->unnested = true;
-	info->rewrittenSublinkQuery = (Query *) copyObject(info->sublink->subselect);
+	info->rewrittenSublinkQuery
+			= (Query *) copyObject(info->sublink->subselect);
 
-	rtRef = rewriteAggregateSublinkQuery (query, info, subList, &corrPos);
+	rtRef = rewriteAggregateSublinkQuery(query, info, subList, &corrPos);
 
 	/* for EXISTS an aggregation means that the sublink condition
 	 * is allways true, because the aggregation always returns a tuple.
@@ -234,43 +300,45 @@ rewriteJAstrategy (Query *query, SublinkInfo *info, Index subList[])
 }
 
 /*
- * Transform an EXISTS sublink into an count(*) on the sublink query and replace EXISTS in condition with 0 < count(*).
+ * Transform an EXISTS sublink into an count(*) on the sublink query and
+ * replace EXISTS in condition with 0 < count(*).
  */
 
 Query *
-rewriteEXISTSstrategy (Query *query, SublinkInfo *info, Index subList[])
+rewriteEXISTSstrategy(Query *query, SublinkInfo *info, Index subList[])
 {
 	Query *sublink;
 	RangeTblRef *rtRef;
 
 	info->unnested = true;
-	info->rewrittenSublinkQuery = (Query *) copyObject(info->sublink->subselect);
+	info->rewrittenSublinkQuery
+			= (Query *) copyObject(info->sublink->subselect);
 	sublink = (Query *) info->rewrittenSublinkQuery;
 
 	/* rewrite sublink query */
 	if (parentIsNot(info))
 	{
-		joinQueryRTEs (query);
-		rtRef = rewriteNotToLeftJoin (query, info, subList, true);
+		joinQueryRTEs(query);
+		rtRef = rewriteNotToLeftJoin(query, info, subList, true);
 	}
 	else
 	{
 		rtRef = rewriteExistsSublinkQuery(query, info, subList);
 
 		/* create join condition */
-		replaceSublinkWithCsubPlusForExists(info,query,rtRef);
+		replaceSublinkWithCsubPlusForExists(info, query, rtRef);
 	}
 
 	return query;
 }
-
 
 /*
  *
  */
 
 static RangeTblRef *
-rewriteNotToLeftJoin (Query *query, SublinkInfo *info, Index subList[], bool exists)
+rewriteNotToLeftJoin(Query *query, SublinkInfo *info, Index subList[],
+		bool exists)
 {
 	RangeTblRef *rtRef;
 	Index sublinkIndex;
@@ -284,7 +352,7 @@ rewriteNotToLeftJoin (Query *query, SublinkInfo *info, Index subList[], bool exi
 	/* rewrite the sublink query */
 	if (rewriteNeedsInject(info))
 	{
-		predVars = addJoinForCorrelationPredicates (query, info);
+		predVars = addJoinForCorrelationPredicates(query, info);
 		if (exists)
 			corrPos = generateGroupByForExistsInject(info, predVars);
 		else
@@ -300,10 +368,12 @@ rewriteNotToLeftJoin (Query *query, SublinkInfo *info, Index subList[], bool exi
 
 	info->rewrittenSublinkQuery = rewriteQueryNode(info->rewrittenSublinkQuery);
 
-	corrPred = createCorrelationPredicates(info, corrPos, list_length(query->rtable) + 1);
+	corrPred = createCorrelationPredicates(info, corrPos, list_length(
+			query->rtable) + 1);
 
 	/* add rewriten sublink to RT */
-	addSubqueryToRT(query, info->rewrittenSublinkQuery, appendIdToString("rewrittenSublink", &curUniqueRelNum));
+	addSubqueryToRT(query, info->rewrittenSublinkQuery, appendIdToString(
+			"rewrittenSublink", &curUniqueRelNum));
 	correctRTEAlias((RangeTblEntry *) lfirst(query->rtable->tail));
 
 	sublinkIndex = list_length(query->rtable);
@@ -327,21 +397,24 @@ rewriteNotToLeftJoin (Query *query, SublinkInfo *info, Index subList[], bool exi
 
 	nullTest = makeNode(NullTest);
 	nullTest->nulltesttype = IS_NULL;
-	nullTest->arg = (Expr *) makeVar(sublinkIndex, 1, exprType((Node *) te->expr), exprTypmod((Node *) te->expr), 0);
+	nullTest->arg = (Expr *) makeVar(sublinkIndex, 1, exprType(
+			(Node *) te->expr), exprTypmod((Node *) te->expr), 0);
 
-	query->jointree = (FromExpr *) replaceSubExpression
-			((Node *) query->jointree, list_make1(info->parent), list_make1((Node *) nullTest), REPLACE_SUB_EXPR_QUERY);
+	query->jointree = (FromExpr *) replaceSubExpression(
+			(Node *) query->jointree, list_make1(info->parent),
+			list_make1((Node *) nullTest), REPLACE_SUB_EXPR_QUERY);
 
 	return rtRef;
 }
 
 /*
- * Rewrite the aggregation sublink query and add it to the range table of "query". Returns a RangeTblRef for
- * the rewritten sublink query.
+ * Rewrite the aggregation sublink query and add it to the range table of
+ * "query". Returns a RangeTblRef for the rewritten sublink query.
  */
 
 static RangeTblRef *
-rewriteAggregateSublinkQuery (Query *query, SublinkInfo *info, Index subList[], List **corrPos)
+rewriteAggregateSublinkQuery(Query *query, SublinkInfo *info, Index subList[],
+		List **corrPos)
 {
 	RangeTblRef *rtRef;
 	Index sublinkIndex;
@@ -356,7 +429,8 @@ rewriteAggregateSublinkQuery (Query *query, SublinkInfo *info, Index subList[], 
 	addDummyAttr(info->rewrittenSublinkQuery);
 
 	/* add rewriten sublink to RT */
-	addSubqueryToRT(query, info->rewrittenSublinkQuery, appendIdToString("rewrittenSublink", &curUniqueRelNum));
+	addSubqueryToRT(query, info->rewrittenSublinkQuery, appendIdToString(
+			"rewrittenSublink", &curUniqueRelNum));
 	correctRTEAlias((RangeTblEntry *) lfirst(query->rtable->tail));
 
 	sublinkIndex = list_length(query->rtable);
@@ -368,14 +442,12 @@ rewriteAggregateSublinkQuery (Query *query, SublinkInfo *info, Index subList[], 
 	return rtRef;
 }
 
-
-
 /*
  *
  */
 
 static RangeTblRef *
-rewriteExistsSublinkQuery (Query *query, SublinkInfo *info, Index subList[])
+rewriteExistsSublinkQuery(Query *query, SublinkInfo *info, Index subList[])
 {
 	RangeTblRef *rtRef;
 	Index sublinkIndex;
@@ -387,7 +459,8 @@ rewriteExistsSublinkQuery (Query *query, SublinkInfo *info, Index subList[])
 		rewriteExistsWithoutInject(query, info);
 
 	/* add rewriten sublink to RT */
-	addSubqueryToRT(query, info->rewrittenSublinkQuery, appendIdToString("rewrittenSublink", &curUniqueRelNum));
+	addSubqueryToRT(query, info->rewrittenSublinkQuery, appendIdToString(
+			"rewrittenSublink", &curUniqueRelNum));
 	correctRTEAlias((RangeTblEntry *) lfirst(query->rtable->tail));
 
 	sublinkIndex = list_length(query->rtable);
@@ -404,19 +477,20 @@ rewriteExistsSublinkQuery (Query *query, SublinkInfo *info, Index subList[])
  */
 
 static Query *
-rewriteExistsWithInject (Query *query, SublinkInfo *info)
+rewriteExistsWithInject(Query *query, SublinkInfo *info)
 {
 	List *predVars;
 	List *corrPos;
 	Node *corrPred;
 
-	predVars = addJoinForCorrelationPredicates (query, info);
+	predVars = addJoinForCorrelationPredicates(query, info);
 
 	corrPos = generateGroupByForExistsInject(info, predVars);
 
 	info->rewrittenSublinkQuery = rewriteQueryNode(info->rewrittenSublinkQuery);
 
-	corrPred = createCorrelationPredicates(info, corrPos, list_length(query->rtable) + 1);
+	corrPred = createCorrelationPredicates(info, corrPos, list_length(
+			query->rtable) + 1);
 	addConditionToQualWithAnd(query, corrPred, true);
 
 	return info->rewrittenSublinkQuery;
@@ -427,7 +501,7 @@ rewriteExistsWithInject (Query *query, SublinkInfo *info)
  */
 
 static Query *
-rewriteExistsWithoutInject (Query *query, SublinkInfo *info)
+rewriteExistsWithoutInject(Query *query, SublinkInfo *info)
 {
 	List *corrPos;
 	Node *corrPred;
@@ -436,7 +510,8 @@ rewriteExistsWithoutInject (Query *query, SublinkInfo *info)
 
 	info->rewrittenSublinkQuery = rewriteQueryNode(info->rewrittenSublinkQuery);
 
-	corrPred = createCorrelationPredicates(info, corrPos, list_length(query->rtable) + 1);
+	corrPred = createCorrelationPredicates(info, corrPos, list_length(
+			query->rtable) + 1);
 	addConditionToQualWithAnd(query, corrPred, true);
 
 	return info->rewrittenSublinkQuery;
@@ -447,19 +522,21 @@ rewriteExistsWithoutInject (Query *query, SublinkInfo *info)
  */
 
 static Query *
-rewriteWithInject (Query *query, SublinkInfo *info, List **corrPos)
+rewriteWithInject(Query *query, SublinkInfo *info, List **corrPos)
 {
 	List *predVars;
 	Node *corrPred;
 
-	predVars = addJoinForCorrelationPredicates (query, info);
+	predVars = addJoinForCorrelationPredicates(query, info);
 
 	*corrPos = generateGroupByForInject(info, predVars);
 
 	info->rewrittenSublinkQuery = rewriteQueryNode(info->rewrittenSublinkQuery);
 
-	if (info->sublink->subLinkType != EXISTS_SUBLINK) {
-		corrPred = createCorrelationPredicates(info, *corrPos, list_length(query->rtable) + 1);
+	if (info->sublink->subLinkType != EXISTS_SUBLINK)
+	{
+		corrPred = createCorrelationPredicates(info, *corrPos, list_length(
+				query->rtable) + 1);
 		addConditionToQualWithAnd(query, corrPred, true);
 	}
 
@@ -467,13 +544,14 @@ rewriteWithInject (Query *query, SublinkInfo *info, List **corrPos)
 }
 
 /*
- * For sublinks that are decorrelated by injection of the outer query into the sublink query,
- * the correlation predicates are transformed into join conditions. This method generates the
- * join between the outer query and the sublink query on the correlation predicates.
+ * For sublinks that are decorrelated by injection of the outer query into the
+ * sublink query, the correlation predicates are transformed into join
+ * conditions. This method generates the join between the outer query and the
+ * sublink query on the correlation predicates.
  */
 
 static List *
-addJoinForCorrelationPredicates (Query *query, SublinkInfo *info)
+addJoinForCorrelationPredicates(Query *query, SublinkInfo *info)
 {
 	Query *rewritten;
 	ListCell *lc;
@@ -492,12 +570,15 @@ addJoinForCorrelationPredicates (Query *query, SublinkInfo *info)
 	predVars = NIL;
 	newCorrVars = NIL;
 	joinAddedQueries = NIL;
-	newCorrAttrNums = (Index *) palloc(sizeof(Index) * list_length(info->corrVarInfos));
-	newCorrVarnos = (Index *) palloc(sizeof(Index) * list_length(info->corrVarInfos));
+	newCorrAttrNums
+			= (Index *) palloc(sizeof(Index) * list_length(info->corrVarInfos));
+	newCorrVarnos
+			= (Index *) palloc(sizeof(Index) * list_length(info->corrVarInfos));
 
 	/* remove sublinks from the original query */
 	//rewritten = copyObject(query); //TODO construct rewritten from accessed range table entries (maybe decide this on quiery complexity)
-	rewritten = generateInjectQuery(query, info, newCorrVarnos, newCorrAttrNums);
+	rewritten
+			= generateInjectQuery(query, info, newCorrVarnos, newCorrAttrNums);
 
 	/* inject top query for each correlated attribute ref and add join condition */
 	foreachi(lc, i, info->corrVarInfos)
@@ -505,17 +586,21 @@ addJoinForCorrelationPredicates (Query *query, SublinkInfo *info)
 		corrVar = (CorrVarInfo *) lfirst(lc);
 		varQuery = corrVar->parentQuery;//TODO find this query in info->rewrittenSublink
 
-		varQuery = (Query *) findSubExpression((Node *) info->rewrittenSublinkQuery, (Node *) varQuery, 0);
+		varQuery = (Query *) findSubExpression(
+				(Node *) info->rewrittenSublinkQuery, (Node *) varQuery, 0);
 
-		/* if we have not added the top query as a range table entry to the parent query of the correlated var
-		 * add a join
+		/* if we have not added the top query as a range table entry to the
+		 * parent query of the correlated var add a join
 		 */
-		if (!list_member(joinAddedQueries,varQuery))
+		if (!list_member(joinAddedQueries, varQuery))
 		{
 			joinQueryRTEs(varQuery);
-			addSubqueryToRT(varQuery, rewritten, appendIdToString("topForCorrelatedVar", &curUniqueRelNum));
-			setIgnoreRTE(rt_fetch(list_length(varQuery->rtable), varQuery->rtable));
-			correctRTEAlias(rt_fetch(list_length(varQuery->rtable), varQuery->rtable));
+			addSubqueryToRT(varQuery, rewritten, appendIdToString(
+					"topForCorrelatedVar", &curUniqueRelNum));
+			setIgnoreRTE(
+					rt_fetch(list_length(varQuery->rtable), varQuery->rtable));
+			correctRTEAlias(
+					rt_fetch(list_length(varQuery->rtable), varQuery->rtable));
 
 			join = createJoinExpr(varQuery, JOIN_INNER);
 			join->larg = (Node *) linitial(varQuery->jointree->fromlist);
@@ -532,16 +617,14 @@ addJoinForCorrelationPredicates (Query *query, SublinkInfo *info)
 			join = (JoinExpr *) linitial(varQuery->jointree->fromlist);
 		}
 
-		/* create correlation predicate */ //TODO will break if in corrVar used in join condition
-		var = makeVar(list_length(varQuery->rtable) - 1,
-				newCorrAttrNums[i],
-				corrVar->corrVar->vartype,
-				corrVar->corrVar->vartypmod,
-				false);
+		/* create correlation predicate *///TODO will break if in corrVar used in join condition
+		var = makeVar(list_length(varQuery->rtable) - 1, newCorrAttrNums[i],
+				corrVar->corrVar->vartype, corrVar->corrVar->vartypmod, false);
 
 		corrVar->vars = list_make1(var);
-		varQuery->jointree = (FromExpr *) replaceSubExpression
-				((Node *) varQuery->jointree, list_make1(corrVar->corrVar), list_make1(var), 0);
+		varQuery->jointree = (FromExpr *) replaceSubExpression(
+				(Node *) varQuery->jointree, list_make1(corrVar->corrVar),
+				list_make1(var), 0);
 
 		predVars = lappend(predVars, var);
 	}
@@ -549,15 +632,15 @@ addJoinForCorrelationPredicates (Query *query, SublinkInfo *info)
 	return predVars;
 }
 
-
 /*
- * Generates a cross product of the range table entries used that are accessed by correlated attributes. This is done to increase
- * performance of processing the injected top query.
- *
+ * Generates a cross product of the range table entries used that are accessed
+ * by correlated attributes. This is done to increase performance of processing
+ * the injected top query.
  */
 
 static Query *
-generateInjectQuery (Query *query, SublinkInfo *info, Index *newCorrVarnos, Index *newCorrAttrNums)
+generateInjectQuery(Query *query, SublinkInfo *info, Index *newCorrVarnos,
+		Index *newCorrAttrNums)
 {
 	Query *result;
 	CorrVarInfo *corr;
@@ -569,23 +652,25 @@ generateInjectQuery (Query *query, SublinkInfo *info, Index *newCorrVarnos, Inde
 	int i;
 	Var *var;
 
-
-	/* check if it is ok to just use the correlated range table entries. For example, if the nullable side of an
-	 * outer join is correlated, we cannot do this.
+	/* check if it is ok to just use the correlated range table entries. For
+	 * example, if the nullable side of an outer join is correlated, we cannot
+	 * do this.
 	 */
 	if (checkInjectNeedsOnlyCorrelatedRTEs(query, info))
 	{
-		/* gather range table entries needed for the correlation and create new query node */
-		result = makeQuery ();
+		/* gather range table entries needed for the correlation and create new
+		 * query node */
+		result = makeQuery();
 		neededRTEs = NIL;
 
 		foreachi(lc, i, info->corrVarInfos)
 		{
 			corr = (CorrVarInfo *) lfirst(lc);
 
-			if(list_member_int(neededRTEs, corr->corrVar->varno))
+			if (list_member_int(neededRTEs, corr->corrVar->varno))
 			{
-				newCorrVarnos[i] = listPositionInt(neededRTEs, corr->corrVar->varno) + 1;
+				newCorrVarnos[i] = listPositionInt(neededRTEs,
+						corr->corrVar->varno) + 1;
 			}
 			else
 			{
@@ -596,7 +681,8 @@ generateInjectQuery (Query *query, SublinkInfo *info, Index *newCorrVarnos, Inde
 				newCorrVarnos[i] = list_length(result->rtable);
 
 				MAKE_RTREF(rtRef, newCorrVarnos[i]);
-				result->jointree->fromlist = lappend(result->jointree->fromlist, rtRef);
+				result->jointree->fromlist = lappend(
+						result->jointree->fromlist, rtRef);
 			}
 		}
 	}
@@ -607,7 +693,7 @@ generateInjectQuery (Query *query, SublinkInfo *info, Index *newCorrVarnos, Inde
 	 * change corr var to reference the target list entry of the
 	 * parent query.
 	 */
-	foreachi(lc,i, info->corrVarInfos)//TODO use new corr vars from newCorrVars!
+	foreachi(lc,i, info->corrVarInfos) //TODO use new corr vars from newCorrVars!
 	{
 		corr = (CorrVarInfo *) lfirst(lc);
 		var = copyObject(corr->corrVar);
@@ -617,10 +703,11 @@ generateInjectQuery (Query *query, SublinkInfo *info, Index *newCorrVarnos, Inde
 		te = findTeForVar(var, result->targetList);
 
 		/* is the var used as a target entry? */
-		if(!te)
+		if (!te)
 		{
-			te = makeTargetEntry((Expr *) var,
-					list_length(result->targetList) + 1, appendIdToString("newCorrAttr",&curUniqueAttrNum), false);
+			te = makeTargetEntry((Expr *) var, list_length(result->targetList)
+					+ 1, appendIdToString("newCorrAttr", &curUniqueAttrNum),
+					false);
 			result->targetList = lappend(result->targetList, te);
 		}
 
@@ -635,7 +722,7 @@ generateInjectQuery (Query *query, SublinkInfo *info, Index *newCorrVarnos, Inde
  */
 
 static bool
-checkInjectNeedsOnlyCorrelatedRTEs (Query *query, SublinkInfo *info) //TODO less restrictive checks would be ok, do it!
+checkInjectNeedsOnlyCorrelatedRTEs(Query *query, SublinkInfo *info) //TODO less restrictive checks would be ok, do it!
 {
 	List *joinParents;
 	List *joinPath;
@@ -645,7 +732,8 @@ checkInjectNeedsOnlyCorrelatedRTEs (Query *query, SublinkInfo *info) //TODO less
 	RangeTblEntry *rte;
 	CorrVarInfo *corr;
 
-	/* for each correlated range table entry check if it is used in the nullable side of an outer join */
+	/* for each correlated range table entry check if it is used in the
+	 * nullable side of an outer join */
 	foreach(lc, info->corrVarInfos)
 	{
 		corr = (CorrVarInfo *) lfirst(lc);
@@ -660,20 +748,20 @@ checkInjectNeedsOnlyCorrelatedRTEs (Query *query, SublinkInfo *info) //TODO less
 
 			if (rte->rtekind == RTE_JOIN)
 			{
-				switch(rte->jointype)
+				switch (rte->jointype)
 				{
-					case JOIN_LEFT:
-						if (lfirst_int(pathLc) == JCHILD_RIGHT)
-							return false;
-					break;
-					case JOIN_RIGHT:
-						if (lfirst_int(pathLc) == JCHILD_LEFT)
-							return false;
-					break;
-					case JOIN_FULL:
+				case JOIN_LEFT:
+					if (lfirst_int(pathLc) == JCHILD_RIGHT)
 						return false;
-					default:
-						break;
+					break;
+				case JOIN_RIGHT:
+					if (lfirst_int(pathLc) == JCHILD_LEFT)
+						return false;
+					break;
+				case JOIN_FULL:
+					return false;
+				default:
+					break;
 				}
 			}
 		}
@@ -683,14 +771,12 @@ checkInjectNeedsOnlyCorrelatedRTEs (Query *query, SublinkInfo *info) //TODO less
 	return true;
 }
 
-
-
 /*
  *
  */
 
 static Node *
-replaceSublinksWithTrueMutator (Node *node, void *context)
+replaceSublinksWithTrueMutator(Node *node, void *context)
 {
 	if (node == NULL)
 		return NULL;
@@ -708,7 +794,7 @@ replaceSublinksWithTrueMutator (Node *node, void *context)
 				arg = (Node *) linitial(not->args);
 
 				if (IsA(arg, SubLink))
-					return makeBoolConst(true,false);
+					return makeBoolConst(true, false);
 			}
 		}
 	}
@@ -721,12 +807,12 @@ replaceSublinksWithTrueMutator (Node *node, void *context)
 
 		op = (OpExpr *) node;
 
-		foreach(lc, op->args)//TODO we should check for if sublink is in And expression and check for casts too
+		foreach(lc, op->args) //TODO we should check for if sublink is in And expression and check for casts too
 		{
 			arg = (Node *) lfirst(lc);
 
 			if (IsA(arg, SubLink))
-				return makeBoolConst(true,false);
+				return makeBoolConst(true, false);
 		}
 	}
 
@@ -737,30 +823,32 @@ replaceSublinksWithTrueMutator (Node *node, void *context)
 		sub = (SubLink *) node;
 
 		if (sub->subLinkType != EXPR_SUBLINK)
-			return makeBoolConst(true,false);
+			return makeBoolConst(true, false);
 	}
 
-	return expression_tree_mutator(node, replaceSublinksWithTrueMutator, context);
+	return expression_tree_mutator(node, replaceSublinksWithTrueMutator,
+			context);
 }
 
 /*
- * Rewrites the sublink query, by grouping on the attributes used in correlation predicates, replacing correlation predicates with
- * true constants and applying normal provenance rewrites.
+ * Rewrites the sublink query, by grouping on the attributes used in
+ * correlation predicates, replacing correlation predicates with true constants
+ * and applying normal provenance rewrites.
  */
 
 static Query *
-rewriteWithoutInject (Query *query, SublinkInfo *info, List **corrPos)
+rewriteWithoutInject(Query *query, SublinkInfo *info, List **corrPos)
 {
-/*	Node *corrPred;*/
+	/*	Node *corrPred;*/
 
 	*corrPos = generateGroupBy(info);
 
 	info->rewrittenSublinkQuery = rewriteQueryNode(info->rewrittenSublinkQuery);
 
-/*	if (info->sublink->subLinkType != EXISTS_SUBLINK) {
-		corrPred = createCorrelationPredicates(info, *corrPos, list_length(query->rtable) + 1);
-		addConditionToQualWithAnd(query, corrPred, true);
-	}*/
+	/*	if (info->sublink->subLinkType != EXISTS_SUBLINK) {
+	 corrPred = createCorrelationPredicates(info, *corrPos, list_length(query->rtable) + 1);
+	 addConditionToQualWithAnd(query, corrPred, true);
+	 }*/
 
 	return info->rewrittenSublinkQuery;
 }
@@ -770,7 +858,7 @@ rewriteWithoutInject (Query *query, SublinkInfo *info, List **corrPos)
  */
 
 static List *
-generateGroupByForExists (SublinkInfo *info)
+generateGroupByForExists(SublinkInfo *info)
 {
 	ListCell *lc;
 	ListCell *innerLc;
@@ -788,7 +876,8 @@ generateGroupByForExists (SublinkInfo *info)
 	query = info->rewrittenSublinkQuery;
 	curResno = list_length(query->targetList);
 
-	/* add target entries for vars in correlation predicates and use these in group by */
+	/* add target entries for vars in correlation predicates and use these in
+	 * group by */
 	foreach(lc, info->corrVarInfos)
 	{
 		corrVar = (CorrVarInfo *) lfirst(lc);
@@ -798,7 +887,8 @@ generateGroupByForExists (SublinkInfo *info)
 			curResno++;
 			var = (Var *) lfirst(innerLc);
 
-			te = makeTargetEntry ((Expr *) var, curResno, appendIdToString("groupForDecorr", &curUniqueAttrNum), false);
+			te = makeTargetEntry((Expr *) var, curResno, appendIdToString(
+					"groupForDecorr", &curUniqueAttrNum), false);
 			query->targetList = lappend(query->targetList, te);
 
 			resnos = lappend_int(resnos, curResno);
@@ -807,11 +897,12 @@ generateGroupByForExists (SublinkInfo *info)
 		searchList = lappend(searchList, corrVar->parent);
 	}
 
-	replaceList = generateDuplicatesList(makeBoolConst(true, false), list_length(searchList));
+	replaceList = generateDuplicatesList(makeBoolConst(true, false),
+			list_length(searchList));
 
 	/* replace correlation predicates by true constants */
-	info->rewrittenSublinkQuery->jointree = (FromExpr *) replaceSubExpression
-			((Node *) query->jointree, searchList, replaceList, 0);
+	info->rewrittenSublinkQuery->jointree = (FromExpr *) replaceSubExpression(
+			(Node *) query->jointree, searchList, replaceList, 0);
 
 	return resnos;
 }
@@ -821,7 +912,7 @@ generateGroupByForExists (SublinkInfo *info)
  */
 
 static List *
-generateGroupByForExistsInject (SublinkInfo *info, List *predVars)
+generateGroupByForExistsInject(SublinkInfo *info, List *predVars)
 {
 	ListCell *lc;
 	ListCell *varLc;
@@ -844,7 +935,8 @@ generateGroupByForExistsInject (SublinkInfo *info, List *predVars)
 
 		curResno++;
 
-		te = makeTargetEntry ((Expr *) var, curResno, appendIdToString("groupForDecorr", &curUniqueAttrNum), false);
+		te = makeTargetEntry((Expr *) var, curResno, appendIdToString(
+				"groupForDecorr", &curUniqueAttrNum), false);
 		query->targetList = lappend(query->targetList, te);
 
 		resnos = lappend_int(resnos, curResno);
@@ -858,7 +950,7 @@ generateGroupByForExistsInject (SublinkInfo *info, List *predVars)
  */
 
 static List *
-generateGroupBy (SublinkInfo *info)
+generateGroupBy(SublinkInfo *info)
 {
 	ListCell *lc;
 	ListCell *innerLc;
@@ -884,10 +976,13 @@ generateGroupBy (SublinkInfo *info)
 	foreach(lc, query->targetList)
 	{
 		te = (TargetEntry *) lfirst(lc);
-		curRessortref = (curRessortref > te->ressortgroupref) ? te->ressortgroupref : curRessortref;
+		curRessortref
+				= (curRessortref > te->ressortgroupref) ? te->ressortgroupref
+						: curRessortref;
 	}
 
-	/* add target entries for vars in correlation predicates and use these in group by */
+	/* add target entries for vars in correlation predicates and use these in
+	 * group by */
 	foreach(lc, info->corrVarInfos)
 	{
 		corrVar = (CorrVarInfo *) lfirst(lc);
@@ -898,7 +993,8 @@ generateGroupBy (SublinkInfo *info)
 			curRessortref++;
 			var = (Var *) lfirst(innerLc);
 
-			te = makeTargetEntry ((Expr *) var, curResno, appendIdToString("groupForDecorr",&curUniqueAttrNum), false);
+			te = makeTargetEntry((Expr *) var, curResno, appendIdToString(
+					"groupForDecorr", &curUniqueAttrNum), false);
 			te->ressortgroupref = curRessortref;
 			query->targetList = lappend(query->targetList, te);
 
@@ -914,12 +1010,15 @@ generateGroupBy (SublinkInfo *info)
 		searchList = lappend(searchList, corrVar->parent);
 	}
 
-	replaceList = generateDuplicatesList(makeBoolConst(true, false), list_length(searchList));
+	replaceList = generateDuplicatesList(makeBoolConst(true, false),
+			list_length(searchList));
 
-	/* replace correlation predicates by true constants at which query node we have to do this depends on the nesting depth
-	 * of the correlated vars depth.
+	/* replace correlation predicates by true constants at which query node we
+	 * have to do this depends on the nesting depth of the correlated vars
+	 * depth.
 	 */
-	replaceSubExprInJoinTree(info->rewrittenSublinkQuery, searchList, replaceList);
+	replaceSubExprInJoinTree(info->rewrittenSublinkQuery, searchList,
+			replaceList);
 
 	/* set group by */
 	query->groupClause = groupBy;
@@ -932,12 +1031,13 @@ generateGroupBy (SublinkInfo *info)
  */
 
 static void
-replaceSubExprInJoinTree (Query *query, List *searchList, List *replaceList)
+replaceSubExprInJoinTree(Query *query, List *searchList, List *replaceList)
 {
 	ListCell *lc;
 	RangeTblEntry *rte;
 
-	query->jointree = (FromExpr *) replaceSubExpression((Node *) query->jointree, searchList, replaceList, 0);
+	query->jointree = (FromExpr *) replaceSubExpression(
+			(Node *) query->jointree, searchList, replaceList, 0);
 
 	foreach(lc, query->rtable)
 	{
@@ -952,7 +1052,7 @@ replaceSubExprInJoinTree (Query *query, List *searchList, List *replaceList)
  *
  */
 static List *
-generateGroupByForInject (SublinkInfo *info, List *predVars)
+generateGroupByForInject(SublinkInfo *info, List *predVars)
 {
 	ListCell *lc;
 	ListCell *varLc;
@@ -975,7 +1075,9 @@ generateGroupByForInject (SublinkInfo *info, List *predVars)
 	foreach(lc, query->targetList)
 	{
 		te = (TargetEntry *) lfirst(lc);
-		curRessortref = (curRessortref > te->ressortgroupref) ? te->ressortgroupref : curRessortref;
+		curRessortref
+				= (curRessortref > te->ressortgroupref) ? te->ressortgroupref
+						: curRessortref;
 	}
 
 	/* add target entries for vars in correlation predicates and use these in group by */
@@ -987,7 +1089,8 @@ generateGroupByForInject (SublinkInfo *info, List *predVars)
 		curResno++;
 		curRessortref++;
 
-		te = makeTargetEntry ((Expr *) var, curResno, appendIdToString("groupForDecorr", &curUniqueAttrNum), false);
+		te = makeTargetEntry((Expr *) var, curResno, appendIdToString(
+				"groupForDecorr", &curUniqueAttrNum), false);
 		te->ressortgroupref = curRessortref;
 		query->targetList = lappend(query->targetList, te);
 
@@ -1006,13 +1109,13 @@ generateGroupByForInject (SublinkInfo *info, List *predVars)
 	return resnos;
 }
 
-
 /*
  *
  */
 
 static Node *
-createCorrelationPredicates (SublinkInfo *info, List *corrVarPos, Index rangeTblPos)
+createCorrelationPredicates(SublinkInfo *info, List *corrVarPos,
+		Index rangeTblPos)
 {
 	ListCell *lc;
 	ListCell *innerLc;
@@ -1054,13 +1157,15 @@ createCorrelationPredicates (SublinkInfo *info, List *corrVarPos, Index rangeTbl
  *
  */
 static void
-replaceSublinkWithLeftJoinForExists (SublinkInfo *info, Query *query, RangeTblRef *rtRef, List *corrPos)
+replaceSublinkWithLeftJoinForExists(SublinkInfo *info, Query *query,
+		RangeTblRef *rtRef, List *corrPos)
 {
 	Node *corrPreds;
 	JoinExpr *join;
 
 	/* generate CsubPlus */
-	corrPreds = createCorrelationPredicates(info, corrPos, list_length(query->rtable));
+	corrPreds = createCorrelationPredicates(info, corrPos, list_length(
+			query->rtable));
 
 	/* join range table entries */
 	joinQueryRTEs(query);
@@ -1073,11 +1178,12 @@ replaceSublinkWithLeftJoinForExists (SublinkInfo *info, Query *query, RangeTblRe
 
 	query->jointree->fromlist = list_make1(join);
 
-	adaptRTEsForJoins (list_make1(join), query, "left_join_for_exists");
+	adaptRTEsForJoins(list_make1(join), query, "left_join_for_exists");
 
 	/* replace sublink with true const */
-	query->jointree->quals = replaceSubExpression
-			(query->jointree->quals, list_make1(info->sublink), list_make1(makeBoolConst(true, false)), REPLACE_SUB_EXPR_QUERY);
+	query->jointree->quals = replaceSubExpression(query->jointree->quals,
+			list_make1(info->sublink), list_make1(makeBoolConst(true, false)),
+			REPLACE_SUB_EXPR_QUERY);
 }
 
 /*
@@ -1085,14 +1191,16 @@ replaceSublinkWithLeftJoinForExists (SublinkInfo *info, Query *query, RangeTblRe
  */
 
 static void
-replaceSublinkWithCsubPlus(SublinkInfo *info, Query *query, RangeTblRef *rtRef, List *corrPos)	//TODO share code with prov_sublink_unn
+replaceSublinkWithCsubPlus(SublinkInfo *info, Query *query, RangeTblRef *rtRef,
+		List *corrPos) //TODO share code with prov_sublink_unn
 {
 	Node *cSubPlus;
 	Node *corrPreds;
 	JoinExpr *join;
 
 	/* generate modified correlation predicates for use in left join */
-	corrPreds = createCorrelationPredicates(info, corrPos, list_length(query->rtable));
+	corrPreds = createCorrelationPredicates(info, corrPos, list_length(
+			query->rtable));
 
 	/* join range table entries */
 	joinQueryRTEs(query);
@@ -1105,14 +1213,16 @@ replaceSublinkWithCsubPlus(SublinkInfo *info, Query *query, RangeTblRef *rtRef, 
 
 	query->jointree->fromlist = list_make1(join);
 
-	adaptRTEsForJoins (list_make1(join), query, "left_join_for_decor");
+	adaptRTEsForJoins(list_make1(join), query, "left_join_for_decor");
 
 	/* generate CsubPlus */
 	cSubPlus = generateCsubPlus(info, rtRef->rtindex, query);
 
-	/* adapt testexpr by substituting references to the new range table entry for the Params */
-	query->jointree->quals = replaceSubExpression
-			(query->jointree->quals, list_make1(info->sublink), list_make1(cSubPlus), REPLACE_SUB_EXPR_QUERY);
+	/* adapt testexpr by substituting references to the new range table entry
+	 * for the Params */
+	query->jointree->quals = replaceSubExpression(query->jointree->quals,
+			list_make1(info->sublink), list_make1(cSubPlus),
+			REPLACE_SUB_EXPR_QUERY);
 }
 
 /*
@@ -1120,7 +1230,8 @@ replaceSublinkWithCsubPlus(SublinkInfo *info, Query *query, RangeTblRef *rtRef, 
  */
 
 static void
-replaceSublinkWithCsubPlusForExists (SublinkInfo *info, Query *query, RangeTblRef *rtRef)
+replaceSublinkWithCsubPlusForExists(SublinkInfo *info, Query *query,
+		RangeTblRef *rtRef)
 {
 	Node *cSubPlus;
 	List *searchList;
@@ -1128,24 +1239,25 @@ replaceSublinkWithCsubPlusForExists (SublinkInfo *info, Query *query, RangeTblRe
 	cSubPlus = makeBoolConst(true, false);
 
 	/* replace sublink with CsubPlus */
-	query->jointree->fromlist = lappend (query->jointree->fromlist, rtRef);
+	query->jointree->fromlist = lappend(query->jointree->fromlist, rtRef);
 
-	/* adapt testexpr by substituting references to the new range table entry for the Params */
+	/* adapt testexpr by substituting references to the new range table entry
+	 * for the Params */
 	if (parentIsNot(info))
 		searchList = list_make1(info->parent);
 	else
 		searchList = list_make1(info->sublink);
 
-	query->jointree->quals = replaceSubExpression
-			(query->jointree->quals, searchList, list_make1(cSubPlus), REPLACE_SUB_EXPR_QUERY);
+	query->jointree->quals = replaceSubExpression(query->jointree->quals,
+			searchList, list_make1(cSubPlus), REPLACE_SUB_EXPR_QUERY);
 }
 
 /*
- * generate the modified testexpression that is used in the join for ANY-sublinks
+ * Generate the modified testexpression that is used in the join for ANY-sublinks
  */
 
 static Node *
-generateCsubPlus (SublinkInfo *info, Index rtIndex, Query *query)
+generateCsubPlus(SublinkInfo *info, Index rtIndex, Query *query)
 {
 	Node *result;
 	Node *cbugExpr;
@@ -1170,13 +1282,13 @@ generateCsubPlus (SublinkInfo *info, Index rtIndex, Query *query)
 	context->useVarnoValue = rtIndex;
 
 	result = copyObject(info->sublink->testexpr);
-	result = replaceParamsMutator (result, context);
+	result = replaceParamsMutator(result, context);
 
 	pfree(context);
 
-	/* get the target entry of the sublink query and replace aggregation functions
-	 * with their value over the empty relations (0 for count and NULL for the others)
-	 */
+	/* get the target entry of the sublink query and replace aggregation
+	 * functions with their value over the empty relations (0 for count and
+	 * NULL for the others) */
 	rte = rt_fetch(rtIndex, query->rtable);
 	expandRTE(rte, rtIndex, 0, false, NULL, &varlist);
 	dummyVar = (Var *) llast(varlist);
@@ -1185,15 +1297,19 @@ generateCsubPlus (SublinkInfo *info, Index rtIndex, Query *query)
 	dummyIsNull->arg = (Expr *) dummyVar;
 	dummyIsNull->nulltesttype = IS_NULL;
 
-	/* add expression that handles count bug (difference between grouping and correlation) */
+	/* add expression that handles count bug (difference between grouping and
+	 * correlation) */
 	isExprSublink = (info->sublink->subLinkType == EXPR_SUBLINK);
-	te = (TargetEntry *) linitial(((Query *)info->sublink->subselect)->targetList);
+	te
+			= (TargetEntry *) linitial(((Query *)info->sublink->subselect)->targetList);
 
-	cbugExpr = replaceAggsWithConstsMutator(copyObject(te->expr), &isExprSublink);
+	cbugExpr = replaceAggsWithConstsMutator(copyObject(te->expr),
+			&isExprSublink);
 
 	if (isExprSublink)
 	{
-		result = (Node *) makeVar(rtIndex,1, exprType((Node *) te->expr), exprTypmod((Node *) te->expr),0);
+		result = (Node *) makeVar(rtIndex, 1, exprType((Node *) te->expr),
+				exprTypmod((Node *) te->expr), 0);
 
 		ifClause = makeNode(CaseWhen);
 		ifClause->expr = (Expr *) dummyIsNull;
@@ -1208,15 +1324,17 @@ generateCsubPlus (SublinkInfo *info, Index rtIndex, Query *query)
 	}
 	else
 	{
-		cbugExpr = replaceParamsWithNodeMutator (copyObject(info->sublink->testexpr), cbugExpr);
-		cbugExpr = (Node *) makeBoolExpr(AND_EXPR, list_make2(dummyIsNull, cbugExpr));
+		cbugExpr = replaceParamsWithNodeMutator(copyObject(
+				info->sublink->testexpr), cbugExpr);
+		cbugExpr = (Node *) makeBoolExpr(AND_EXPR,
+				list_make2(dummyIsNull, cbugExpr));
 		result = (Node *) makeBoolExpr(OR_EXPR, list_make2(result,cbugExpr));
 	}
 
 	/* create boolean expression */
 	if (result == NULL)
 	{
-		result = makeBoolConst(true,false);
+		result = makeBoolConst(true, false);
 	}
 
 	return result;
@@ -1227,7 +1345,7 @@ generateCsubPlus (SublinkInfo *info, Index rtIndex, Query *query)
  */
 
 static Node *
-replaceAggsWithConstsMutator (Node *node, void *context)
+replaceAggsWithConstsMutator(Node *node, void *context)
 {
 	if (node == NULL)
 		return NULL;
@@ -1237,17 +1355,17 @@ replaceAggsWithConstsMutator (Node *node, void *context)
 		Aggref *agg;
 
 		agg = (Aggref *) node;
-		if (strcmp(get_func_name(agg->aggfnoid),"count") == 0)
-			return (Node *) coerce_to_specific_type(NULL,
-									(Node *) makeConst(INT4OID, -1, 4, Int32GetDatum(0), false, true),
-									agg->aggtype,
-									"");
+		if (strcmp(get_func_name(agg->aggfnoid), "count") == 0)
+			return (Node *) coerce_to_specific_type(NULL, (Node *) makeConst(
+					INT4OID, -1, 4, Int32GetDatum(0), false, true),
+					agg->aggtype, "");
 		else
 			return (Node *) makeNullConst(agg->aggtype, InvalidOid);
 	}
 
 	// recurse
-	return expression_tree_mutator(node, replaceAggsWithConstsMutator, (void *) context);
+	return expression_tree_mutator(node, replaceAggsWithConstsMutator,
+			(void *) context);
 }
 
 /*
@@ -1255,7 +1373,7 @@ replaceAggsWithConstsMutator (Node *node, void *context)
  */
 
 static Node *
-replaceParamsWithNodeMutator (Node *node, Node *context)
+replaceParamsWithNodeMutator(Node *node, Node *context)
 {
 	if (node == NULL)
 		return NULL;
@@ -1264,7 +1382,8 @@ replaceParamsWithNodeMutator (Node *node, Node *context)
 		return copyObject(context);
 
 	// recurse
-	return expression_tree_mutator(node, replaceParamsWithNodeMutator, (void *) context);
+	return expression_tree_mutator(node, replaceParamsWithNodeMutator,
+			(void *) context);
 }
 
 /*
@@ -1272,7 +1391,7 @@ replaceParamsWithNodeMutator (Node *node, Node *context)
  */
 
 static bool
-parentIsNot (SublinkInfo *info)
+parentIsNot(SublinkInfo *info)
 {
 	BoolExpr *expr;
 
@@ -1301,7 +1420,7 @@ parentIsNot (SublinkInfo *info)
  */
 
 static bool
-rewriteNeedsInject (SublinkInfo *info)
+rewriteNeedsInject(SublinkInfo *info)
 {
 	if (!checkCorrVarsInEqualityWhere(info))//TODO other preconds
 		return true;

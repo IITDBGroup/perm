@@ -13,8 +13,31 @@
 #ifndef PROVLOG_H_
 #define PROVLOG_H_
 
+#include "utils/elog.h"
+#include "utils/guc.h"
 #include "utils/rel.h"
 #include "nodes/parsenodes.h"
+
+#define LOGDEBUG(message) \
+		do { \
+			if (log_min_messages <= DEBUG1) \
+				logDebug(message); \
+		} while (0)
+#define LOGNOTICE(message) \
+		do { \
+			if (log_min_messages <= NOTICE) \
+				logDebug(message); \
+		} while (0)
+#define LOGNODE(node,message) \
+		do { \
+			if (log_min_messages <= DEBUG1) \
+				logNode(node, message); \
+		} while (0)
+#define LOGNODEXML(node) \
+		do { \
+			if (log_min_messages <= DEBUG1) \
+				logNodeXml(node); \
+		} while (0)
 
 extern void logNode (void *node, char *message);
 extern void logNodeXml (void *node);

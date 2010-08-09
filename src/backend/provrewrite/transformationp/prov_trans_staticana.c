@@ -1,9 +1,11 @@
 /*-------------------------------------------------------------------------
  *
  * prov_trans_staticana.c
- *	  POSTGRES C - Static analysis of a query tree for transformation provenance rewrite. This used to omit unnecessary
- *	  			runtime computation for parts of a query that have a static transformation provenance. Static information
- *	  			is gathered by traversing the query tree and annotating it (provInfo field) with the necessary info.
+ *	  PERM C - Static analysis of a query tree for transformation provenance
+ *	  			rewrite. This used to omit unnecessary runtime computation for
+ *	  			parts of a query that have a static transformation provenance.
+ *	  			Static information is gathered by traversing the query tree and
+ *	  			annotating it (provInfo field) with the necessary info.
  *
  * Portions Copyright (c) 2008 Boris Glavic
  *
@@ -38,22 +40,27 @@
 		} \
 		else \
 		{ \
-			((TransSubInfo *) curnode)->children = list_make1(((TransSubInfo *) newnode)); \
+			((TransSubInfo *) curnode)->children = \
+					list_make1(((TransSubInfo *) newnode)); \
 			curnode = ((TransSubInfo *) newnode); \
 		} \
 	} while(0)
 
 /* methods */
-static int analyseOneQueryNode (Query *query, int curId, TransSubInfo *parent, Index rtIndex);
+static int analyseOneQueryNode (Query *query, int curId, TransSubInfo *parent,
+		Index rtIndex);
 static void handleDummyQueryNode (Query *query);
 static int analyseAgg (Query *query, int curId);
 static int analyseJoinTree (Query *query, int curId, TransSubInfo *cur);
-static int analyseJoinTreeNode (Node *join, int curId, TransSubInfo *cur, Query *query);
-static int analyseRte (RangeTblEntry *rte, TransSubInfo *cur, int curId, TransProvInfo *info, Index rtIndex);
+static int analyseJoinTreeNode (Node *join, int curId, TransSubInfo *cur,
+		Query *query);
+static int analyseRte (RangeTblEntry *rte, TransSubInfo *cur, int curId,
+		TransProvInfo *info, Index rtIndex);
 static int analyseProjection (Query *query, int curId, TransSubInfo *cur);
 static int analyseSelection (Query *query, int curId, TransSubInfo *cur);
 static int analyseSetOp (Query *query, int curId);
-static int analyseOneSetOp (Node *node, int curId, TransSubInfo *cur, Query *query);
+static int analyseOneSetOp (Node *node, int curId, TransSubInfo *cur,
+		Query *query);
 
 //static void computeAnnots (Query *query);
 
@@ -63,8 +70,9 @@ static bool checkStaticTreeNode (Node *node);
 static void computeSets(TransSubInfo *node, int numNodes);
 
 /*
- * Generate ids for parts of the query and analyze which parts are static. This information is
- * stored in as a TransProvInfo in the provInfo->rewriteInfo field of each query node.
+ * Generate ids for parts of the query and analyze which parts are static. This
+ * information is stored in as a TransProvInfo in the provInfo->rewriteInfo
+ * field of each query node.
  */
 
 void
@@ -108,7 +116,8 @@ analyseStaticTransProv (Query *query)
  */
 
 static int
-analyseOneQueryNode (Query *query, int curId, TransSubInfo *parent, Index rtIndex)
+analyseOneQueryNode (Query *query, int curId, TransSubInfo *parent,
+		Index rtIndex)
 {
 	TransProvInfo *info;
 
@@ -200,7 +209,8 @@ analyseProjection (Query *query, int curId, TransSubInfo *cur)
 {
 	TransSubInfo *next;
 
-	if ((!query->hasAggs && isProjection(query)) || isProjectionUnderAgg(query))
+	if ((!query->hasAggs && isProjection(query))
+			|| isProjectionUnderAgg(query))
 	{
 		next = makeTransSubInfo(curId++, SUBOP_Projection);
 		ADD_NODE_TO_TRANS(GET_TRANS_INFO(query),cur,next);
@@ -242,7 +252,8 @@ analyseJoinTree (Query *query, int curId, TransSubInfo *cur)
 	Node *node;
 	TransProvInfo *info;
 
-	/* check if there is a root TransSubInfo and if fromlist contains more than one entry */
+	/* check if there is a root TransSubInfo and if fromlist contains more than
+	 * one entry */
 	info = GET_TRANS_INFO(query);
 	if (!info->root && list_length(query->jointree->fromlist) > 1)
 	{
@@ -309,7 +320,8 @@ analyseJoinTreeNode (Node *join, int curId, TransSubInfo *cur, Query *query)
 	else {
 		rtRef = (RangeTblRef *) join;
 
-		curId = analyseRte (rt_fetch(rtRef->rtindex, query->rtable), cur, curId, info, rtRef->rtindex);
+		curId = analyseRte (rt_fetch(rtRef->rtindex, query->rtable), cur,
+				curId, info, rtRef->rtindex);
 	}
 
 	return curId;
@@ -320,7 +332,8 @@ analyseJoinTreeNode (Node *join, int curId, TransSubInfo *cur, Query *query)
  */
 
 static int
-analyseRte (RangeTblEntry *rte, TransSubInfo *cur, int curId, TransProvInfo *info, Index rtIndex)
+analyseRte (RangeTblEntry *rte, TransSubInfo *cur, int curId,
+		TransProvInfo *info, Index rtIndex)
 {
 	TransSubInfo *next;
 
@@ -404,7 +417,8 @@ analyseOneSetOp (Node *node, int curId, TransSubInfo *cur, Query *query)
 	{
 		rtRef = (RangeTblRef *) node;
 
-		curId = analyseRte(rt_fetch(rtRef->rtindex, query->rtable), cur, curId, info, rtRef->rtindex);
+		curId = analyseRte(rt_fetch(rtRef->rtindex, query->rtable), cur, curId,
+				info, rtRef->rtindex);
 	}
 
 	return curId;
@@ -465,6 +479,12 @@ checkStaticTreeNode (Node *node)
 	case SUBOP_Join_Cross:
 		info->isStatic = true;
 		break;
+	case SUBOP_SetOp_Diff:
+		sub = (Node *) linitial(info->children);
+		info->isStatic = checkStaticTreeNode(sub);
+		sub = (Node *) lsecond(info->children);
+		checkStaticTreeNode(sub);
+		return info->isStatic;
 	default:
 		info->isStatic = false;
 		break;
@@ -480,7 +500,11 @@ checkStaticTreeNode (Node *node)
 }
 
 /*
- *
+ * Compute the annotation and bitset for a TransSubInfo. If the node has not
+ * static transformation provenance, then the set contains only the identifier
+ * for this node. For nodes with static transformation provenance the set
+ * also includes the sets for its children (or its left child in case of
+ * set difference).
  */
 
 static void
@@ -505,8 +529,14 @@ computeSets (TransSubInfo *node, int numNodes)
 
 		if (node->isStatic)
 		{
-			node->setForNode = varBitOr(node->setForNode, childSub->setForNode);
-			node->annot = list_concat(node->annot, childSub->annot);
+			// for set difference only add the set of the first child.
+			if (node->opType != SUBOP_SetOp_Diff
+					|| lc == list_head(node->children))
+			{
+				node->setForNode = varBitOr(node->setForNode,
+						childSub->setForNode);
+				node->annot = list_concat(node->annot, childSub->annot);
+			}
 		}
 	}
 }

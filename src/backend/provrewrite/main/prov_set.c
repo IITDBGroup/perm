@@ -46,6 +46,7 @@
 static void rewriteUnionWithWLCS (Query *query);
 static void addDummyProvAttrs (RangeTblEntry *rte, List *subProv, int pos);
 static void adaptSetProvenanceAttrs (Query *query);
+static void adaptSetStmtCols (SetOperationStmt *stmt, List *colTypes, List *colTypmods);
 static void replaceSetOperationSubTrees (Query *query, Node *node, Node **parentPointer, SetOperation rootType);
 static void replaceSetOperatorSubtree (Query *query, SetOperationStmt *setOp, Node **parent);
 static void rewriteRTEs (Query *newTop);
@@ -109,7 +110,7 @@ rewriteSetQuery (Query * query)
 	rewriteRTEs (newTop);
 	numSubs = list_length(newTop->rtable) - 1;
 
-	logNode(newTop, "replaced different set ops and rewrite sub queries");
+	LOGNODE(newTop, "replaced different set ops and rewrite sub queries");
 
 	/* correct alias of rewritten subqueries */
 	correctSubQueryAlias (newTop);
@@ -291,11 +292,8 @@ adaptSetProvenanceAttrs (Query *query)
 	Var *var;
 	ListCell *lc;
 	int curAttno = 1;
-	SetOperationStmt *stmt;
-
-	stmt = (SetOperationStmt *) query->setOperations;
-	stmt->colTypes = NIL;
-	stmt->colTypmods = NIL;
+	List *colTypes = NIL;
+	List *colTypmods = NIL;
 
 	foreach(lc, query->targetList)
 	{
@@ -303,12 +301,27 @@ adaptSetProvenanceAttrs (Query *query)
 		var = (Var *) te->expr;
 		var->varno = 1;
 		var->varattno = curAttno++;
-		stmt->colTypes = lappend_oid(stmt->colTypes, var->vartype);
-		stmt->colTypmods = lappend_int(stmt->colTypmods, var->vartypmod);
+		colTypes = lappend_oid(colTypes, var->vartype);
+		colTypmods = lappend_int(colTypmods, var->vartypmod);
 	}
 
+	adaptSetStmtCols(query->setOperations, colTypes, colTypmods);
+}
 
+/*
+ *
+ */
 
+static void
+adaptSetStmtCols (SetOperationStmt *stmt, List *colTypes, List *colTypmods)
+{
+	stmt->colTypes = colTypes;
+	stmt->colTypmods = colTypmods;
+	stmt->all = true;
+	if (IsA(stmt->larg, SetOperationStmt))
+		adaptSetStmtCols ((SetOperationStmt *) stmt->larg, colTypes, colTypmods);
+	if (IsA(stmt->rarg, SetOperationStmt))
+		adaptSetStmtCols ((SetOperationStmt *) stmt->rarg, colTypes, colTypmods);
 }
 
 /*
@@ -777,7 +790,7 @@ replaceSetOperatorSubtree (Query *query, SetOperationStmt *setOp, Node **parent)
 	MAKE_RTREF(rtRef, list_length(query->rtable));
 	*parent = (Node *) rtRef;
 
-	logNode(query, "before range table adapt");
+	LOGNODE(query, "before range table adapt");
 
 	/* adapt range table and rteRefs for query */
 	newRtable = NIL;

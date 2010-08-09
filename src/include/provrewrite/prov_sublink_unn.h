@@ -18,9 +18,9 @@
 #include "provrewrite/prov_sublink_util_mutate.h"
 #include "provrewrite/prov_sublink_util_analyze.h"
 
-extern bool checkConditionsTransfromAnyToJoin (SublinkInfo *info, Query *query);
-extern Query *rewriteSingleAnyTopLevel (Query *query, SublinkInfo *info, Index subList[], List *infos);
-extern bool checkPreconditionsUnnestAllReqFalse (SublinkInfo *info, Query *query);
-extern Query *rewriteUncorrNotAnyOrAll (Query *query, SublinkInfo *info, Index subList[], List *infos);
+extern bool checkUnnStrategyPreconditions (SublinkInfo *info, Query *query);
+extern Query *rewriteUnnStrategy (Query *query, SublinkInfo *info, Index subList[], List *infos);
+extern bool checkUnnNotStrategyPreconditions (SublinkInfo *info, Query *query);
+extern Query *rewriteUnnNotStrategy (Query *query, SublinkInfo *info, Index subList[], List *infos);
 
 #endif /* PROV_SUBLINK_UNN_H_ */

@@ -72,7 +72,7 @@ rewriteTargetSublinkUsingLeftJoin (Query *newTop, Query *query, SublinkInfo *inf
 	Index subIndex;
 
 	/* here we are sure that the sublink is rewritten using MOVE-strategy there say so */
-	logNotice("use Move");
+	LOGNOTICE("use Move");
 	addUsedMethod("Move");
 
 	/* rewrite Sublink query */

@@ -1,7 +1,10 @@
 /*-------------------------------------------------------------------------
  *
  * prov_sublink_unn.c
- *	  POSTGRES C unnests sublinks for provenance rewrite.
+ *	  PERM C - Unnests sublinks for provenance rewrite. The following rewrite
+ *	  strategies are implemented in this file:
+ *	  		1) Unn
+ *	  		2) Unn-Not
  *
  * Portions Copyright (c) 2008 Boris Glavic
  *
@@ -30,28 +33,32 @@
 
 /* prototypes */
 static bool inOuterJoin (SublinkInfo *info, Query *query);
-static Node *generateCsubPlus (SublinkInfo *info, Index rtIndex);
-static void replaceSublinkWithCsub (SublinkInfo *info, Query *query, List *infos, RangeTblRef *rtRef);
+static Node *generateCsubPlus (SublinkInfo *info, Index rtIndex, bool forNot);
+static void replaceSublinkWithCsub (SublinkInfo *info, Query *query,
+									List *infos, RangeTblRef *rtRef);
 static List *findSublinksWithSameExprRoot (List *infos, SublinkInfo *info);
 
 /*
- * Checks if a sublink fullfills the conditions for the rewriteSingelAnyTopLevel rewrite method. These are:
+ * Checks if a sublink fullfills the conditions for the
+ * rewriteSingelAnyTopLevel rewrite method. These are:
  * 		1) Sublink is uncorrelated
  * 		2) Sublink is in WHERE in an AND-tree
- * 		3) Sublink is an ANY, EXISTS or Tsub
+ * 		3) Sublink is an ANY, EXISTS or scalar Sublink
  * 		4) The Sublink is not used in an OUTER JOIN qual
- * 		5) Sublink does not contain sublinks that have to be rewritten using GEN-strategy (the correlations used
- *			there wouldn't work in a FROM-caluse item)
- *		6) Sublink does not have sublinks in its test expression or is used in the test expression of another sublink
+ * 		5) Sublink does not contain sublinks that have to be rewritten using GEN-strategy
+ * 			(the correlations used there wouldn't work in a FROM-clause item)
+ *		6) Sublink does not have sublinks in its test expression or is used in
+ *		   the test expression of another sublink
  *
  */
 
 bool
-checkConditionsTransfromAnyToJoin (SublinkInfo *info, Query *query)
+checkUnnStrategyPreconditions (SublinkInfo *info, Query *query)
 {
 	bool result;
 
-	result = info->category == SUBCAT_UNCORRELATED || (getSublinkTypeAfterChildRewrite(info) == SUBCAT_UNCORRELATED);
+	result = info->category == SUBCAT_UNCORRELATED
+			|| (getSublinkTypeAfterChildRewrite(info) == SUBCAT_UNCORRELATED);
 	result = result && info->location == SUBLOC_WHERE;
 	result = result && (info->sublink->subLinkType == ANY_SUBLINK
 			|| info->sublink->subLinkType == EXISTS_SUBLINK
@@ -69,7 +76,7 @@ checkConditionsTransfromAnyToJoin (SublinkInfo *info, Query *query)
  */
 
 Query *
-rewriteSingleAnyTopLevel (Query *query, SublinkInfo *info,  Index subList[], List *infos)
+rewriteUnnStrategy (Query *query, SublinkInfo *info,  Index subList[], List *infos)
 {
 	Query *sublinkQuery;
 	Index sublinkIndex;
@@ -104,10 +111,10 @@ rewriteSingleAnyTopLevel (Query *query, SublinkInfo *info,  Index subList[], Lis
  * 		3) is an ANY or ALL(//TODO) sublink
  * 		4) Sublink is not used in an OUTER JOIN qual
  * 		5) Sublink does not contain sublinks that have to be rewritten using GEN-strategy (the correlations used
- *			there wouldn't work in a FROM-caluse item)
+ *			there wouldn't work in a FROM-clause item)
  */
 bool
-checkPreconditionsUnnestAllReqFalse (SublinkInfo *info, Query *query)
+checkUnnNotStrategyPreconditions (SublinkInfo *info, Query *query)
 {
 	bool result;
 
@@ -124,8 +131,9 @@ checkPreconditionsUnnestAllReqFalse (SublinkInfo *info, Query *query)
 /*
  *
  */
+
 Query *
-rewriteUncorrNotAnyOrAll (Query *query, SublinkInfo *info, Index subList[], List *infos)
+rewriteUnnNotStrategy (Query *query, SublinkInfo *info, Index subList[], List *infos)
 {
 	Index sublinkIndex;
 	Index subIndex;
@@ -144,7 +152,8 @@ rewriteUncorrNotAnyOrAll (Query *query, SublinkInfo *info, Index subList[], List
 	adaptedSublinkQuery = copyObject(info->sublink->subselect);
 	addDummyAttr(adaptedSublinkQuery);
 
-	addSubqueryToRT(query, adaptedSublinkQuery, appendIdToString("sublinkForNotAny", &curUniqueRelNum));
+	addSubqueryToRT(query, adaptedSublinkQuery,
+					appendIdToString("sublinkForNotAny", &curUniqueRelNum));
 	correctRTEAlias((RangeTblEntry *) lfirst(query->rtable->tail));
 
 	MAKE_RTREF(rtRef, list_length(query->rtable));
@@ -153,15 +162,15 @@ rewriteUncorrNotAnyOrAll (Query *query, SublinkInfo *info, Index subList[], List
 	newJoin = createJoinExpr(query, JOIN_LEFT);
 	newJoin->larg = (Node *) linitial(query->jointree->fromlist);
 	newJoin->rarg = (Node *) copyObject(rtRef);
-	newJoin->quals = generateCsubPlus(info, rtRef->rtindex);
+	newJoin->quals = generateCsubPlus(info, rtRef->rtindex, true);
 
 	query->jointree->fromlist = list_make1(newJoin);//CHECK ok to add as top level join
 
 	/* create range table entry for the rewritten sublink query in this case static null values */
 	info->rewrittenSublinkQuery = rewriteQueryNode(info->rewrittenSublinkQuery);
-	//generateNullAsProvnenace(info);
 
-	addSubqueryToRT(query, info->rewrittenSublinkQuery, appendIdToString("rewrittenSublink", &curUniqueRelNum));
+	addSubqueryToRT(query, info->rewrittenSublinkQuery,
+					appendIdToString("rewrittenSublink", &curUniqueRelNum));
 	correctRTEAlias((RangeTblEntry *) lfirst(query->rtable->tail));
 
 	sublinkIndex = list_length(query->rtable);
@@ -243,7 +252,7 @@ replaceSublinkWithCsub (SublinkInfo *info, Query *query, List *infos, RangeTblRe
 	sameExprRoot = findSublinksWithSameExprRoot (infos, info);
 
 	/* create CsubPlus */
-	cSubPlus = generateCsubPlus(info, rtRef->rtindex);
+	cSubPlus = generateCsubPlus(info, rtRef->rtindex, false);
 	if (cSubPlus == NULL)
 	{
 		if (info->sublink->subLinkType == EXPR_SUBLINK)
@@ -342,7 +351,7 @@ findSublinksWithSameExprRoot (List *infos, SublinkInfo *info)
  */
 
 static Node *
-generateCsubPlus (SublinkInfo *info, Index rtIndex)
+generateCsubPlus (SublinkInfo *info, Index rtIndex, bool forNot)
 {
 	Node *result;
 	ReplaceParamsContext *context;
@@ -357,6 +366,21 @@ generateCsubPlus (SublinkInfo *info, Index rtIndex)
 	context->useVarnoValue = rtIndex;
 
 	result = copyObject(info->sublink->testexpr);
+	// A negated NOT ANY C expression evaluates to
+	// NULL which is interpreted as false if none
+	// of the C values is true and at least one is
+	// NULL. We have to check for this case in the
+	// join condition.
+	if (forNot)
+	{
+		NullTest *nullTest = makeNode(NullTest);
+
+		nullTest->nulltesttype = IS_NULL;
+		nullTest->arg = (Expr *) copyObject(result);
+
+		result = makeBoolExpr(OR_EXPR, list_make2(result, nullTest));
+	}
+
 	result = replaceParamsMutator (result, context);
 
 	pfree(context);

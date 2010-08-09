@@ -201,8 +201,10 @@ typedef struct CorrVarInfo
 	bool outside;
 	RangeTblEntry *refRTE;
 	SublinkLocation location;
-	int nestingDepth;
+//	int nestingDepth;
 	int trueVarLevelsUp;		/* number of sublinks nesting levels between the referenced var and the correlated var */
+	bool belowAgg;
+	bool belowSet;
 } CorrVarInfo;
 
 
@@ -422,7 +424,10 @@ extern RangeTblEntry *makeRte (RTEKind);
 extern SelectionInfo *makeSelectionInfo (void);
 extern PushdownInfo *makePushdownInfo (void);
 extern EquivalenceList *makeEquivalenceList (void);
-extern CorrVarInfo *makeCorrVar (Var *corrVar, List *vars, Node *parent, Node *exprRoot, SublinkLocation location, bool outside, RangeTblEntry *refRTE);
+extern CorrVarInfo *makeCorrVar (Var *corrVar, List *vars, Node *parent,
+								Node *exprRoot, SublinkLocation location,
+								bool outside, RangeTblEntry *refRTE,
+								bool belowAgg, bool belowSet, int trueVarUp);
 extern InequalityGraph *makeInequalityGraph (void);
 extern InequalityGraphNode *makeInequalityGraphNode (Node *content);
 extern InequalityGraphNode *makeInequalityGraphNodeNIL (void);

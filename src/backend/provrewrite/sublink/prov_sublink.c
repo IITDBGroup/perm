@@ -118,7 +118,7 @@ rewriteSublink (Query *query, SublinkInfo *info, Index subList[], List **rewrite
 	 */
 	if (prov_use_sublink_optimization_left_join && info->category == SUBCAT_UNCORRELATED)
 	{
-		logNotice("use Left");
+		LOGNOTICE("use Left");
 		addUsedMethod("Left");
 		rewriteSublinkUsingLeftJoin (query, info, subList);
 		*rewritePos = lappend_int(*rewritePos, info->sublinkPos);
@@ -127,7 +127,7 @@ rewriteSublink (Query *query, SublinkInfo *info, Index subList[], List **rewrite
 	/* use cross product simulated left join method */
 	else
 	{
-		logNotice("use Gen");
+		LOGNOTICE("use Gen");
 		addUsedMethod("Gen");
 		rewriteSublinkWithCorrelationToBase (query, info, subList);
 		*rewritePos = lappend_int(*rewritePos, info->sublinkPos);
@@ -209,16 +209,16 @@ unnestAndDecorrelate (Query *query, Index subList[], List *infos, List **rewrite
 		{
 			if (checkJAstrategyPreconditions (info))
 			{
-				logNotice("use unnest JA");
-				addUsedMethod("Unn-JA");
+				LOGNOTICE("use JA strategy");
+				addUsedMethod("JA");
 
 				query = rewriteJAstrategy (query, info, subList);
 				*rewritePos = lappend_int(*rewritePos, info->sublinkPos);
 			}
 			else if (checkEXISTSstrategyPreconditions (info))
 			{
-				logNotice("use unnest JA - transform to count");
-				addUsedMethod("Unn-JA-toCount");
+				LOGNOTICE("use EXISTS strategy");
+				addUsedMethod("EXISTS");
 
 				query = rewriteEXISTSstrategy (query, info, subList);
 				*rewritePos = lappend_int(*rewritePos, info->sublinkPos);
@@ -232,20 +232,20 @@ unnestAndDecorrelate (Query *query, Index subList[], List *infos, List **rewrite
 		 */
 		if (prov_use_sublink_transfrom_top_level_any_to_join && !info->unnested)
 		{
-			if (checkConditionsTransfromAnyToJoin (info, query))
+			if (checkUnnStrategyPreconditions (info, query))
 			{
-				logNotice("use Unn");
+				LOGNOTICE("use Unn strategy");
 				addUsedMethod("Unn");
 
-				query =  rewriteSingleAnyTopLevel (query, info, subList, infos);
+				query =  rewriteUnnStrategy (query, info, subList, infos);
 				*rewritePos = lappend_int(*rewritePos, info->sublinkPos);
 			}
-			else if (checkPreconditionsUnnestAllReqFalse(info, query))
+			else if (checkUnnNotStrategyPreconditions(info, query))
 			{
-				logNotice("use Unn - NOT");
+				LOGNOTICE("use Unn-Not strategy");
 				addUsedMethod("Unn-NOT");
 
-				query =  rewriteUncorrNotAnyOrAll (query, info, subList, infos);
+				query =  rewriteUnnNotStrategy (query, info, subList, infos);
 				*rewritePos = lappend_int(*rewritePos, info->sublinkPos);
 			}
 		}

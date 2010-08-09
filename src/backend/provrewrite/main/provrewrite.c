@@ -33,6 +33,7 @@
 #include "parser/parsetree.h"			// routines to extract info from parse trees
 #include "parser/parse_oper.h"			// for lookup of operators
 #include "rewrite/rewriteManip.h"		// Querytree manipulation subroutines for rewrites
+#include "utils/builtins.h"
 #include "utils/lsyscache.h"			// common system catalog access queries
 #include "utils/syscache.h"				// used to release heap tuple references
 
@@ -117,7 +118,7 @@ provenanceRewriteQuery (Query *query)
 	/* handle this expressions here */
 	query = handleThisExprs(query);
 
-	logNode(query, "complete query tree");
+	LOGNODE(query, "complete query tree");
 
 	/* check if we have to rewrite a part of the query */
 	if (!hasProvenanceSubquery(query))
@@ -136,7 +137,8 @@ provenanceRewriteQuery (Query *query)
 	/* try to pushdown selections */
 	query = pushdownSelections(query);
 
-	logNode(query, "complete rewritten query tree");
+	LOGNODE(query, "complete rewritten query tree");
+	LOGDEBUG(parseBackSafe(copyObject(query))->data);
 
 	/* store the rewrite strategies that were used in the query tree */
 	((ProvInfo *) query->provInfo)->rewriteInfo = copyObject(rewriteMethodStack);
@@ -160,7 +162,7 @@ traverseQueryTree (RangeTblEntry *rteQuery, Query *query, char *cursorName)
 	// is query marked for provenance rewrite?
 	if (IsProvRewrite(query))
 	{
-		logNode(query, "query tree to be rewritten");
+		LOGNODE(query, "query tree to be rewritten");
 
 		resetRelReferences ();
 		resetUniqueNameGens ();
@@ -259,7 +261,7 @@ rewriteQueryNode (Query * query)
 	else
 		query = rewriteSPJQuery (query);
 
-	logNode(query, "rewritten query tree (influence contribution)");
+	LOGNODE(query, "rewritten query tree (influence contribution)");
 
 	return query;
 }
@@ -278,7 +280,7 @@ rewriteQueryNodeCopy (Query *query)
 	else
 		query = rewriteSPJQueryCopy (query);
 
-	logNode(query, "rewritten query tree (copy contribution semantics)");
+	LOGNODE(query, "rewritten query tree (copy contribution semantics)");
 
 	return query;
 }

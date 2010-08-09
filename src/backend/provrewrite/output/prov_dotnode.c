@@ -158,7 +158,7 @@ dotQuery (Query *query)
 
 	str = generateDotQuery (query);
 
-	logDebug(str->data);
+	LOGDEBUG(str->data);
 
 	return str;
 }

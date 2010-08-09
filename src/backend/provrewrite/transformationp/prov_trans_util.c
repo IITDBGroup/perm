@@ -242,7 +242,7 @@ getTopJoinInfo (Query *query, bool hasCross)
 			/* easy check if a node has more than 2
 			 * children its definitly the top join node */
 			if (list_length(((TransSubInfo *) result)->children) > 1)
-				return result;
+				return (TransSubInfo *) result;
 
 			/* check its children, if they are TransProvInfos, Joins, or BaseRel accesses then
 			 * the current node it the top join node.
@@ -252,7 +252,7 @@ getTopJoinInfo (Query *query, bool hasCross)
 				child = (Node *) lfirst(lc);
 
 				if(IsA(child, TransProvInfo))
-					return result;
+					return (TransSubInfo *) result;
 
 				sub = (TransSubInfo *) child;
 
@@ -264,7 +264,7 @@ getTopJoinInfo (Query *query, bool hasCross)
 				case SUBOP_Join_Full:
 				case SUBOP_Join_Cross:
 				case SUBOP_BaseRel:
-					return result;
+					return (TransSubInfo *) result;
 				default:
 					break;
 				}

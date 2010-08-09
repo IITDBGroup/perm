@@ -52,6 +52,9 @@ typedef struct GetCorrelatedVarsWalkerContext
         Node *exprRoot;
         SublinkLocation location;
         int varlevelsUp;
+		List *realLevelsUp;
+        bool belowAgg;
+        bool belowSet;
 } GetCorrelatedVarsWalkerContext;
 
 /*

@@ -642,7 +642,7 @@ replaceSetOperatorSubtree (Query *top, SetOperationStmt *setOp, Node **parent)
 
 	correctSubQueryAlias(top);
 
-	logNode(top, "after replace of subtree");
+	LOGNODE(top, "after replace of subtree");
 }
 
 ///*

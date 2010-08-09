@@ -492,7 +492,7 @@ makeEquivalenceList (void)
 
 CorrVarInfo *
 makeCorrVar (Var *corrVar, List *vars, Node *parent, Node *exprRoot, SublinkLocation location,
-		bool outside, RangeTblEntry *refRTE)
+		bool outside, RangeTblEntry *refRTE, bool belowAgg, bool belowSet, int trueVarUp)
 {
 	CorrVarInfo *result;
 
@@ -506,8 +506,9 @@ makeCorrVar (Var *corrVar, List *vars, Node *parent, Node *exprRoot, SublinkLoca
 	result->location = location;
 	result->outside = outside;
 	result->refRTE = refRTE;
-	result->nestingDepth = 0; //TODO
-	result->trueVarLevelsUp = 0;
+	result->trueVarLevelsUp = trueVarUp;
+	result->belowAgg = belowAgg;
+	result->belowSet = belowSet;
 
 	return result;
 }
@@ -785,8 +786,9 @@ _equalCorrVarInfo(CorrVarInfo *a, CorrVarInfo *b)
 	COMPARE_SCALAR_FIELD(outside);
 	COMPARE_NODE_FIELD(refRTE);
 	COMPARE_SCALAR_FIELD(location);
-	COMPARE_SCALAR_FIELD(nestingDepth);
 	COMPARE_SCALAR_FIELD(trueVarLevelsUp);
+	COMPARE_SCALAR_FIELD(belowAgg);
+	COMPARE_SCALAR_FIELD(belowSet);
 
 	return true;
 }
@@ -1087,15 +1089,10 @@ _outSublinkInfo(StringInfo str, SublinkInfo *node)
 	WRITE_ENUM_FIELD(aggLoc, SublinkAggLocation);
 	WRITE_NODE_FIELD(sublink);
 	WRITE_NODE_FIELD(parent);
-	//WRITE_POINTER_FIELD(grandParentExprPointer);
 	WRITE_NODE_FIELD(exprRoot);
 	WRITE_NODE_FIELD(rootCopy);
-	//WRITE_POINTER_FIELD(subLinkExprPointer);
 	WRITE_NODE_FIELD(aggOrGroup);
-	//WRITE_POINTER_FIELD(aggOrGroupPointer);
 	WRITE_NODE_FIELD(corrVarInfos);
-//	WRITE_NODE_FIELD(corrSuperInsideVars);
-//	WRITE_NODE_FIELD(corrSubVars);
 	WRITE_NODE_FIELD(condRTEs);
 	WRITE_NODE_FIELD(corrRTEs);
 	WRITE_NODE_FIELD(targetVar);
@@ -1118,8 +1115,9 @@ _outCorrVarInfo(StringInfo str, CorrVarInfo *node)
 	WRITE_BOOL_FIELD(outside);
 	WRITE_NODE_FIELD(refRTE);
 	WRITE_ENUM_FIELD(location, SublinkLocation);
-	WRITE_INT_FIELD(nestingDepth);
 	WRITE_INT_FIELD(trueVarLevelsUp);
+	WRITE_BOOL_FIELD(belowAgg);
+	WRITE_BOOL_FIELD(belowSet);
 }
 
 static void
@@ -1460,8 +1458,9 @@ _readCorrVarInfo(void)
 	READ_BOOL_FIELD(outside);
 	READ_NODE_FIELD(refRTE);
 	READ_ENUM_FIELD(location, SublinkLocation);
-	READ_INT_FIELD(nestingDepth);
 	READ_INT_FIELD(trueVarLevelsUp);
+	READ_BOOL_FIELD(belowAgg);
+	READ_BOOL_FIELD(belowSet);
 
 	READ_DONE();
 }
@@ -1759,8 +1758,9 @@ _copyCorrVarInfo(CorrVarInfo *from)
 	COPY_SCALAR_FIELD(outside);
 	COPY_NODE_FIELD(refRTE);
 	COPY_SCALAR_FIELD(location);
-	COPY_SCALAR_FIELD(nestingDepth);
 	COPY_SCALAR_FIELD(trueVarLevelsUp);
+	COPY_SCALAR_FIELD(belowAgg);
+	COPY_SCALAR_FIELD(belowSet);
 
 	return newnode;
 }

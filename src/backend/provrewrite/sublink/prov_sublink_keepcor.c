@@ -20,9 +20,11 @@
 #include "nodes/makefuncs.h"
 #include "nodes/parsenodes.h"
 #include "nodes/primnodes.h"
+#include "optimizer/clauses.h"
 #include "parser/parse_relation.h"
 #include "parser/parse_expr.h"
 #include "parser/parsetree.h"
+#include "utils/guc.h"
 
 #include "provrewrite/provrewrite.h"
 #include "provrewrite/provlog.h"
@@ -47,19 +49,29 @@ static Node *generateCsubPlus (SublinkInfo *info);
 static List * createJoinExprsForBaseRelJoin (Query *query, Index startRTindex, Index rtIndex);
 static void createPlistForBaseRelJoin (Query *query, Index rtIndex, Index curResno);
 
+/* macros */
+#define IS_UNION_TOP(query) \
+	(((Query *) query)->setOperations != NULL \
+	&& ((SetOperationStmt *)((Query *) query)->setOperations)->op == SETOP_UNION \
+	&& prov_use_wl_union_semantics \
+	)
+
 /*
  * Rewrite a sublink by
  * 1) Joining all RTEs
  * 2) rewrite the sublink's query
- * 3) add cross product with all base relations unioned with a null tuple accessed by the sublink
- * 4) add a new sublinks that simulates a left join between the rewritten sublink query T_sub+ and the base relations
- * 		such that a tuple from the normal query is joined with the base relations if there is a tuple from T_sub+ that has
- * 		the same provenance attribute values as the base relation attribute values
- *
+ * 3) add cross product with all base relations unioned with a null tuple
+ *    accessed by the sublink
+ * 4) add a new sublinks that simulates a left join between the rewritten
+ *    sublink query T_sub+ and the base relations such that a tuple from the
+ *    normal query is joined with the base relations if there is a tuple from
+ *    T_sub+ that has the same provenance attribute values as the base relation
+ *    attribute values
  */
 
 void
-rewriteSublinkWithCorrelationToBase (Query *query, SublinkInfo *info, Index subPos[])
+rewriteSublinkWithCorrelationToBase (Query *query, SublinkInfo *info,
+		Index subPos[])
 {
 	Query *rewrittenSub;
 	List *accessedBaseRels;
@@ -67,7 +79,8 @@ rewriteSublinkWithCorrelationToBase (Query *query, SublinkInfo *info, Index subP
 	int baseRelStackPos;
 	int subListPos;
 
-	/* check if we are processing a top level sublink and active the base rel stack */
+	/* check if we are processing a top level sublink and active the base
+	 * rel stack */
 	inSublink = baseRelStackActive;
 	baseRelStackActive = true;
 	baseRelStackPos = list_length(baseRelStack);
@@ -83,8 +96,8 @@ rewriteSublinkWithCorrelationToBase (Query *query, SublinkInfo *info, Index subP
 	/* add base relations */
 	if (inSublink)
 	{
-		/* if we are processing a nested sublink do not remove base relations from stack
-		 * because we need them for rewrite of the parent sublink.
+		/* if we are processing a nested sublink do not remove base relations
+		 * from stack because we need them for rewrite of the parent sublink.
 		 */
 		accessedBaseRels = getAllUntil(baseRelStack, baseRelStackPos);
 	}
@@ -93,14 +106,16 @@ rewriteSublinkWithCorrelationToBase (Query *query, SublinkInfo *info, Index subP
 
 	subListPos = addJoinWithBaseRelations (query, accessedBaseRels);
 
-	/* add sublink for join condition for the join with sublinks base relations */
+	/* add sublink for join condition for the join with sublinks base
+	 * relations */
 	addConditionForBaseRelJoin (query, info);
 
-	/* if sublink is a top level sublink (it is not contained in another sublink) deactivate the baseRelStack */
+	/* if sublink is a top level sublink (it is not contained in another
+	 * sublink) deactivate the baseRelStack */
 	if (!inSublink)
 		deactiveBaseRelStack ();
 
-	logNode(query, "query after rewritten sublink");
+	LOGNODE(query, "query after rewritten sublink");
 
 	subPos[info->sublinkPos] = subListPos;
 }
@@ -119,9 +134,10 @@ rewriteGenSublinkQuery (Query *query)
 	ListCell *lc;
 	RangeTblRef *rtRef;
 	int i;
+	int varUp = -1;
 
 	/* no limit just use normal rewrite */
-	if (!query->limitCount && !query->limitOffset)
+	if (!query->limitCount && !query->limitOffset && !IS_UNION_TOP(query))
 		return rewriteQueryNode(query);
 
 	/* query has a limit clause. This means we have to introduce a new dummy
@@ -129,20 +145,27 @@ rewriteGenSublinkQuery (Query *query)
 	 * mess up the LIMIT clause.
 	 */
 	result = makeQuery();
-	addSubqueryToRT(result, query, appendIdToString("orig_with_limit", &curUniqueRelNum));
+	addSubqueryToRT(result, query,
+			appendIdToString("orig_with_limit", &curUniqueRelNum));
 
 	foreachi(lc, i, query->targetList)
 	{
 		te = (TargetEntry *) lfirst(lc);
 
-		var = makeVar(1, i + 1, exprType((Node *) te->expr), exprTypmod((Node *) te->expr), 0);
-		newTe = makeTargetEntry((Expr *) var, i + 1, pstrdup(te->resname), false);
+		var = makeVar(1, i + 1, exprType((Node *) te->expr),
+				exprTypmod((Node *) te->expr), 0);
+		newTe = makeTargetEntry((Expr *) var, i + 1,
+				pstrdup(te->resname), false);
 
 		result->targetList = lappend(result->targetList, newTe);
 	}
 
 	MAKE_RTREF(rtRef, 1);
 	result->jointree->fromlist = list_make1(rtRef);
+
+	result = (Query *) query_tree_mutator ((Query *) result,
+			increaseSublevelsUpMutator, &varUp,
+			QTW_IGNORE_JOINALIASES | QTW_DONT_COPY_QUERY);
 
 	return rewriteQueryNode(result);
 }
@@ -163,11 +186,11 @@ addJoinWithBaseRelations (Query *query, List *baseRels)
 	Query *baseRel;
 	List *subJoins;
 
-
 	/*
-	 *	get number of attributes before we add base relations. This might be different from target list length, because
-	 *	rewriting another sublink might have added attributes to the top level join, but not to the query target
-	 *	list.
+	 *	get number of attributes before we add base relations. This might be
+	 *	different from target list length, because rewriting another sublink
+	 *	might have added attributes to the top level join, but not to the query
+	 *	target list.
 	 */
 	if (list_length(query->rtable) == 0) //TODO will brreak if constants are used
 	{
@@ -196,7 +219,8 @@ addJoinWithBaseRelations (Query *query, List *baseRels)
 		rte = (RangeTblEntry *) lfirst(lc);
 		baseRel = createBaseRelUnionNull (rte, query, provAttrs);
 
-		addSubqueryToRT (query, baseRel, appendIdToString("base_rel_union_null",&curUniqueRelNum));
+		addSubqueryToRT (query, baseRel,
+				appendIdToString("base_rel_union_null",&curUniqueRelNum));
 		correctRTEAlias (llast(query->rtable));
 		rtIndex++;
 	}
@@ -235,10 +259,12 @@ createPlistForBaseRelJoin (Query *query, Index rtIndex, Index curResno)
 
 	pList = NIL;
 
-	/* if there is only one base relation and no original query RTE we have no join */
+	/* if there is only one base relation and no original query RTE we have no
+	 * join */
 	if (rtIndex == 1)
 	{
-		for(nameLc = ((List *) linitial(pStack))->head, i = 1; nameLc != NULL; nameLc = nameLc->next, i++)
+		for(nameLc = ((List *) linitial(pStack))->head, i = 1; nameLc != NULL;
+				nameLc = nameLc->next, i++)
 		{
 			curResno++;
 
@@ -260,11 +286,13 @@ createPlistForBaseRelJoin (Query *query, Index rtIndex, Index curResno)
 		/* get top level join */
 		rte = (RangeTblEntry *) rt_fetch(rtIndex, query->rtable);
 
-		/* get the vars from the top level join and the names from the pList of T_sub+ */
+		/* get the vars from the top level join and the names from the pList
+		 * of T_sub+ */
 		lc = rte->joinaliasvars->head;
 		nameLc = ((List *) linitial(pStack))->head;
 
-		/* skip attributes from original query (with possibly added attributes from sublinks processed before) */
+		/* skip attributes from original query (with possibly added attributes
+		 * from sublinks processed before) */
 		for(i = 0; i < curResno; i++)
 		{
 			lc = lc->next;
@@ -282,7 +310,8 @@ createPlistForBaseRelJoin (Query *query, Index rtIndex, Index curResno)
 
 			te = (TargetEntry *) lfirst(nameLc);
 
-			newTe = makeTargetEntry((Expr *) var, curResno, pstrdup(te->resname),false);
+			newTe = makeTargetEntry((Expr *) var, curResno,
+					pstrdup(te->resname),false);
 			pList = lappend(pList, newTe);
 		}
 	}
@@ -291,7 +320,8 @@ createPlistForBaseRelJoin (Query *query, Index rtIndex, Index curResno)
 }
 
 /*
- *	Create the join tree for the crossproduct of the original query and the base relations.
+ *	Create the join tree for the crossproduct of the original query and the
+ *	base relations.
  */
 
 static List *
@@ -304,7 +334,8 @@ createJoinExprsForBaseRelJoin (Query *query, Index startRTindex, Index rtIndex)
 
 	subJoins = NIL;
 
-	/* special case original query has no RTEs (e.g. SELECT 1) and there is only one base rel */
+	/* special case original query has no RTEs (e.g. SELECT 1) and there is
+	 * only one base rel */
 	if (startRTindex == 1 && rtIndex == 2)
 	{
 			MAKE_RTREF(rtRef, rtIndex - 1);
@@ -312,8 +343,8 @@ createJoinExprsForBaseRelJoin (Query *query, Index startRTindex, Index rtIndex)
 			return NIL;
 	}
 
-	/* normal case proceed by joining the top join tree node with one of the base relations
-	 * and add the new join as top join tree node.
+	/* normal case proceed by joining the top join tree node with one of the
+	 * base relations and add the new join as top join tree node.
 	 */
 	for(i = startRTindex; i < rtIndex; i++) {
 		newJoin = createJoinExpr(query, JOIN_INNER);
@@ -332,9 +363,8 @@ createJoinExprsForBaseRelJoin (Query *query, Index startRTindex, Index rtIndex)
 }
 
 /*
- * Creates a query that produces R+ for an base relation R and unions R+ with a tuple consisting
- * only of null tuples.
- *
+ * Creates a query that produces R+ for an base relation R and unions R+ with
+ * a tuple consisting only of null tuples.
  */
 
 static Query *
@@ -352,7 +382,8 @@ createBaseRelUnionNull (RangeTblEntry *rte, Query *query, List *provAttrs)
 
 	/* add base table to range table */
 	subQuery = generateBaseRelQuery (rte, provAttrs);
-	addSubqueryToRT (unionQuery, subQuery, appendIdToString("base_rel", &curUniqueRelNum));
+	addSubqueryToRT (unionQuery, subQuery,
+			appendIdToString("base_rel", &curUniqueRelNum));
 	correctRTEAlias((RangeTblEntry *) lfirst(unionQuery->rtable->tail));
 
 	/* create target list from base relation query target list */
@@ -360,7 +391,8 @@ createBaseRelUnionNull (RangeTblEntry *rte, Query *query, List *provAttrs)
 
 	/* add null tuple to range table */
 	subQuery = generateNullQuery (rte);
-	addSubqueryToRT (unionQuery, subQuery, appendIdToString("null_constructor", &curUniqueRelNum));
+	addSubqueryToRT (unionQuery, subQuery,
+			appendIdToString("null_constructor", &curUniqueRelNum));
 	correctRTEAlias((RangeTblEntry *) lfirst(unionQuery->rtable->tail));
 
 	/* create union */
@@ -419,7 +451,8 @@ generateBaseRelQuery (RangeTblEntry *rte, List *provAttrs)
 	rtRef->rtindex = 1;
 	result->jointree->fromlist = list_make1(rtRef);
 
-	/* get attributes of base relation and add a target entry for each base relation attr */
+	/* get attributes of base relation and add a target entry for each base
+	 * relation attr */
 	expandRTEWithParam(rte, 1, 0, false, false, &vars, &baseRelAttrs);
 
 	resno = 1;
@@ -441,9 +474,9 @@ generateBaseRelQuery (RangeTblEntry *rte, List *provAttrs)
 }
 
 /*
- * For a base relation given as a RangeTblEntry generate query that returns a single tuple with the same schema as the base relation
- * and all attribute values set to null.
- *
+ * For a base relation given as a RangeTblEntry generate query that returns a
+ * single tuple with the same schema as the base relation and all attribute
+ * values set to null.
  */
 
 static Query *
@@ -466,7 +499,8 @@ generateNullQuery (RangeTblEntry *rte)
 	/* create a new Query node */
 	result = makeQuery();
 
-	/* get attributes of base relation and add a null constant for each base relation attr */
+	/* get attributes of base relation and add a null constant for each base
+	 * relation attr */
 	expandRTEWithParam(rte, 1, 0, false, false, &attrNames, &baseRelAttrs);
 
 	resno = 1;
@@ -488,9 +522,8 @@ generateNullQuery (RangeTblEntry *rte)
 
 
 /*
- *	Create a selection condition that filter out tuples from the rewritten T_sub that do not belong to
- *	the actual T_sub^+.
- *
+ *	Create a selection condition that filter out tuples from the rewritten
+ *	T_sub that do not belong to the actual T_sub^+.
  */
 
 static void
@@ -514,7 +547,8 @@ addConditionForBaseRelJoin (Query *query, SublinkInfo *info)
 
 	rewrittenSubquery = info->rewrittenSublinkQuery;
 
-	if (info->sublink->subLinkType == ANY_SUBLINK || info->sublink->subLinkType == ALL_SUBLINK)
+	if (info->sublink->subLinkType == ANY_SUBLINK
+			|| info->sublink->subLinkType == ALL_SUBLINK)
 	{
 		/* generate Csub and CsubPlus from sublink condition */
 		Csub = generateCsub (info);
@@ -525,13 +559,16 @@ addConditionForBaseRelJoin (Query *query, SublinkInfo *info)
 		{
 			/* C_sub' OR NOT C_sub */
 			boolNode = (BoolExpr *) makeBoolExpr(NOT_EXPR, list_make1(Csub));
-			condition = (Node *) makeBoolExpr(OR_EXPR, list_make2(CsubPlus, boolNode));
+			condition = (Node *) makeBoolExpr(OR_EXPR,
+					list_make2(CsubPlus, boolNode));
 		}
 		if (info->sublink->subLinkType == ALL_SUBLINK)
 		{
 			/* C_sub OR NOT C_sub' */
-			boolNode = (BoolExpr *) makeBoolExpr(NOT_EXPR, list_make1(CsubPlus));
-			condition = (Node *) makeBoolExpr(OR_EXPR, list_make2(Csub, boolNode));
+			boolNode = (BoolExpr *) makeBoolExpr(NOT_EXPR,
+					list_make1(CsubPlus));
+			condition = (Node *) makeBoolExpr(OR_EXPR,
+					list_make2(Csub, boolNode));
 		}
 
 		/* add simulated join condition to rewrittenSubquery qual */
@@ -539,7 +576,8 @@ addConditionForBaseRelJoin (Query *query, SublinkInfo *info)
 		rewrittenSubquery->hasSubLinks = true;
 	}
 
-	/* fetch pList of T_sub+ from pStack and pList for the join of all base rels */
+	/* fetch pList of T_sub+ from pStack and pList for the join of all
+	 * base rels */
 	subPlist = (List *) linitial(pStack);
 	oldPlist = (List *) popNth(&pStack, 1);
 
@@ -553,7 +591,8 @@ addConditionForBaseRelJoin (Query *query, SublinkInfo *info)
 		baseRelVar = copyObject(baseRelVar);
 		baseRelVar->varlevelsup = 1;
 
-		/* create an equality (null = null too) condition for the base relation var and T_sub var */
+		/* create an equality (null = null too) condition for the base relation
+		 * var and T_sub var */
 		condition = createNotDistinctConditionForVars (tsubVar, baseRelVar);
 
 		/* AND new equality condition with base rel attr to where clause */
@@ -569,8 +608,8 @@ addConditionForBaseRelJoin (Query *query, SublinkInfo *info)
 	condition = (Node *) sublink;
 
 	/*
-	 * create a not exists sublink and base rel = null condition for the case that
-	 * T_sub is empty.
+	 * create a not exists sublink and base rel = null condition for the case
+	 * that T_sub is empty.
 	 */
 	sublink = makeNode(SubLink);
 	sublink->subLinkType = EXISTS_SUBLINK;
@@ -589,22 +628,25 @@ addConditionForBaseRelJoin (Query *query, SublinkInfo *info)
 		nullTest->nulltesttype = IS_NULL;
 		nullTest->arg = (Expr *) copyObject(tsubVar);
 
-		boolNode = (BoolExpr *) makeBoolExpr(AND_EXPR, list_make2(boolNode, nullTest));
+		boolNode = (BoolExpr *) makeBoolExpr(AND_EXPR,
+				list_make2(boolNode, nullTest));
 	}
 
 	/*
-	 * create top level OR between the sublink for joining base relations and the extra
-	 * condition for the case that T_sub is empty
+	 * create top level OR between the sublink for joining base relations and
+	 * the extra condition for the case that T_sub is empty
 	 */
 
-	condition = (Node *) makeBoolExpr(OR_EXPR, list_make2(condition, boolNode));
+	condition = (Node *) makeBoolExpr(OR_EXPR,
+			list_make2(condition, boolNode));
 
 	/* add condition to where clause */
 	addConditionToQualWithAnd (query, condition, true);
 }
 
 /*
- * copies a sublink node but increases varlevelsup from the testexpr and in the sublink query
+ * Copies a sublink node but increases varlevelsup from the testexpr and in
+ * the sublink query.
  */
 
 static Node *
@@ -622,7 +664,8 @@ generateCsub (SublinkInfo *info)
 	/* increase varlevelsup in sublink query of Csub */
 	increaseSublevelsContext = (int *) palloc(sizeof(int));
 	*increaseSublevelsContext = -1;
-	sublink->subselect = increaseSublevelsUpMutator(sublink->subselect, increaseSublevelsContext);
+	sublink->subselect = increaseSublevelsUpMutator(sublink->subselect,
+			increaseSublevelsContext);
 	pfree(increaseSublevelsContext);
 
 	/* increase varlevelsup in sublink test expression */
@@ -633,14 +676,17 @@ generateCsub (SublinkInfo *info)
 	context->varSublevelsUp = -1;
 	context->useVarnoValue = 0;
 
-	 ((SubLink *) result)->testexpr = replaceParamsMutator (((SubLink *) result)->testexpr, context);
+	 ((SubLink *) result)->testexpr = replaceParamsMutator (
+			 ((SubLink *) result)->testexpr, context);
 	 pfree(context);
 
 	return result;
 }
 
 /*
- * For a ANY- or ALL-sublink we create a condition that resembles the sublink test expression.
+ * For a ANY- or ALL-sublink we create a condition that resembles the sublink
+ * test expression.
+ *
  * For example if the sublink is:
  * 		a = ANY (SELECT b FROM R)
  * the new condition is

@@ -48,7 +48,7 @@ logNodeXml (void *node)
 {
 	ereport (DEBUG1,
 					(errcode(ERRCODE_DIVISION_BY_ZERO),
-					errmsg(nodeToXml(node))));
+					errmsg("%s",nodeToXml(node))));
 }
 
 /*
@@ -60,7 +60,7 @@ logDebug (char *message)
 {
 	ereport (DEBUG1,
 				(errcode(ERRCODE_DIVISION_BY_ZERO),
-				errmsg(message)));
+				errmsg("%s",message)));
 }
 
 /*
@@ -72,7 +72,7 @@ logNotice (char *message)
 {
 	ereport (NOTICE,
 				(errcode(ERRCODE_DIVISION_BY_ZERO),
-				errmsg(message)));
+				errmsg("%s",message)));
 }
 
 
@@ -114,7 +114,8 @@ logValueStringList (List *list)
 
 	ereport (DEBUG1,
 					(errcode(ERRCODE_DIVISION_BY_ZERO),
-					errmsg("print T_String list with length: %i", list_length(list))));
+					errmsg("print T_String list with length: %i",
+							list_length(list))));
 
 	pos = 0;
 	foreach(lc, list)
@@ -146,7 +147,8 @@ logCharList (List *list)
 
 	ereport (DEBUG1,
 					(errcode(ERRCODE_DIVISION_BY_ZERO),
-					errmsg("print char list with length: %i", list_length(list))));
+					errmsg("print char list with length: %i",
+							list_length(list))));
 
 	pos = 0;
 	foreach(lc, list)
@@ -168,7 +170,8 @@ logIntList (List *list)
 
 	ereport (DEBUG1,
 					(errcode(ERRCODE_DIVISION_BY_ZERO),
-					errmsg("print int list with length: %i", list_length(list))));
+					errmsg("print int list with length: %i",
+							list_length(list))));
 
 	pos = 0;
 	foreach(lc, list)
@@ -194,7 +197,10 @@ logQuerySql (Query *query)
 
 	ereport (DEBUG1,
 					(errcode(ERRCODE_DIVISION_BY_ZERO),
-					errmsg(buf->data)));
+					errmsg("%s", buf->data)));
+
+	pfree(buf->data);
+	pfree(buf);
 }
 
 /*
@@ -210,7 +216,10 @@ logQuerySqlDb2 (Query *query)
 
 	ereport (DEBUG1,
 					(errcode(ERRCODE_DIVISION_BY_ZERO),
-					errmsg(buf->data)));
+					errmsg("%s", buf->data)));
+
+	pfree(buf->data);
+	pfree(buf);
 }
 
 /*

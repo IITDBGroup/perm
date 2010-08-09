@@ -2447,8 +2447,9 @@ _outCorrVarInfo(StringInfo str, CorrVarInfo *node, int depth)
 	WRITE_BOOL_ELEM(outside);
 	WRITE_NODE_ELEM(refRTE);
 	WRITE_ENUM_ELEM(location, SublinkLocation);
-	WRITE_INT_ELEM(nestingDepth);
 	WRITE_INT_ELEM(trueVarLevelsUp);
+	WRITE_BOOL_ELEM(belowAgg);
+	WRITE_BOOL_ELEM(belowSet);
 
 	WRITE_NODE_END("CORRVARINFO");
 }

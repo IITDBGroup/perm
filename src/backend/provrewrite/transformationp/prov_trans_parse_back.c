@@ -1,9 +1,9 @@
 /*-------------------------------------------------------------------------
  *
  * prov_trans_parse_back.c
- *	  POSTGRES C
+ *	  	PERM C -
  *
- * Portions Copyright (c) 2008 Boris Glavic
+ * Portions Copyright (c) 2009 Boris Glavic
  *
  *
  * IDENTIFICATION
@@ -142,13 +142,14 @@ static void parseAnnotations (Query *query, bool start, StringInfo buf);
  */
 
 void
-parseBackTransToSQL (Query *query, TransRepQueryInfo *repInfo, MemoryContext funcPrivateCtx)
+parseBackTransToSQL (Query *query, TransRepQueryInfo *repInfo,
+		MemoryContext funcPrivateCtx)
 {
 	TransProvInfo *info;
 	TransSubInfo *subInfo;
 	List *ranges;
 	StringInfo str;
-	MemoryContext old;
+//	MemoryContext old;
 
 	info = GET_TRANS_INFO(query);
 	subInfo = getRootSubForNode(info);
@@ -164,7 +165,8 @@ parseBackTransToSQL (Query *query, TransRepQueryInfo *repInfo, MemoryContext fun
  */
 
 void
-postprocessRanges (List *ranges, StringInfo str, TransRepQueryInfo *repInfo, MemoryContext funcPrivateCtx)
+postprocessRanges (List *ranges, StringInfo str, TransRepQueryInfo *repInfo,
+		MemoryContext funcPrivateCtx)
 {
 	TransParseRange *range;
 	int numRanges;
@@ -265,7 +267,8 @@ parseBackTrans(Query *query, List **result)
 	resultDesc = BuildDescForRelation(attrList);
 
 	/* parse back query */
-	get_select_query_def(query, resultDesc, context, (Node *) getRootSubForNode(GET_TRANS_INFO(query)), false);
+	get_select_query_def(query, resultDesc, context,
+			(Node *) getRootSubForNode(GET_TRANS_INFO(query)), false);
 
 	return buf;
 }
@@ -274,13 +277,14 @@ parseBackTrans(Query *query, List **result)
 /* ----------
  * get_query_def			- Parse back one query parsetree
  *
- * If resultDesc is not NULL, then it is the output tuple descriptor for
- * the view represented by a SELECT query.
+ * If resultDesc is not NULL, then it is the output tuple descriptor for the
+ * view represented by a SELECT query.
  * ----------
  */
 static void
 get_query_def(Query *query, StringInfo buf, List *parentnamespace,
-			  TupleDesc resultDesc, int prettyFlags, int startIndent, TRANSPARSE_ARGS)
+			  TupleDesc resultDesc, int prettyFlags, int startIndent,
+			  TRANSPARSE_ARGS)
 {
 	TransParseContext newContext;
 	deparse_namespace dpns;
@@ -310,7 +314,8 @@ get_query_def(Query *query, StringInfo buf, List *parentnamespace,
 	switch (query->commandType)
 	{
 		case CMD_SELECT:
-			get_select_query_def(query, resultDesc, &newContext, parentInfo, inStatic);
+			get_select_query_def(query, resultDesc, &newContext, parentInfo,
+					inStatic);
 			break;
 
 		default:
@@ -405,13 +410,15 @@ get_select_query_def(Query *query, TupleDesc resultDesc, TRANSPARSE_ARGS)
 	if (query->setOperations)
 	{
 		curSub = (TransSubInfo *) info->root;
-		get_setop_query(query->setOperations, query, resultDesc, context, (Node *) curSub, newStatic, true);
+		get_setop_query(query->setOperations, query, resultDesc, context,
+				(Node *) curSub, newStatic, true);
 		/* ORDER BY clauses must be simple in this case */
 		force_colno = true;
 	}
 	else
 	{
-		get_basic_select_query(query, resultDesc, context, (Node *) curSub, newStatic);
+		get_basic_select_query(query, resultDesc, context, (Node *) curSub,
+				newStatic);
 		force_colno = false;
 	}
 
@@ -434,7 +441,7 @@ get_select_query_def(Query *query, TupleDesc resultDesc, TRANSPARSE_ARGS)
 			sortcoltype = exprType(sortexpr);
 			/* See whether operator is default < or > for datatype */
 			typentry = lookup_type_cache(sortcoltype,
-										 TYPECACHE_LT_OPR | TYPECACHE_GT_OPR);
+					TYPECACHE_LT_OPR | TYPECACHE_GT_OPR);
 			if (srt->sortop == typentry->lt_opr)
 			{
 				/* ASC is default, so emit nothing for it */
@@ -490,12 +497,12 @@ get_select_query_def(Query *query, TupleDesc resultDesc, TRANSPARSE_ARGS)
 
 		if (rc->forUpdate)
 			appendContextKeyword(context, " FOR UPDATE",
-								 -PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
+					-PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
 		else
 			appendContextKeyword(context, " FOR SHARE",
-								 -PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
+					-PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
 		appendStringInfo(str, " OF %s",
-						 quote_identifier(rte->eref->aliasname));
+				quote_identifier(rte->eref->aliasname));
 		if (rc->noWait)
 			appendStringInfo(str, " NOWAIT");
 	}
@@ -506,6 +513,10 @@ get_select_query_def(Query *query, TupleDesc resultDesc, TRANSPARSE_ARGS)
 	if(!inStatic)
 		range->end = str->len;
 }
+
+/*
+ *
+ */
 
 static void
 get_basic_select_query(Query *query, TupleDesc resultDesc, TRANSPARSE_ARGS)
@@ -584,7 +595,8 @@ get_basic_select_query(Query *query, TupleDesc resultDesc, TRANSPARSE_ARGS)
 	{
 		bool needAgg;
 
-		child = getSpecificInfo ((TransSubInfo *) info->root, SUBOP_Aggregation);
+		child = getSpecificInfo ((TransSubInfo *) info->root,
+				SUBOP_Aggregation);
 
 		if ((needAgg = (!inStatic && !equal(info->root, child))))
 			MAKE_RANGE(range, child);
@@ -760,7 +772,8 @@ get_target_list(Query *query, TupleDesc resultDesc, TRANSPARSE_ARGS)
  */
 
 static void
-get_setop_query(Node *setOp, Query *query, TupleDesc resultDesc, TRANSPARSE_ARGS, bool isRoot)
+get_setop_query(Node *setOp, Query *query, TupleDesc resultDesc,
+		TRANSPARSE_ARGS, bool isRoot)
 {
 	StringInfo	str = context->buf;
 	bool		need_paren;
@@ -792,7 +805,8 @@ get_setop_query(Node *setOp, Query *query, TupleDesc resultDesc, TRANSPARSE_ARGS
 		if (need_paren)
 			appendStringInfoChar(str, '(');
 		get_query_def(subquery, str, context->namespaces, resultDesc,
-					  context->prettyFlags, context->indentLevel, context, NULL, inStatic);
+					  context->prettyFlags, context->indentLevel, context,
+					  NULL, inStatic);
 		if (need_paren)
 			appendStringInfoChar(str, ')');
 	}
@@ -812,7 +826,8 @@ get_setop_query(Node *setOp, Query *query, TupleDesc resultDesc, TRANSPARSE_ARGS
 			appendStringInfoChar(str, '(');
 		if (parentInfo)
 			child = (Node *) TSET_LARG(parentInfo);
-		get_setop_query(op->larg, query, resultDesc, context, child, newStatic, false);
+		get_setop_query(op->larg, query, resultDesc, context, child,
+				newStatic, false);
 		if (need_paren)
 			appendStringInfoChar(str, ')');
 
@@ -822,15 +837,15 @@ get_setop_query(Node *setOp, Query *query, TupleDesc resultDesc, TRANSPARSE_ARGS
 		{
 			case SETOP_UNION:
 				appendContextKeyword(context, " UNION ",
-									 -PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
+						-PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
 				break;
 			case SETOP_INTERSECT:
 				appendContextKeyword(context, " INTERSECT ",
-									 -PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
+						-PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
 				break;
 			case SETOP_EXCEPT:
 				appendContextKeyword(context, " EXCEPT ",
-									 -PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
+						-PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
 				break;
 			default:
 				elog(ERROR, "unrecognized set op: %d",
@@ -844,13 +859,18 @@ get_setop_query(Node *setOp, Query *query, TupleDesc resultDesc, TRANSPARSE_ARGS
 
 		need_paren = !IsA(op->rarg, RangeTblRef);
 
+		if (op->op == SETOP_EXCEPT)
+			appendStringInfoString(str, "<NOT>");
 		if (need_paren)
 			appendStringInfoChar(str, '(');
 		if (parentInfo)
 			child = (Node *) TSET_RARG(parentInfo);
-		get_setop_query(op->rarg, query, resultDesc, context, child, newStatic, false);
+		get_setop_query(op->rarg, query, resultDesc, context, child, newStatic,
+				false);
 		if (need_paren)
 			appendStringInfoChar(str, ')');
+		if (op->op == SETOP_EXCEPT)
+			appendStringInfoString(str, "</NOT>");
 	}
 	else
 	{
@@ -919,7 +939,8 @@ push_plan(deparse_namespace *dpns, Plan *subplan)
 	 * OUTER referent; otherwise normal.
 	 */
 	if (IsA(subplan, Append))
-		dpns->outer_plan = (Plan *) linitial(((Append *) subplan)->appendplans);
+		dpns->outer_plan =
+				(Plan *) linitial(((Append *) subplan)->appendplans);
 	else
 		dpns->outer_plan = outerPlan(subplan);
 
@@ -1054,7 +1075,8 @@ get_variable(Var *var, int levelsup, bool showstar, TransParseContext *context)
 			 * more-closely-nested RTE, or be ambiguous, in which case we need
 			 * to specify the schemaname to avoid these errors.
 			 */
-			if (find_rte_by_refname(rte->eref->aliasname, context->namespaces) != rte)
+			if (find_rte_by_refname(rte->eref->aliasname,
+					context->namespaces) != rte)
 				schemaname = get_namespace_name(get_rel_namespace(rte->relid));
 		}
 		else if (rte->rtekind == RTE_JOIN)
