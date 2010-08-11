@@ -31,13 +31,13 @@
 
 /* Function declarations */
 static void rewriteBaseRelation (int rtindex, RangeTblEntry *rte, Query *query);
-static void rewriteRTEwithProvenance (int rtindex, RangeTblEntry *rte, Query *query);
 static void computeJoinPAttrs(List **pAttrs, Node *joinChild, Query *query, List *subList);
 static bool checkForNTupleDupConstructs (Query *query);
 
 /*
- * Rewrite a SPJ query node. First, handle the LIMIT clause if its present, then rewrite sublink queries.
- * Finally do the actual rewrite of the SPJ query.
+ * Rewrite a SPJ query node. First, handle the LIMIT clause if its present,
+ * then rewrite sublink queries. Finally do the actual rewrite of the SPJ
+ * query.
  */
 
 Query *
@@ -73,12 +73,14 @@ rewriteSPJQuery (Query *query)
 }
 
 /*
- * Do the actual rewrite of an SPJ query. For an SPJ query the only thing to do is to add the
- * provenance attributes for all subquery and base relation entries in the range table to the
- * target list of the SPJ query (we record for which RT entries we have provenance in subList).
- * First, the RT entries are rewritten. Second, RTE aliases and join RTEs are adapted to consider
- * the provenance RT entries. Finally, the provenance attributes are added to the target list of
- * the SPJ query and are pushed on pStack to be used by callers of this method.
+ * Do the actual rewrite of an SPJ query. For an SPJ query the only thing to do
+ * is to add the provenance attributes for all subquery and base relation
+ * entries in the range table to the target list of the SPJ query (we record
+ * for which RT entries we have provenance in subList). First, the RT entries
+ * are rewritten. Second, RTE aliases and join RTEs are adapted to consider the
+ * provenance RT entries. Finally, the provenance attributes are added to the
+ * target list of the SPJ query and are pushed on pStack to be used by callers
+ * of this method.
  */
 
 Query *
@@ -145,7 +147,7 @@ rewriteRTEs (Query *query, List **subList, Index maxRtindex)
 		{
 			/* rte is a stored provenance query */
 			if (rte->provAttrs != NIL)
-				rewriteRTEwithProvenance (rtindex, rte, query);
+				rewriteRTEwithProvenance (rtindex, rte);
 
 			/* rte is base relation */
 			else if (rte->rtekind == RTE_RELATION || rte->isProvBase)
@@ -224,16 +226,16 @@ rewriteBaseRelation (int rtindex, RangeTblEntry *rte, Query *query)
 	/* if the baseRelStack is activated push a RTE for this base relation on the baseRelStack */
 	if (baseRelStackActive)
 		push(&baseRelStack, copyObject(rte));
-
 }
 
 /*
- * Rewrites a RTE that includes provenance attributes. To be more precise for which a user has given a list of
- * provenance attributes by appending the PROVENANCE (Attribute List) clause to the from clause item represented
- * by this RTE.
+ * Rewrites a RTE that includes provenance attributes. To be more precise for
+ * which a user has given a list of provenance attributes by appending the
+ * PROVENANCE (Attribute List) clause to the from clause item represented by
+ * this RTE.
  */
 
-static void rewriteRTEwithProvenance (int rtindex, RangeTblEntry *rte, Query *query)
+void rewriteRTEwithProvenance (int rtindex, RangeTblEntry *rte)
 {
 	ListCell *lc;
 	List *vars;
@@ -252,7 +254,8 @@ static void rewriteRTEwithProvenance (int rtindex, RangeTblEntry *rte, Query *qu
 	/* create Var nodes for all attributes of the RTE */
 	if (rte->rtekind == RTE_SUBQUERY)
 	{
-		/* if the RTE subquery is a provenance query we rewrite this query and return */
+		/* if the RTE subquery is a provenance query we rewrite this query and
+		 * return */
 		if (IsProvRewrite(rte->subquery))
 		{
 			rte->subquery = rewriteQueryNode(rte->subquery);
@@ -270,7 +273,8 @@ static void rewriteRTEwithProvenance (int rtindex, RangeTblEntry *rte, Query *qu
 			attr = makeString(te->resname);
 			names = lappend(names, attr);
 
-			attrVar = makeVar(rtindex, te->resno, exprType((Node *) te->expr), exprTypmod((Node *) te->expr), 0);
+			attrVar = makeVar(rtindex, te->resno, exprType((Node *) te->expr),
+					exprTypmod((Node *) te->expr), 0);
 			vars = lappend(vars, attrVar);
 		}
 	}
@@ -297,7 +301,8 @@ static void rewriteRTEwithProvenance (int rtindex, RangeTblEntry *rte, Query *qu
 			if (strcmp(attr->val.str, provattr->val.str) == 0)
 			{
 				found = true;
-				te = makeTargetEntry((Expr *) attrVar, attrVar->varattno, createExternalProvAttrName(attr->val.str), false);
+				te = makeTargetEntry((Expr *) attrVar, attrVar->varattno,
+						createExternalProvAttrName(attr->val.str), false);
 				pList = lappend(pList, te);
 			}
 		}

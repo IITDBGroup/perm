@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * copy/prov_copy_util.c
- *	  POSTGRES C Utility functions for copy contribution semantics
+ *	  PERM C - Utility functions for copy contribution semantics
  *
  * Portions Copyright (c) 2008 Boris Glavic
  *
@@ -29,9 +29,12 @@
 #include "provrewrite/provstack.h"
 
 
-static void addProvAttrFromStack (Query *query, Index rtindex, List **pList, List **subPstack);
-static void addDummyProvenanceAttributesForRTE (Query *query, Index rtindex, List **pList);
-static void addDummyProvenanceAttrsForBaseRel (CopyMapRelEntry *rel, Query *query, List **pList);
+static void addProvAttrFromStack (Query *query, Index rtindex, List **pList,
+		List **subPstack);
+static void addDummyProvenanceAttributesForRTE (Query *query, Index rtindex,
+		List **pList);
+static void addDummyProvenanceAttrsForBaseRel (CopyMapRelEntry *rel,
+		Query *query, List **pList);
 
 /*
  *
@@ -58,7 +61,8 @@ copyAddProvAttrsForSet (Query *query, List *subList, List *pList)
 		{
 			rtIndex = rel->rtindex;
 
-			while(lc->next && ((CopyMapRelEntry *) lc->next->data.ptr_value)->rtindex == rtIndex)
+			while(lc->next && ((CopyMapRelEntry *)
+					lc->next->data.ptr_value)->rtindex == rtIndex)
 					lc = lc->next;
 
 			addProvAttrFromStack (query, rtIndex, &pList, &curPstack);
@@ -100,9 +104,11 @@ copyAddProvAttrForNonRewritten (Query *query)
 		{
 			attr = (CopyMapEntry *) lfirst(innerLc);
 
-			expr = (Expr *) makeNullConst(attr->baseRelAttr->vartype, attr->baseRelAttr->vartypmod);
+			expr = (Expr *) makeNullConst(attr->baseRelAttr->vartype,
+					attr->baseRelAttr->vartypmod);
 
-			newTe = makeTargetEntry(expr, curResno, strdup(attr->provAttrName), false);
+			newTe = makeTargetEntry(expr, curResno, strdup(attr->provAttrName),
+					false);
 
 			/* append to targetList and pList */
 			targetList = lappend (targetList, newTe);
@@ -120,9 +126,11 @@ copyAddProvAttrForNonRewritten (Query *query)
 
 
 /*
- * Add provenance attributes to a query. The query should have been rewritten beforehand. The provenance attributes are added for each range
- * table entry. If a RTE is rewritten than just add its provenance attributes like for influence contribution semantics. Else add null-constants
- * as Dummy provenance attributes to generate a consistent output schema.
+ * Add provenance attributes to a query. The query should have been rewritten
+ * beforehand. The provenance attributes are added for each range table entry.
+ * If a RTE is rewritten than just add its provenance attributes like for
+ * influence contribution semantics. Else add null-constants as Dummy
+ * provenance attributes to generate a consistent output schema.
  */
 
 List *
@@ -139,9 +147,8 @@ copyAddProvAttrs (Query *query, List *subList, List *pList)
 	{
 		curSubquery = (Index) lfirst_int(subqLc);
 
-		/* if current rte contains parts that are rewritten, then obtain provenance
-		 * attributes from this rte's subquery.
-		 */
+		/* if current rte contains parts that are rewritten, then obtain
+		 * provenance attributes from this rte's subquery.*/
 		if (shouldRewriteRTEforMap(GetInfoCopyMap(query), curSubquery))
 			addProvAttrFromStack (query, curSubquery, &pList, &subPStack);
 		/* is a not rewritten RTE. Create dummy provenance attributes */
@@ -161,7 +168,8 @@ copyAddProvAttrs (Query *query, List *subList, List *pList)
  */
 
 static void
-addProvAttrFromStack (Query *query, Index rtindex, List **pList, List **subPstack)
+addProvAttrFromStack (Query *query, Index rtindex, List **pList,
+		List **subPstack)
 {
 	RangeTblEntry *rte;
 	ListCell *lc;
@@ -201,7 +209,8 @@ addProvAttrFromStack (Query *query, Index rtindex, List **pList, List **subPstac
 }
 
 /*
- * Create Dummy provenance attributes entries (null constants) for a range table entry of a query.
+ * Create Dummy provenance attributes entries (null constants) for a range
+ * table entry of a query.
  */
 
 static void
@@ -226,7 +235,8 @@ addDummyProvenanceAttributesForRTE (Query *query, Index rtindex, List **pList)
  */
 
 static void
-addDummyProvenanceAttrsForBaseRel (CopyMapRelEntry *rel, Query *query, List **pList)
+addDummyProvenanceAttrsForBaseRel (CopyMapRelEntry *rel, Query *query,
+		List **pList)
 {
 	ListCell *lc;
 	Expr *expr;
@@ -240,9 +250,11 @@ addDummyProvenanceAttrsForBaseRel (CopyMapRelEntry *rel, Query *query, List **pL
 	{
 		attr = (CopyMapEntry *) lfirst(lc);
 
-		expr = (Expr *) makeNullConst(attr->baseRelAttr->vartype, attr->baseRelAttr->vartypmod);
+		expr = (Expr *) makeNullConst(attr->baseRelAttr->vartype,
+				attr->baseRelAttr->vartypmod);
 
-		newTe = makeTargetEntry(expr, curResno, strdup(attr->provAttrName), false);
+		newTe = makeTargetEntry(expr, curResno, strdup(attr->provAttrName),
+				false);
 
 		query->targetList = lappend(query->targetList, newTe);
 

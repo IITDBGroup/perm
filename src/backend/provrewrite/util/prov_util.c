@@ -176,12 +176,13 @@ addSubqueryToRT (Query *query, Query* subQuery, char *aliasName)
 }
 
 /*
- * Appends a subquery to a queries range table and sets the inFrom and requiredPerms fields of the RTE
- * to the values supplied by the caller.
+ * Appends a subquery to a queries range table and sets the inFrom and
+ * requiredPerms fields of the RTE to the values supplied by the caller.
  */
 
 void
-addSubqueryToRTWithParam (Query *query, Query *subQuery, char *aliasName, bool inFrom, AclMode reqPerms, bool append)
+addSubqueryToRTWithParam (Query *query, Query *subQuery, char *aliasName,
+		bool inFrom, AclMode reqPerms, bool append)
 {
 	RangeTblEntry *newRte;
 
@@ -196,13 +197,9 @@ addSubqueryToRTWithParam (Query *query, Query *subQuery, char *aliasName, bool i
 
 	/* append to range table */
 	if (append)
-	{
 		query->rtable = lappend (query->rtable, newRte);
-	}
 	else
-	{
 		query->rtable = lcons (newRte, query->rtable);
-	}
 }
 
 /*
@@ -247,14 +244,15 @@ correctSublinkAliasWalker (Node *node, void *context)
 		sublink = (SubLink *) node;
 		correctRecurSubQueryAlias((Query *) sublink->subselect);
 
-		return expression_tree_walker(sublink->testexpr, correctSublinkAliasWalker, context);
+		return expression_tree_walker(sublink->testexpr,
+				correctSublinkAliasWalker, context);
 	}
 
 	return expression_tree_walker(node, correctSublinkAliasWalker, context);
 }
 
 /*
- * creates the eref colnames list for all subqueries in an query's range table
+ * Creates the eref colnames list for all subqueries in an query's range table.
  */
 
 void
@@ -271,7 +269,7 @@ correctSubQueryAlias (Query *query)
 }
 
 /*
- *		Creates an the eref column name list for a subquery range table entry
+ * Creates an the eref column name list for a subquery range table entry.
  */
 
 void
@@ -305,8 +303,9 @@ correctRTEAlias (RangeTblEntry *rte)
 }
 
 /*
- * Adapt a provenance attribute var. If the Var's RTE is used in a join expr change
- * the varno and varattno values to the corresponding var of the top level join expression.
+ * Adapt a provenance attribute var. If the Var's RTE is used in a join expr
+ * change the varno and varattno values to the corresponding var of the top
+ * level join expression.
  */
 
 void
@@ -336,15 +335,13 @@ getRTindexForProvTE (Query *query, Var* var)
 		{
 			joinExpr = (JoinExpr *) lfirst(lc);
 			if (findRTindexInJoin (rtindex, joinExpr, &joinRTElist, NULL))
-			{
 				break;
-			}
 		}
 	}
 
 	ereport (DEBUG1,
-					(errcode(ERRCODE_DIVISION_BY_ZERO),
-							errmsg("joinlistlength: %i", list_length(joinRTElist))));
+			(errcode(ERRCODE_DIVISION_BY_ZERO),
+					errmsg("joinlistlength: %i", list_length(joinRTElist))));
 
 	/*
 	 * resolve the RT indirections induced by join operations.
@@ -360,7 +357,8 @@ getRTindexForProvTE (Query *query, Var* var)
 		foreach (aliasLc, rte->joinaliasvars)
 		{
 			joinVar = (Var *) lfirst(aliasLc);
-			if ((joinVar->varno == var->varno) && (joinVar->varattno == var->varattno))
+			if ((joinVar->varno == var->varno)
+					&& (joinVar->varattno == var->varattno))
 			{
 				foundAttrNum = newAttrNumber;
 			}
@@ -388,7 +386,8 @@ findRTindexInFrom (Index rtindex, Query *query, List** rtList, List **joinPath)
 
 		if (IsA(fromItem, JoinExpr))
 		{
-			if(findRTindexInJoin(rtindex, (JoinExpr *) fromItem, rtList, joinPath))
+			if(findRTindexInJoin(rtindex, (JoinExpr *) fromItem, rtList,
+					joinPath))
 				return true;
 		}
 		else
@@ -411,13 +410,13 @@ findRTindexInFrom (Index rtindex, Query *query, List** rtList, List **joinPath)
 }
 
 /*
- * searches for a reference of a RTE in a Jointree. If a
- * reference to rtindex is found the rtindex values of
- * all parent nodes are appended to the rtList.
+ * Searches for a reference of a RTE in a Jointree. If a  reference to rtindex
+ * is found the rtindex values of all parent nodes are appended to the rtList.
  */
 
 bool
-findRTindexInJoin (Index rtindex, JoinExpr *joinExpr, List** rtList, List **joinPath)
+findRTindexInJoin (Index rtindex, JoinExpr *joinExpr, List** rtList,
+		List **joinPath)
 {
 	RangeTblRef *rtRef;
 
@@ -435,7 +434,8 @@ findRTindexInJoin (Index rtindex, JoinExpr *joinExpr, List** rtList, List **join
 		}
 	}
 	else {
-		if (findRTindexInJoin (rtindex, (JoinExpr *) joinExpr->larg, rtList, joinPath))
+		if (findRTindexInJoin (rtindex, (JoinExpr *) joinExpr->larg,
+				rtList, joinPath))
 		{
 			*rtList = lappend_int(*rtList, joinExpr->rtindex);
 			if(joinPath)
@@ -459,7 +459,8 @@ findRTindexInJoin (Index rtindex, JoinExpr *joinExpr, List** rtList, List **join
 		}
 	}
 	else {
-		if (findRTindexInJoin (rtindex, (JoinExpr *) joinExpr->rarg, rtList, joinPath))
+		if (findRTindexInJoin (rtindex, (JoinExpr *) joinExpr->rarg, rtList,
+				joinPath))
 		{
 			*rtList = lappend_int(*rtList, joinExpr->rtindex);
 			if(joinPath)
@@ -473,7 +474,8 @@ findRTindexInJoin (Index rtindex, JoinExpr *joinExpr, List** rtList, List **join
 }
 
 /*
- * For a given query returns the a List of the base relations accessed by the query
+ * For a given query returns the a List of the base relations accessed by the
+ * query.
  */
 
 List *
@@ -495,6 +497,10 @@ findBaseRelationsForProvenanceQuery (Query *query)
 	return result;
 }
 
+/*
+ *
+ */
+
 void
 findBaseRelationsForProvenanceRTE (RangeTblEntry *rte, List **result)
 {
@@ -502,19 +508,19 @@ findBaseRelationsForProvenanceRTE (RangeTblEntry *rte, List **result)
 }
 
 /*
- * Returns a List of RTEs for the base relations accessed by a provenance query
+ * Returns a List of RTEs for the base relations accessed by a provenance
+ * query.
  */
 
 static void
-findBaseRelationsForProvenanceRTERecurse (RangeTblEntry *rte, List **result, bool viewCheck)
+findBaseRelationsForProvenanceRTERecurse (RangeTblEntry *rte, List **result,
+		bool viewCheck)
 {
 	ListCell *lc;
 	RangeTblEntry *subRTE;
 
 	if (rte->isProvBase)
-	{
 		*result = lappend(*result, rte);
-	}
 	else if (rte->rtekind == RTE_SUBQUERY)
 	{
 		findSublinkBaseRelations (rte->subquery, result);
@@ -529,20 +535,16 @@ findBaseRelationsForProvenanceRTERecurse (RangeTblEntry *rte, List **result, boo
 	{
 		/* if relation is a view find base relations accessed by the view */
 		if (viewCheck && get_rel_relkind(rte->relid) == 'v')
-		{
 			getViewRelations(rte->relid, result);
-		}
 		else
-		{
 			*result = lappend(*result, rte);
-		}
 	}
 
 }
 
 /*
- *	Calls getSublinkBaseRelationsWalker for all possible locations of sublinks in
- *	a query.
+ *	Calls getSublinkBaseRelationsWalker for all possible locations of sublinks
+ *	in a query.
  */
 
 static void
@@ -559,7 +561,8 @@ findSublinkBaseRelations (Query *query, List **result)
 	{
 		te = (TargetEntry *) lfirst(lc);
 
-		/* check that target entry is not used in group by, because group by is handled below */
+		/* check that target entry is not used in group by, because group by
+		 * is handled below */
 		if (!isUsedInGroupBy(query,te))
 		{
 			getSublinkBaseRelationsWalker ((Node *) te->expr, result);
@@ -573,7 +576,8 @@ findSublinkBaseRelations (Query *query, List **result)
 	groupByTes = getGroupByTLEs (query);
 	foreach(lc, groupByTes)
 	{
-		getSublinkBaseRelationsWalker ((Node *)((TargetEntry *) lfirst(lc))->expr, result);
+		getSublinkBaseRelationsWalker ((Node *)((TargetEntry *)
+				lfirst(lc))->expr, result);
 	}
 
 	/* search for target list sublinks */
@@ -586,8 +590,9 @@ findSublinkBaseRelations (Query *query, List **result)
 }
 
 /*
- * Helper method for findBaseRelationsForProvenanceRTE that searches for sublinks and adds the base relations
- * accessed by a sublink query to the List "result".
+ * Helper method for findBaseRelationsForProvenanceRTE that searches for
+ * sublinks and adds the base relations accessed by a sublink query to the List
+ *  "result".
  */
 
 static bool
@@ -599,7 +604,8 @@ getSublinkBaseRelationsWalker (Node *node, List **context)
 	if (node == NULL)
 		return false;
 
-	/* if a sublink is found add use findBaseRelationsForProvenanceRTERecurse to add its base relations to the result */
+	/* if a sublink is found add use findBaseRelationsForProvenanceRTERecurse
+	 * to add its base relations to the result */
 	if (IsA(node,SubLink))
 	{
 		SubLink *sublink;
@@ -615,11 +621,13 @@ getSublinkBaseRelationsWalker (Node *node, List **context)
 	}
 
 	// recurse
-	return expression_tree_walker(node, getSublinkBaseRelationsWalker, (void *) context);
+	return expression_tree_walker(node, getSublinkBaseRelationsWalker,
+			(void *) context);
 }
 
 /*
- * Expands a view and adds all base relations accessed by the view to the List "result".
+ * Expands a view and adds all base relations accessed by the view to the List
+ * "result".
  */
 
 static void
@@ -660,7 +668,8 @@ getViewRelations (Oid relid, List **result)
 }
 
 /*
- * Checks if a RangeTblEntry is one of the special RangeTblEntry inserted by postgres rewrite rules.
+ * Checks if a RangeTblEntry is one of the special RangeTblEntry inserted by
+ * postgres rewrite rules.
  */
 
 static bool
@@ -713,7 +722,7 @@ createSmallerEqCondition (Node *left, Node *right)
 }
 
 /*
- * Creates a biggerThan condition for two nodes;
+ * Creates a biggerThan condition for two nodes.
  */
 
 Node *
@@ -723,7 +732,7 @@ createBiggerCondition (Node *left, Node *right)
 }
 
 /*
- * Create an comparison condition
+ * Create an comparison condition.
  */
 
 static Node *
@@ -776,7 +785,8 @@ createComparison (Node *left, Node *right, ComparisonType type)
             break;
           case COMP_SMALLEREQ:
           case COMP_BIGGEREQ:
-            operTuple = compatible_oper(NULL, opName, leftType, rightType, false, -1);
+            operTuple = compatible_oper(NULL, opName, leftType, rightType,
+            		false, -1);
             break;
           default:
               break;
@@ -787,16 +797,16 @@ createComparison (Node *left, Node *right, ComparisonType type)
         // different types, try first to get an oper if they are binary
         // otherwise the nodes have be coerced first.
 	else
-        {
+	{
 	  operTuple = compatible_oper(NULL, opName, leftType, rightType, true, -1);
 
 	  // try to find operator that would work with type coercion
 	  if (operTuple == NULL)
-          {
-	    operTuple = oper(NULL, opName, leftType, rightType, true, -1);
+	  {
+		  operTuple = oper(NULL, opName, leftType, rightType, true, -1);
 
-	    // did not work out
-            if (operTuple == NULL)
+		  // did not work out
+		  if (operTuple == NULL)
               elog(ERROR,
                   "Could not find an operator %s for types %d, %d",
                   strVal(((Value *) linitial(opName))),
@@ -804,13 +814,13 @@ createComparison (Node *left, Node *right, ComparisonType type)
                   rightType);
 	  }
 
-          // add cast if necessary
+	  // add cast if necessary
 	  operator = (Form_pg_operator) GETSTRUCT(operTuple);
 	  left = coerce_to_target_type(NULL, left, leftType, operator->oprleft,
-                                      -1, COERCION_EXPLICIT, COERCE_DONTCARE);
-          right = coerce_to_target_type(NULL, right, rightType, operator->oprright,
-                                      -1, COERCION_EXPLICIT, COERCE_DONTCARE);
-        }
+			  -1, COERCION_EXPLICIT, COERCE_DONTCARE);
+	  right = coerce_to_target_type(NULL, right, rightType, operator->oprright,
+			  -1, COERCION_EXPLICIT, COERCE_DONTCARE);
+	}
 
 	// create a node for the operator
 
@@ -858,8 +868,9 @@ createNotDistinctConditionForVars (Var *leftChild, Var *rightChild)
 }
 
 /*
- * Create a new top level AND/OR between the queries jointree->qual and the condition. If the jointree qualification is NULL it
- * is replaced by condition.
+ * Create a new top level AND/OR between the queries jointree->qual and the
+ * condition. If the jointree qualification is NULL it is replaced by
+ * condition.
  */
 
 void
@@ -870,15 +881,18 @@ addConditionToQualWithAnd (Query *query, Node *condition, bool and)
 	else
 	{
 		if (and)
-			query->jointree->quals = (Node *) makeBoolExpr(AND_EXPR, list_make2(query->jointree->quals, condition));
+			query->jointree->quals = (Node *) makeBoolExpr(AND_EXPR,
+					list_make2(query->jointree->quals, condition));
 		else
-			query->jointree->quals = (Node *) makeBoolExpr(OR_EXPR, list_make2(query->jointree->quals, condition));
+			query->jointree->quals = (Node *) makeBoolExpr(OR_EXPR,
+					list_make2(query->jointree->quals, condition));
 	}
 }
 
 /*
- * Creates a logical AND expression for a list of expressions
+ * Creates a logical AND expression for a list of expressions.
  */
+
 Node *
 createAndFromList (List *exprs)
 {
@@ -903,7 +917,8 @@ createAndFromList (List *exprs)
 
 
 /*
- * Returns the target list entries that are used in the group by clause of a query.
+ * Returns the target list entries that are used in the group by clause of a
+ * query.
  */
 
 List *
@@ -981,7 +996,8 @@ isUsedInOrderBy (Query *query, TargetEntry *te)
 }
 
 /*
- *  Returns true if the target entry is used in the group by clause of the query.
+ *  Returns true if the target entry is used in the group by clause of the
+ *  query.
  */
 
 bool
@@ -1004,7 +1020,8 @@ isUsedInGroupBy(Query *query, TargetEntry *te)
 
 
 /*
- *	Creates the joinaliasvars and eref fields for each join RTE from list subJoins.
+ *	Creates the joinaliasvars and eref fields for each join RTE from list
+ *	subJoins.
  */
 
 void
@@ -1074,8 +1091,9 @@ adaptRTEsForJoins(List *subJoins, Query *query, char *joinRTEname)
 }
 
 /*
- * Recreates all var and colname lists of all Join RTEs of a query
+ * Recreates all var and colname lists of all Join RTEs of a query.
  */
+
 void
 recreateJoinRTEs (Query *query)
 {
@@ -1093,8 +1111,9 @@ recreateJoinRTEs (Query *query)
 }
 
 /*
- * recursively creates the join alias and vars for an join expression, by first
- * creating these elements for the args of the join and then for the join itself.
+ * Recursively creates the join alias and vars for an join expression, by first
+ * creating these elements for the args of the join and then for the join
+ * itself.
  */
 
 static void
@@ -1136,14 +1155,15 @@ createJoinExpr (Query *query, JoinType joinType)
 }
 
 /*
- * Joins two range table entries of a query on the attributes provide as position
- * list leftAttrs and RightAttrs. If parameter userNotDistinct is true NOT
- * DISTINCT conditions are used to compare the attributes. Otherwise simple
- * equality is used.
+ * Joins two range table entries of a query on the attributes provide as
+ * position list leftAttrs and RightAttrs. If parameter userNotDistinct is
+ * true NOT DISTINCT conditions are used to compare the attributes. Otherwise
+ * simple equality is used.
  */
 //TODO currently only for subquery rtes!
 JoinExpr *
-createJoinOnAttrs (Query *query, JoinType joinType, Index leftRT, Index rightRT, List *leftAttrs, List *rightAttrs, bool useNotDistinct)
+createJoinOnAttrs (Query *query, JoinType joinType, Index leftRT,
+		Index rightRT, List *leftAttrs, List *rightAttrs, bool useNotDistinct)
 {
 	JoinExpr *join;
 	List *comparisons;
@@ -1166,8 +1186,10 @@ createJoinOnAttrs (Query *query, JoinType joinType, Index leftRT, Index rightRT,
 	join->rarg = (Node *) rtRef;
 
 	/* get left and right vars */
-	expandRTE(rt_fetch(leftRT, query->rtable), leftRT, 0, false, NULL, &leftVars);
-	expandRTE(rt_fetch(rightRT, query->rtable), rightRT, 0, false, NULL, &rightVars);
+	expandRTE(rt_fetch(leftRT, query->rtable), leftRT, 0, false, NULL,
+			&leftVars);
+	expandRTE(rt_fetch(rightRT, query->rtable), rightRT, 0, false, NULL,
+			&rightVars);
 
 	leftVars = getAllInList(leftVars, leftAttrs);
 	rightVars = getAllInList(rightVars, rightAttrs);
@@ -1178,7 +1200,8 @@ createJoinOnAttrs (Query *query, JoinType joinType, Index leftRT, Index rightRT,
 		leftVar = (Var *) lfirst(leftLc);
 		rightVar = (Var *) lfirst(rightLc);
 
-		comparisons = lappend(comparisons, createNotDistinctConditionForVars(leftVar, rightVar));
+		comparisons = lappend(comparisons,
+				createNotDistinctConditionForVars(leftVar, rightVar));
 	}
 
 	join->quals = (Node *) makeBoolExpr(AND_EXPR,comparisons);
@@ -1187,21 +1210,24 @@ createJoinOnAttrs (Query *query, JoinType joinType, Index leftRT, Index rightRT,
 }
 
 /*
- *	searches in expression with root "node" for sub expressions from search list and replaces them by
- *	expressions from replace list. Flags can be used to determine if the method should recurse into certain
- *	node types:
+ * Searches in expression with root "node" for sub expressions from search list
+ * and replaces them by expressions from replace list. Flags can be used to
+ * determine if the method should recurse into certain node types:
+ *
  *				REPLACE_SUB_EXPR_QUERY:			do not recurse into queries
  *				REPLACE_SUB_EXPR_SUBLINK:		do not recurse into sublinks
  *
  */
 Node *
-replaceSubExpression (Node *node, List *searchList, List *replaceList, int flags)
+replaceSubExpression (Node *node, List *searchList, List *replaceList,
+		int flags)
 {
 	ReplaceSubExpressionsContext *context;
 	Node *result;
 
 	/* create context */
-	context = (ReplaceSubExpressionsContext *) palloc(sizeof(ReplaceSubExpressionsContext));
+	context = (ReplaceSubExpressionsContext *)
+			palloc(sizeof(ReplaceSubExpressionsContext));
 	context->flags = flags;
 	context->searchList = searchList;
 	context->replaceList = replaceList;
@@ -1218,7 +1244,8 @@ replaceSubExpression (Node *node, List *searchList, List *replaceList, int flags
  */
 
 static Node *
-replaceSubExpressionsMutator (Node *node, ReplaceSubExpressionsContext *context)
+replaceSubExpressionsMutator (Node *node,
+		ReplaceSubExpressionsContext *context)
 {
 	ListCell *lc;
 	Node *searchExpr;
@@ -1235,9 +1262,7 @@ replaceSubExpressionsMutator (Node *node, ReplaceSubExpressionsContext *context)
 			searchExpr = (Node *) lfirst(lc);
 
 			if (equal(node, searchExpr))
-			{
 				return node;
-			}
 		}
 	}
 
@@ -1248,28 +1273,24 @@ replaceSubExpressionsMutator (Node *node, ReplaceSubExpressionsContext *context)
 		searchExpr = (Node *) lfirst(lc);
 
 		if (equal(node, searchExpr))
-		{
 			return (Node *) list_nth(context->replaceList, listPos);
-		}
 
 		listPos++;
 	}
 
-	/* check for special types and stop recursion if this node types where deactived by the flags */
+	/* check for special types and stop recursion if this node types where
+	 * deactived by the flags */
 	if (IsA(node, Query) && !(context->flags & REPLACE_SUB_EXPR_QUERY))
-	{
 		return copyObject(node);
-	}
 	if (IsA(node, SubLink) && !(context->flags & REPLACE_SUB_EXPR_SUBLINK))
-	{
 		return copyObject(node);
-	}
 
-	return expression_tree_mutator(node, replaceSubExpressionsMutator, (void *) context);
+	return expression_tree_mutator(node, replaceSubExpressionsMutator,
+			(void *) context);
 }
 
 /*
- *	returns a list of aggregates used in an expression.
+ *	Returns a list of aggregates used in an expression.
  */
 
 List *
@@ -1304,6 +1325,7 @@ aggrExprWalker (Node *node, List** context)
 /*
  *
  */
+
 Node **
 getLinkToFromItem (Query *query, Index rtIndex)
 {
@@ -1311,7 +1333,8 @@ getLinkToFromItem (Query *query, Index rtIndex)
 	ListCell *lc;
 	Node *fromItem;
 
-	context = (GetFromItemWalkerContext *) palloc(sizeof(GetFromItemWalkerContext));
+	context = (GetFromItemWalkerContext *)
+			palloc(sizeof(GetFromItemWalkerContext));
 	context->result = NULL;
 	context->rtIndex = rtIndex;
 	context->curParent = NULL;
@@ -1375,7 +1398,8 @@ fromItemWalker (Node *node, GetFromItemWalkerContext *context)
 }
 
 /*
- * If node is the qual of an JoinExpr of query, then return this JoinExpr, otherwise return NULL.
+ * If node is the qual of an JoinExpr of query, then return this JoinExpr,
+ * otherwise return NULL.
  */
 
 Node **
@@ -1445,7 +1469,8 @@ findSubExpression (Node *expr, Node *subExpr, int flags)
 {
 	FindSubExpressionWalkerContext *context;
 
-	context = (FindSubExpressionWalkerContext *) palloc(sizeof(FindSubExpressionWalkerContext));
+	context = (FindSubExpressionWalkerContext *)
+			palloc(sizeof(FindSubExpressionWalkerContext));
 	context->searchExpr = expr;
 	context->result = NULL;
 
@@ -1493,6 +1518,10 @@ removeProvInfoNodes (Query *query)
 	removeProvInfoNodesWalker ((Node *) query, NULL);
 }
 
+/*
+ *
+ */
+
 static bool
 removeProvInfoNodesWalker (Node *node, void *context)
 {
@@ -1506,7 +1535,8 @@ removeProvInfoNodesWalker (Node *node, void *context)
 		query = (Query *) node;
 		query->provInfo = NULL;
 
-		return query_tree_walker(query, removeProvInfoNodesWalker, (void *) context, 0);
+		return query_tree_walker(query, removeProvInfoNodesWalker,
+				(void *) context, 0);
 	}
 	if (IsA(node, SubLink))
 	{
@@ -1517,7 +1547,8 @@ removeProvInfoNodesWalker (Node *node, void *context)
 		//CHECK
  	}
 
-	return expression_tree_walker(node, removeProvInfoNodesWalker, (void *) context);
+	return expression_tree_walker(node, removeProvInfoNodesWalker,
+			(void *) context);
 }
 
 /*
@@ -1525,13 +1556,18 @@ removeProvInfoNodesWalker (Node *node, void *context)
  */
 
 bool
-queryHasRewriteChildren (Query *query) {
+queryHasRewriteChildren (Query *query)
+{
 	bool result = false;
 
 	queryHasRewriteChildrenWalker((Node *) query, &result);
 
 	return result;
 }
+
+/*
+ *
+ */
 
 static bool
 queryHasRewriteChildrenWalker (Node *node, bool *context)
@@ -1550,7 +1586,8 @@ queryHasRewriteChildrenWalker (Node *node, bool *context)
 			return true;
 		}
 
-		return query_tree_walker(query, queryHasRewriteChildrenWalker, (void *) context, 0);
+		return query_tree_walker(query, queryHasRewriteChildrenWalker,
+				(void *) context, 0);
 	}
 	if (IsA(node, SubLink))
 	{
@@ -1561,11 +1598,12 @@ queryHasRewriteChildrenWalker (Node *node, bool *context)
 		//CHECK
  	}
 
-	return expression_tree_walker(node, queryHasRewriteChildrenWalker, (void *) context);
+	return expression_tree_walker(node, queryHasRewriteChildrenWalker,
+			(void *) context);
 }
 
 /*
- * checks if a query has any provenance queries as children
+ * Checks if a query has any provenance queries as children.
  */
 
 bool
@@ -1621,7 +1659,8 @@ generateQueryFromBaseRelation (RangeTblEntry *rte)
 		var = (Var *) lfirst(varLc);
 		name = (Value *) lfirst(nameLc);
 
-		te = makeTargetEntry((Expr *) var, resno, pstrdup(name->val.str),false);
+		te = makeTargetEntry((Expr *) var, resno, pstrdup(name->val.str),
+				false);
 		result->targetList = lappend(result->targetList, te);
 
 		resno++;
@@ -1656,7 +1695,7 @@ generateQueryRTEFromRelRTE (RangeTblEntry *rte)
 }
 
 /*
- * returns the join tree node that references rtindex.
+ * Returns the join tree node that references rtindex.
  */
 
 Node *
@@ -1718,7 +1757,7 @@ getJoinTreeNodeWalker (Node *node, Index rtindex)
 }
 
 /*
- *	returns true if a node is a Var or Const (surrounding casts are ok).
+ *	Returns true if a node is a Var or Const (surrounding casts are ok).
  */
 
 bool
@@ -1728,8 +1767,10 @@ isVarOrConstWithCast (Node *node)
 }
 
 /*
- * if expr is a VAr or Const surrounded by casts return the Var or Const. Return NULL else;
+ * if expr is a VAr or Const surrounded by casts return the Var or Const.
+ * Return NULL else.
  */
+
 static Node *
 getCastedVarOrConst (Node *node)
 {
@@ -1813,11 +1854,13 @@ getComparisonType (Node *node)
 		return COMP_BIGGER;
 
 	/* is smaller eq than ? */
-	if (op->opno == compatible_oper_opid(list_make1(makeString("<=")), argType, argType, false))
+	if (op->opno == compatible_oper_opid(list_make1(makeString("<=")), argType,
+			argType, false))
 		return COMP_SMALLEREQ;
 
 	/* is bigger eq than ? */
-	if (op->opno == compatible_oper_opid(list_make1(makeString(">=")), argType, argType, false))
+	if (op->opno == compatible_oper_opid(list_make1(makeString(">=")), argType,
+			argType, false))
 		return COMP_BIGGEREQ;
 
 	/* is equality? */
@@ -1833,7 +1876,8 @@ getComparisonType (Node *node)
 }
 
 /*
- * Checks if an expr is constant (no vars, no aggs, no sublinks, no volatile and immutable functions, no params)
+ * Checks if an expr is constant (no vars, no aggs, no sublinks, no volatile
+ * and immutable functions, no params)
  */
 
 bool
@@ -1850,8 +1894,8 @@ isConstExpr (Node *node)
 }
 
 /*
- * If var is used as the expr field of an traget list entry from targetList, return true.
- * Else return false.
+ * If var is used as the expr field of an traget list entry from targetList,
+ * return true. Else return false.
  */
 
 TargetEntry *

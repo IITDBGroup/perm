@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * prov_set.c
- *	  PERM C - I-CS data-data provenance rewrites for set queries.
+ *	  PERM C - I-CS provenance rewrites for set queries.
  *
  * Portions Copyright (c) 2008 Boris Glavic
  *
@@ -29,42 +29,55 @@
 #include "parser/parse_expr.h"			// expression transformation used for expression type calculation
 #include "parser/parse_oper.h"			// for lookup of operators
 #include "parser/parsetree.h"
+#include "parser/parse_relation.h"
 #include "utils/guc.h"
 #include "utils/syscache.h"				// used to release heap tuple references
 #include "provrewrite/provlog.h"
+#include "provrewrite/provattrname.h"
 #include "provrewrite/provstack.h"
 #include "provrewrite/prov_util.h"
 #include "provrewrite/prov_sublink_util_analyze.h"
 #include "provrewrite/prov_sublink_util_mutate.h"
 #include "provrewrite/prov_sublink_util_search.h"
-#include "provrewrite/prov_set.h"
+#include "provrewrite/prov_spj.h"
 #include "provrewrite/provrewrite.h"
 #include "provrewrite/prov_nodes.h"
+#include "provrewrite/prov_set.h"
 
 
 /* Function declarations */
+static void addSetSubqueryRTEs (Query *top, Query *orig);
+static void createNullSetDiffProvAttrs(Query *newTop, Query *query,
+		List **pList);
 static void rewriteUnionWithWLCS (Query *query);
 static void addDummyProvAttrs (RangeTblEntry *rte, List *subProv, int pos);
 static void adaptSetProvenanceAttrs (Query *query);
-static void adaptSetStmtCols (SetOperationStmt *stmt, List *colTypes, List *colTypmods);
-static void replaceSetOperationSubTrees (Query *query, Node *node, Node **parentPointer, SetOperation rootType);
-static void replaceSetOperatorSubtree (Query *query, SetOperationStmt *setOp, Node **parent);
-static void rewriteRTEs (Query *newTop);
-static void makeRTEVars (RangeTblEntry *rte, RangeTblEntry *newRte, Index rtindex);
+static void adaptSetStmtCols (SetOperationStmt *stmt, List *colTypes,
+		List *colTypmods);
+static void replaceSetOperationSubTrees (Query *query, Node *node,
+		Node **parentPointer, SetOperation rootType);
+static void replaceSetOperatorSubtree (Query *query, SetOperationStmt *setOp,
+		Node **parent);
+static void rewriteSetRTEs (Query *newTop);
+static void makeRTEVars (RangeTblEntry *rte, RangeTblEntry *newRte,
+		Index rtindex);
 static void createJoinsForSetOp (Query *query, SetOperation setType);
 static void createSetDiffJoin (Query *query);
-static void createRTEforJoin (Query *query, JoinExpr *join, Index leftIndex, Index rightIndex);
-static Node *createEqualityCondition (List* leftAttrs, List* rightAttrs, Index leftIndex, Index rightIndex, BoolExprType boolOp, bool neq);
+static void createRTEforJoin (Query *query, JoinExpr *join, Index leftIndex,
+		Index rightIndex);
+static Node *createEqualityCondition (List* leftAttrs, List* rightAttrs,
+		Index leftIndex, Index rightIndex, BoolExprType boolOp, bool neq);
 static List *getAttributesForJoin (RangeTblEntry *rte);
 static bool substractRangeTblRefValuesWalker (Node *node, void *context);
 
 /*
- *	Rewrites a set operation query node . Depending on the type of set operations this
- *	query node represents, it can be rewritten in one pass or has to be restructured
- *	into several query node before applying the rewrites. E.g., if the set operations
- *	are only union no restructuring is necessary (this is derived from the fact that
- *	applying the algebraic rewrite rules on which Perm is based to a list of unions
- *	results in a fixed form). See ICDE'09 paper for details.
+ *	Rewrites a set operation query node . Depending on the type of set
+ *	operations this query node represents, it can be rewritten in one pass or
+ *	has to be restructured into several query node before applying the
+ *	rewrites. E.g., if the set operations are only union no restructuring is
+ *	necessary (this is derived from the fact that applying the algebraic
+ *	rewrite rules on which derived Perm is based to a list of unions results
+ *	in a fixed form). See ICDE'09 paper for details.
  */
 
 Query *
@@ -83,13 +96,15 @@ rewriteSetQuery (Query * query)
 	removeDummyRewriterRTEs(query);
 
 	/* restructure set operation tree if necessary */
-	replaceSetOperationSubTrees (query, query->setOperations, &(query->setOperations), ((SetOperationStmt *) query->setOperations)->op);
+	replaceSetOperationSubTrees (query, query->setOperations,
+			&(query->setOperations),
+			((SetOperationStmt *) query->setOperations)->op);
 
-	/* check if the alternative union semantics is activate
-	 * and we are rewriting a union node. If so use all the join
-	 * stuff falls apart and we just have to rewrite the original query
-	 */
-	if (prov_use_wl_union_semantics && ((SetOperationStmt *) query->setOperations)->op == SETOP_UNION)
+	/* check if the alternative union semantics is activated and we are
+	 * rewriting a union node. If so use all the join stuff falls apart and we
+	 * just have to rewrite the original query */
+	if (prov_use_wl_union_semantics
+			&& ((SetOperationStmt *) query->setOperations)->op == SETOP_UNION)
 	{
 		rewriteUnionWithWLCS (query);
 
@@ -98,7 +113,7 @@ rewriteSetQuery (Query * query)
 
 	/* create new top query node */
 	newTop = makeQuery();
-	newTop->rtable = copyObject(query->rtable);
+	addSetSubqueryRTEs(newTop, query);
 	newTop->targetList = copyObject(query->targetList);
 	newTop->intoClause = copyObject(query->intoClause);
 	SetSublinkRewritten(newTop, true);
@@ -107,7 +122,7 @@ rewriteSetQuery (Query * query)
 	addSubqueryToRTWithParam (newTop, orig, "originalSet", false, ACL_NO_RIGHTS, false);
 
 	/* rewrite the subqueries used in the set operation */
-	rewriteRTEs (newTop);
+	rewriteSetRTEs (newTop);
 	numSubs = list_length(newTop->rtable) - 1;
 
 	LOGNODE(newTop, "replaced different set ops and rewrite sub queries");
@@ -120,6 +135,9 @@ rewriteSetQuery (Query * query)
 
 	/* add provenance attributes from the subqueries to the top query target list */
 	pList = addProvenanceAttrsForRange (newTop, 2, 2 + numSubs, pList);
+	if (prov_use_wl_union_semantics && ((SetOperationStmt *)
+			query->setOperations)->op == SETOP_EXCEPT)
+		createNullSetDiffProvAttrs(newTop, query, &pList);
 	push(&pStack, pList);
 
 	/* increase sublevelsup of vars in case we are rewriting in an sublink query */
@@ -129,6 +147,122 @@ rewriteSetQuery (Query * query)
 	pfree(context);
 
 	return newTop;
+}
+
+/*
+ *
+ */
+
+static void
+addSetSubqueryRTEs (Query *top, Query *orig)
+{
+	SetOperationStmt *setOp = (SetOperationStmt *) orig->setOperations;
+	List *rte = NIL;
+
+	if (!prov_use_wl_union_semantics || setOp->op != SETOP_EXCEPT)
+	{
+		top->rtable = copyObject(orig->rtable);
+		return;
+	}
+
+	findSetOpRTEs(orig->rtable, (Node *) setOp->larg, &rte, NULL);
+	top->rtable = copyObject(rte);
+}
+
+
+/*
+ *
+ */
+
+static void
+createNullSetDiffProvAttrs(Query *newTop, Query *query, List **pList)
+{
+	List *rtes = NIL;
+	List *provRtes = NIL;
+	List *attrNames;
+	List *vars;
+	Node *rightSet;
+	ListCell *lc;
+	ListCell *innerLc;
+	ListCell *attrLc;
+	ListCell *varLc;
+	RangeTblEntry *rte;
+	RangeTblEntry *provRte;
+	TargetEntry *newTe;
+	Node *nullConst;
+	Value *colName;
+	Var *var;
+	char *provName;
+	Index curResno = list_length(newTop->targetList);
+
+	/* get all base relations under right input of set difference and
+	 * generate NULL provenance attributes for them.
+	 */
+	rightSet = ((SetOperationStmt *) query->setOperations)->rarg;
+	findSetOpRTEs(query->rtable, rightSet, &rtes, NULL);
+
+	/* for each rte accessed by the subtree under the right input get the
+	 * base relations accessed by this rte and create null constants as
+	 * provenance attributes for them. */
+	foreach(lc, rtes)
+	{
+		rte = (RangeTblEntry *) lfirst(lc);
+		provRtes = NIL;
+
+		findBaseRelationsForProvenanceRTE(rte, &provRtes);
+
+		foreach(innerLc, provRtes)
+		{
+			provRte = (RangeTblEntry *) lfirst(innerLc);
+			attrNames = NIL;
+			vars = NIL;
+
+			/* check if is an RTE with specified provenance attributes */
+			if (provRte->provAttrs != NIL)
+			{
+				List *tes;
+
+				rewriteRTEwithProvenance(1, provRte);
+				tes = pop(&pStack);
+
+				foreach(attrLc, tes)
+				{
+					newTe = (TargetEntry *) lfirst(attrLc);
+					var = (Var *) newTe->expr;
+
+					newTe->resno = ++curResno;
+					newTe->expr = (Expr *) makeNullConst(var->vartype,
+							var->vartypmod);
+					newTop->targetList = lappend(newTop->targetList, newTe);
+					*pList = lappend(*pList, newTe);
+				}
+			}
+			else
+			{
+				/* increment rel ref counter */
+				getQueryRefNum(provRte, true);
+
+				/* get RTE attributes */
+				expandRTEWithParam(provRte, 1, 0, false, false, &attrNames, &vars);
+
+				/* generate provenance attributes */
+				forboth(attrLc, attrNames, varLc, vars)
+				{
+					colName = (Value *) lfirst(attrLc);
+					var = (Var *) lfirst(varLc);
+
+					nullConst = (Node *) makeNullConst(var->vartype,
+							var->vartypmod);
+					provName = createProvAttrName(provRte, strVal(colName));
+
+					newTe = makeTargetEntry((Expr *) nullConst, ++curResno,
+							provName, false);
+					newTop->targetList = lappend(newTop->targetList, newTe);
+					*pList = lappend(*pList, newTe);
+				}
+			}
+		}
+	}
 }
 
 /*
@@ -285,6 +419,7 @@ addDummyProvAttrs (RangeTblEntry *rte, List *subProv, int pos)
 /*
  *
  */
+
 static void
 adaptSetProvenanceAttrs (Query *query)
 {
@@ -305,7 +440,8 @@ adaptSetProvenanceAttrs (Query *query)
 		colTypmods = lappend_int(colTypmods, var->vartypmod);
 	}
 
-	adaptSetStmtCols(query->setOperations, colTypes, colTypmods);
+	adaptSetStmtCols((SetOperationStmt *) query->setOperations,
+			colTypes, colTypmods);
 }
 
 /*
@@ -343,19 +479,20 @@ substractRangeTblRefValuesWalker (Node *node, void *context)
 		rtRef->rtindex -= 2;
 	}
 
-	return expression_tree_walker(node, substractRangeTblRefValuesWalker, context);
+	return expression_tree_walker(node, substractRangeTblRefValuesWalker,
+			context);
 }
 
 
 
 /*
- * Rewrites the range table entries of a set query.
- * Basically loops over each RTE entries leaving out the
- * first one which is the original set operation query.
+ * Rewrites the range table entries of a set query. Basically loops over each
+ * RTE entries leaving out the first one which is the original set operation
+ * query.
  */
 
 static void
-rewriteRTEs (Query *newTop)
+rewriteSetRTEs (Query *newTop)
 {
 	ListCell *lc;
 	RangeTblEntry *rte;
@@ -370,10 +507,10 @@ rewriteRTEs (Query *newTop)
 }
 
 /*
- * Create the joins for a rewritten set operation node. We have to
- * join the original query (first RTE of the new top query node introduced
- * by the rewrite rules) with each rewritten input of the set operation (all
- * the other range table entries of the new top node).
+ * Create the joins for a rewritten set operation node. We have to join the
+ * original query (first RTE of the new top query node introduced by the
+ * rewrite rules) with each rewritten input of the set operation (all the other
+ * range table entries of the new top node).
  */
 
 static void
@@ -394,7 +531,8 @@ createJoinsForSetOp (Query *query, SetOperation setType)
 		case SETOP_INTERSECT:
 			joinType = JOIN_INNER;
 		break;
-		/* set difference is a special case with two types of join ops but only two subqueries */
+		/* set difference is a special case with two types of join ops but only
+		 * two subqueries */
 		case SETOP_EXCEPT:
 			createSetDiffJoin (query);
 			return;
@@ -455,9 +593,10 @@ createJoinsForSetOp (Query *query, SetOperation setType)
 }
 
 /*
- * Creates the joins for a rewritten set difference operation. The algebraic rewrite rules dictate
- * that each set diff operation has to be placed on its own in a query node. Therefore, we only have
- * to join the original query (first range table entry) with its two rewritten inputs.
+ * Creates the joins for a rewritten set difference operation. The algebraic
+ * rewrite rules dictate that each set diff operation has to be placed on its
+ * own in a query node. Therefore, we only have to join the original query
+ * (first range table entry) with its two rewritten inputs.
  */
 
 static void
@@ -474,7 +613,7 @@ createSetDiffJoin (Query *query)
 
 	/* create inner join node */
 	innerJoin = (JoinExpr *) makeNode(JoinExpr);
-	innerJoin->rtindex = 4;
+	innerJoin->rtindex = list_length(query->rtable) + 1;
 	innerJoin->jointype = JOIN_INNER;
 
 	MAKE_RTREF(rtRef, 1);
@@ -485,6 +624,12 @@ createSetDiffJoin (Query *query)
 
 	createRTEforJoin(query, innerJoin, 0, 1);
 	createSetJoinCondition (query, innerJoin, 0, 1, false);
+
+	if (prov_use_wl_union_semantics)
+	{
+		query->jointree->fromlist = list_make1(innerJoin);
+		return;
+	}
 
 	/* create outer join node */
 	outerJoin = (JoinExpr *) makeNode(JoinExpr);
@@ -714,13 +859,18 @@ replaceSetOperationSubTrees (Query *query, Node *node, Node **parentPointer, Set
 		break;
 		/* set difference, replace subtree with new query node */
 		case SETOP_EXCEPT:
-			/* if is root set operation replace left and rigth sub trees */
+			/* if is root set operation replace left and right sub trees */
 			if (rootType == SETOP_EXCEPT) {
 				if (IsA(setOp->larg, SetOperationStmt))
-					replaceSetOperatorSubtree (query, (SetOperationStmt *) setOp->larg, &(setOp->larg));
+					replaceSetOperatorSubtree (query, (SetOperationStmt *)
+							setOp->larg, &(setOp->larg));
 
-				if (IsA(setOp->rarg, SetOperationStmt))
-					replaceSetOperatorSubtree (query, (SetOperationStmt *) setOp->rarg, &(setOp->rarg));
+				/* is wl semantics is used the right subtree can be left
+				 * untouched */
+				if (IsA(setOp->rarg, SetOperationStmt)
+						&& !prov_use_wl_union_semantics)
+					replaceSetOperatorSubtree (query, (SetOperationStmt *)
+							setOp->rarg, &(setOp->rarg));
 			}
 			/* is not root operation process as for operator change */
 			else
@@ -816,8 +966,9 @@ replaceSetOperatorSubtree (Query *query, SetOperationStmt *setOp, Node **parent)
 }
 
 /*
- *	Returns a list with RTindexes and RangeTblEntries that are accessed by set operation
- *	tree under setTreeNode.
+ *	Returns lists with RTindexes and RangeTblEntries that are accessed by set
+ *	operation tree under setTreeNode. If rtes or rtindex is null only the
+ *	other list is filled.
  */
 
 void
@@ -837,8 +988,10 @@ findSetOpRTEs (List *rtable, Node *setTreeNode, List **rtes, List **rtindex)
 	{
 		rtIndex = ((RangeTblRef *) setTreeNode)->rtindex;
 		rtEntry = (RangeTblEntry *) list_nth(rtable, (rtIndex - 1));
-		*rtes = lappend(*rtes, rtEntry);
-		*rtindex = lappend_int(*rtindex, rtIndex);
+		if (rtes)
+			*rtes = lappend(*rtes, rtEntry);
+		if (rtindex)
+			*rtindex = lappend_int(*rtindex, rtIndex);
 	}
 	else
 		elog(ERROR,

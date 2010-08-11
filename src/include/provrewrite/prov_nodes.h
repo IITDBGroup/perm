@@ -27,7 +27,7 @@
  */
 
 /*
- *
+ * Types of contribution semantics supported by Perm.
  */
 
 typedef enum ContributionType
@@ -97,7 +97,8 @@ typedef struct CopyMapEntry
 } CopyMapEntry;
 
 /*
- * An attribute reference with a possible condition attached. Used in the eqList of an copy map entry.
+ * An attribute reference with a possible condition attached. Used in the
+ * eqList of an copy map entry.
  */
 
 typedef struct EquivalenceAttr {
@@ -107,7 +108,8 @@ typedef struct EquivalenceAttr {
 } EquivalenceAttr;
 
 /*
- *
+ * Datastructure that stores information for a query node that is needed for
+ * the provenance rewrite process in Perm.
  */
 
 typedef struct ProvInfo
@@ -133,10 +135,11 @@ typedef enum SublinkLocation
 
 /*
  * enum used to distinguish between different types of sublinks. A sublinks is
- * uncorrelated (SUBCAT_UNCORRELATED) if its query does not contain column references
- * for columns from the query where the sublink is used in. It is SUBCAT_SELPUSHUP if it
- * contains such references, but the conditions where these references are used can be pulled up
- * to the top-level of the the sublink query. Otherwise a sublink is SUBCAT_NOSELPUSHUP.
+ * uncorrelated (SUBCAT_UNCORRELATED) if its query does not contain column
+ * references for columns from the query where the sublink is used in. It is
+ * SUBCAT_SELPUSHUP if it contains such references, but the conditions where
+ * these references are used can be pulled up to the top-level of the the
+ * sublink query. Otherwise a sublink is SUBCAT_NOSELPUSHUP.
  */
 
 typedef enum SublinkCat
@@ -148,7 +151,7 @@ typedef enum SublinkCat
 
 
 /*
- *
+ * Possible positions of sublinks in an aggreation.
  */
 typedef enum SublinkAggLocation
 {
@@ -158,7 +161,8 @@ typedef enum SublinkAggLocation
 } SublinkAggLocation;
 
 /*
- * Struct for passing around information about a SubLink used by provenance rewrite module
+ * Struct for passing around information about a SubLink used by provenance
+ * rewrite module.
  */
 typedef struct SublinkInfo
 {
@@ -201,8 +205,8 @@ typedef struct CorrVarInfo
 	bool outside;
 	RangeTblEntry *refRTE;
 	SublinkLocation location;
-//	int nestingDepth;
-	int trueVarLevelsUp;		/* number of sublinks nesting levels between the referenced var and the correlated var */
+	int trueVarLevelsUp;		/* number of sublinks nesting levels between the
+									referenced var and the correlated var */
 	bool belowAgg;
 	bool belowSet;
 } CorrVarInfo;
@@ -505,7 +509,8 @@ extern bool provNodesEquals(void *a, void *b);
 #define ContributionType(query) \
 	(((ProvInfo *) ((Query *) query)->provInfo)->contribution)
 
-/* checks if the expr of a SelectionInfo contains no aggregates, no volatile functions and no sublinks */
+/* Checks if the expr of a SelectionInfo contains no aggregates, no volatile
+ * functions and no sublinks. */
 #define SelPushable(sel) \
 	(!(((SelectionInfo *) sel)->containsAggs) && !((SelectionInfo *) sel)->hasSublinks && !((SelectionInfo *) sel)->hasVolatileFuncs)
 
@@ -516,7 +521,14 @@ extern bool provNodesEquals(void *a, void *b);
 	((TransProvInfo *) ((ProvInfo *) ((Query *) query)->provInfo)->rewriteInfo)
 
 #define SET_TRANS_INFO(query) \
-	((TransProvInfo *)(((ProvInfo *) ((Query *) query)->provInfo)->rewriteInfo = (Node *) makeTransProvInfo()))
+	((TransProvInfo *)(((ProvInfo *) \
+			((Query *) query)->provInfo)->rewriteInfo = (Node *) \
+			makeTransProvInfo()))
+
+#define DO_SET_TRANS_INFO(query) \
+	do { \
+		SET_TRANS_INFO(query); \
+	} while (0)
 
 #define SET_TRANS_INFO_TO(query,newInfo) \
 	(((ProvInfo *) ((Query *) query)->provInfo)->rewriteInfo = (Node *) (newInfo))

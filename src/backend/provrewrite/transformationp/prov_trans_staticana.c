@@ -121,7 +121,7 @@ analyseOneQueryNode (Query *query, int curId, TransSubInfo *parent,
 {
 	TransProvInfo *info;
 
-	SET_TRANS_INFO(query);
+	DO_SET_TRANS_INFO(query);
 	info = GET_TRANS_INFO(query);
 	info->rtIndex = rtIndex;
 

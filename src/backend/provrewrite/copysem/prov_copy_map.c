@@ -1,8 +1,9 @@
 /*-------------------------------------------------------------------------
  *
  * prov_copy_map.c
- *	  Support data structure for copy-contribution semantics. Basically a list of attribute equivalences for
- *	  each base relation accessed by a provenance query.
+ *	  PERM C - Support data structure for copy-contribution semantics.
+ *	  Basically a list of attribute equivalences for each base relation
+ *	  accessed by a provenance query.
  *
  * Portions Copyright (c) 2008 Boris Glavic
  *
@@ -77,16 +78,24 @@ getQueryOutAttrs (Query *query)
 }
 
 /*
- * Generate the CopyMap data structure for a query. A CopyMap is produced for each query node in the query and is stored in this query nodes
- * ProvInfo field. The CopyMap of a query node q stores the information about which attributes of the base relations accessed by q are
- * copied to the result of q. This information is needed for copy contribution semantics provenance rewrite to know which parts of a query
- * should be rewritten to propagate provenance. The map generation differs depending on the type of copy contribution semantics (C-CS) used:
+ * Generate the CopyMap data structure for a query. A CopyMap is produced for
+ * each query node in the query and is stored in this query nodes ProvInfo
+ * field. The CopyMap of a query node q stores the information about which
+ * attributes of the base relations accessed by q are copied to the result of
+ * q. This information is needed for copy contribution semantics provenance
+ * rewrite to know which parts of a query should be rewritten to propagate
+ * provenance. The map generation differs depending on the type of copy
+ * contribution semantics (C-CS) used:
  *
- * 	CDC-CS: Only the provenance of base relations for which each attribute is directly copied are propagated.
- * 	CTC-CS: Only the provenance of base relations for which each attribute is transitively copied are propagated.
+ * 	CDC-CS: Only the provenance of base relations for which each attribute is
+ * 			directly copied are propagated.
+ * 	CTC-CS: Only the provenance of base relations for which each attribute is
+ * 			transitively copied are propagated.
  * 			(e.g. by WHERE equality conditions)
- * 	PDC-CS: Only the provenance of base relations for which at least one attribute is directly copied are propagated.
- * 	PTC-CS: Only the provenance of base relations for which at least one attribute is transitively copied are propagated.
+ * 	PDC-CS: Only the provenance of base relations for which at least one
+ * 			attribute is directly copied are propagated.
+ * 	PTC-CS: Only the provenance of base relations for which at least one
+ * 			attribute is transitively copied are propagated.
  */
 
 void
@@ -111,8 +120,8 @@ generateCopyMaps (Query *query)
 }
 
 /*
- * Top-down traversal to set the propagate flags, such that each query nodes copy map contains the information which subqueries should be
- * rewritten.
+ * Top-down traversal to set the propagate flags, such that each query nodes
+ * copy map contains the information which subqueries should be rewritten.
  */
 
 static void
@@ -144,9 +153,8 @@ setPropagateFlagsForQueryNode (Query *query)
 	CopyMap *subCopyMap;
 	ListCell *lc;
 
-	/* for each base relation entry, check if it is not propagating, and if so push this info down into the
-	 * child query nodes copy maps.
-	 */
+	/* for each base relation entry, check if it is not propagating, and if so
+	 *  push this info down into the child query nodes copy maps. */
 	foreach(lc, GetInfoCopyMap(query)->entries)
 	{
 		superEntry = (CopyMapRelEntry *) lfirst(lc);
@@ -159,7 +167,8 @@ setPropagateFlagsForQueryNode (Query *query)
 			{
 				subCopyMap = GetInfoCopyMap(rte->subquery);
 
-				subEntry = getRelEntry(subCopyMap, superEntry->relation, superEntry->refNum);
+				subEntry = getRelEntry(subCopyMap, superEntry->relation,
+						superEntry->refNum);
 				subEntry->propagate = false;
 			}
 		}
@@ -694,9 +703,11 @@ setCopyMapRTindices (CopyMap *map, Index rtindex)
 }
 
 /*
- * Checks if the provenance of a baserelation represented by a CopyMapRelEntry should be propagated further up in the query.
- * For CCT-CS it should be propagated if for each base relation attribute there is at least one attribute in the query that
- * is directly copied from this base relation attribute.
+ * Checks if the provenance of a baserelation represented by a CopyMapRelEntry
+ * should be propagated further up in the query. For CCT-CS it should be
+ * propagated if for each base relation attribute there is at least one
+ * attribute in the query that is directly copied from this base relation
+ * attribute.
  */
 
 bool
@@ -741,8 +752,9 @@ shouldRewriteQuery (Query *query)
 }
 
 /*
- * Checks if a range table entry of a query should be rewritten according to copy contribution semantics. This information
- * is stored in the provided copy map.
+ * Checks if a range table entry of a query should be rewritten according to
+ * copy contribution semantics. This information is stored in the provided copy
+ * map.
  */
 
 bool
@@ -811,7 +823,8 @@ getEntryForBaseRel (CopyMap *map, Index rtindex)
 }
 
 /*
- * Get the CopyMapRelEntry for the "refNum"'th reference to the relation with Oid "rel".
+ * Get the CopyMapRelEntry for the "refNum"th reference to the relation with
+ * Oid "rel".
  */
 
 static CopyMapRelEntry *
@@ -832,13 +845,15 @@ getRelEntry (CopyMap *map, Oid rel, int refNum)
 }
 
 /*
- * A generic walker that applies a function to each of the relentries and attr entries of a copy map.
+ * A generic walker that applies a function to each of the relentries and attr
+ * entries of a copy map.
  */
 
 void
 copyMapWalker (CopyMap *map, void *context, void *attrContext,
 				bool (*relWalker) (CopyMapRelEntry *entry, void *context),
-				bool (*attrWalker) (CopyMapRelEntry *entry, CopyMapEntry *attr, void *context))
+				bool (*attrWalker) (CopyMapRelEntry *entry, CopyMapEntry *attr,
+						void *context))
 {
 	CopyMapRelEntry *entry;
 	CopyMapEntry *attr;

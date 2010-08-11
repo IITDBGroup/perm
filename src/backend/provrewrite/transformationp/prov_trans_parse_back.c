@@ -859,7 +859,7 @@ get_setop_query(Node *setOp, Query *query, TupleDesc resultDesc,
 
 		need_paren = !IsA(op->rarg, RangeTblRef);
 
-		if (op->op == SETOP_EXCEPT)
+		if (op->op == SETOP_EXCEPT && newStatic)
 			appendStringInfoString(str, "<NOT>");
 		if (need_paren)
 			appendStringInfoChar(str, '(');
@@ -869,7 +869,7 @@ get_setop_query(Node *setOp, Query *query, TupleDesc resultDesc,
 				false);
 		if (need_paren)
 			appendStringInfoChar(str, ')');
-		if (op->op == SETOP_EXCEPT)
+		if (op->op == SETOP_EXCEPT && newStatic)
 			appendStringInfoString(str, "</NOT>");
 	}
 	else

@@ -47,13 +47,9 @@ createProvAttrName (RangeTblEntry *rte, char *name)
 	int newLength;
 
 	if (rte->rtekind == RTE_RELATION)
-	{
 		provRelName = getRelationName (rte->relid);
-	}
 	else if (rte->rtekind == RTE_SUBQUERY)
-	{
 		provRelName = getQueryName (rte);
-	}
 	else
 	{
 		//TODO error
@@ -115,9 +111,10 @@ escapeAttrName (char *name)
 }
 
 /*
- * Returns the name of a base relation. For multiple references to a relation append an integer identifying the
- * reference.
+ * Returns the name of a base relation. For multiple references to a relation
+ * append an integer identifying the reference.
  */
+
 char *
 getRelationName (Oid relid)
 {
@@ -162,7 +159,7 @@ getRelationName (Oid relid)
 }
 
 /*
- * get a relation name without appended unique number
+ * Get a relation name without appended unique number.
  */
 
 char *
@@ -193,9 +190,9 @@ getRelationNameUnqualified (Oid relid)
 }
 
 /*
- * Returns the name of a base relation or subquery marked with the BASERELATION keyword.
- * For multiple references to a relation append an integer identifying the
- * reference.
+ * Returns the name of a base relation or subquery marked with the BASERELATION
+ * keyword. For multiple references to a relation append an integer identifying
+ * the reference.
  */
 
 char *
@@ -231,8 +228,9 @@ getQueryName (RangeTblEntry *rte)
 }
 
 /*
- * returns the count of references to a relation. This is done using a counter for each relation (OID)
- * that is incremented each time this method is called with the OID of the relation.
+ * Returns the number of references to a relation. This is done using a counter
+ * for each relation (OID) that is incremented each time this method is called
+ * with the OID of the relation.
  */
 
 int
@@ -241,8 +239,8 @@ getRelationRefNum (Oid relid, bool increment)
 	ListCell *lc;
 	OidRef *oidRef;
 
-	/* walk through list of OidRef structs. If a entry with oid = relid is found increment
-	 * ref count and return the incremented ref count value.
+	/* walk through list of OidRef structs. If a entry with oid = relid is
+	 * found increment ref count and return the incremented ref count value.
 	 */
 
 	foreach(lc, relRefCount)
@@ -257,7 +255,8 @@ getRelationRefNum (Oid relid, bool increment)
 		}
 	}
 
-	/* first reference to relation add OidRef for this relation to relRefCount */
+	/* first reference to relation add OidRef for this relation to
+	 * relRefCount */
 	oidRef = (OidRef *) palloc(sizeof(OidRef));
 	oidRef->relid = relid;
 	oidRef->refCounter = 0;
@@ -268,8 +267,9 @@ getRelationRefNum (Oid relid, bool increment)
 }
 
 /*
- *	Returns the count of references to a range table entry that is either a base relation or is a subquery
- *	that is marked with the BASERELATION keyword.
+ *	Returns the count of references to a range table entry that is either a
+ *	base relation or is a subquery that is marked with the BASERELATION
+ *	keyword.
  */
 
 int
@@ -282,7 +282,8 @@ getQueryRefNum (RangeTblEntry *rte, bool increment)
 	if (rte->rtekind == RTE_RELATION && !rte->isProvBase)
 		return getRelationRefNum (rte->relid, increment);
 
-	/* if RTE has an alias use this as name, if not check for eref and finally fall back to view name if RTE is a view */
+	/* if RTE has an alias use this as name, if not check for eref and finally
+	 * fall back to view name if RTE is a view */
 	if (!rte->alias || !rte->alias->aliasname)
 	{
 		if (rte->eref && rte->eref->aliasname)
@@ -323,7 +324,7 @@ getQueryRefNum (RangeTblEntry *rte, bool increment)
 }
 
 /*
- * Reset the relation reference counters
+ * Reset the relation reference counters.
  */
 
 void
@@ -334,7 +335,7 @@ resetRelReferences (void)
 }
 
 /*
- * returns true, if te is a provnenace attribute
+ * Returns true, if te is a provnenace attribute.
  */
 
 bool
@@ -353,8 +354,9 @@ isProvAttr (TargetEntry *te)
 }
 
 /*
- * Creates a provenance attribute name for a subquery that for which the user has specified a list of provenance attributes.
- * This is done by adding the prefix provenance and escaping underscores in the attribute name.
+ * Creates a provenance attribute name for a subquery that for which the user
+ * has specified a list of provenance attributes. This is done by adding the
+ * prefix provenance and escaping underscores in the attribute name.
  */
 
 char *

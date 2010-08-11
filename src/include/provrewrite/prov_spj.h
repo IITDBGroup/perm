@@ -19,6 +19,7 @@ extern Query *rewriteSPJQuery (Query *query);
 extern Query *rewriteSPJrestrict (Query *query, List **subList, Index maxRtindex);
 extern List *rewriteRTEs (Query *query, List **subList, Index maxRtindex);
 
+extern void rewriteRTEwithProvenance (int rtindex, RangeTblEntry *rte);
 extern void rewriteDistinctClause (Query *query);
 extern void correctJoinRTEs (Query *query, List **subList);
 extern bool checkLimit (Query *query);

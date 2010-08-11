@@ -191,7 +191,7 @@ rewriteStaticSetOp (Query *query, Node **parentInfo)
 			&curUniqueRelNum));
 	addSubqueryTargetListToTargetList(query, 1);
 
-	SET_TRANS_INFO(newTop);
+	DO_SET_TRANS_INFO(newTop);
 	info = GET_TRANS_INFO(newTop);
 	subInfo = GET_TRANS_INFO(query);
 	info->isStatic = subInfo->isStatic;
@@ -316,10 +316,37 @@ rewriteUsingSubInfo (TransSubInfo *setInfo, Query *query, Index offset)
 	RangeTblEntry *rte;
 	Index rtIndex;
 
+//
+//	if (setInfo->opType == SUBOP_SetOp_Diff)
+//	{
+//		child = (Node *) linitial(setInfo->children);
+//
+//		if (IsA(child, TransProvInfo))
+//		{
+//			rtIndex = TRANS_GET_RTINDEX(child) + offset;
+//			TRANS_SET_RTINDEX(child, rtIndex);
+//			rte = rt_fetch(rtIndex, query->rtable);
+//			SET_TRANS_INFO_TO(rte->subquery, child);
+//			rte->subquery = rewriteQueryNodeTrans (rte->subquery, rte,
+//					(Node **) &(setInfo->children->head->data.ptr_value));
+//		}
+//		else
+//			rewriteUsingSubInfo((TransSubInfo *) child, query, offset);
+//
+//		return;
+//	}
+
 	foreach(lc, setInfo->children)
 	{
-		child = lfirst(lc);
+		child = (Node *) lfirst(lc);
 
+		// For set difference only rewrite the left input.
+		if (setInfo->opType == SUBOP_SetOp_Diff
+				&& prov_use_wl_union_semantics
+				&& lc != list_head(setInfo->children))
+			break;
+
+		// rewrite child
 		if (IsA(child, TransProvInfo))
 		{
 			rtIndex = TRANS_GET_RTINDEX(child) + offset;

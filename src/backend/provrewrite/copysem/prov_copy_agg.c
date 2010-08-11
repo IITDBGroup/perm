@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * prov_copy_agg.c
- *	  PERM C - C-CS data-data provenance rewrite for queries with aggregation.
+ *	  PERM C - C-CS provenance rewrite for queries with aggregation.
  *
  * Portions Copyright (c) 2008 Boris Glavic
  *
@@ -29,8 +29,10 @@
 
 /* Function declarations */
 static bool setRtindexRelEntryWalker (CopyMapRelEntry *entry, void *context);
-static bool mapInVarsAttrWalker (CopyMapRelEntry *entry, CopyMapEntry *attr, void *context);
-static bool mapOutVarsAttrWalker (CopyMapRelEntry *entry, CopyMapEntry *attr, void *context);
+static bool mapInVarsAttrWalker (CopyMapRelEntry *entry, CopyMapEntry *attr,
+		void *context);
+static bool mapOutVarsAttrWalker (CopyMapRelEntry *entry, CopyMapEntry *attr,
+		void *context);
 
 static void createWithoutAggCopyMap (Query *rewrite, List *attrMap);
 static void createNewTopCopyMap (Query *newTop, List *attrMap);
@@ -55,7 +57,8 @@ rewriteCopyAggregateQuery (Query *query) //TODO adapt rewritten non-agg copy map
 	pList = NIL;
 	subList = NIL;
 
-	/* Should the query be rewritten at all? If not fake provenance attributes. */
+	/* Should the query be rewritten at all? If not fake provenance
+	 * attributes. */
 	if (!shouldRewriteQuery(query))
 	{
 		pList = copyAddProvAttrForNonRewritten(query);
@@ -70,14 +73,14 @@ rewriteCopyAggregateQuery (Query *query) //TODO adapt rewritten non-agg copy map
 	groupByTLEs = getGroupByTLEs (query);
 
 	/* copy query node and strip off aggregation and limit-clause and add a
-	 * the CopyMap of the aggregation but adapt it
-	 */
+	 * the CopyMap of the aggregation but adapt it. */
 	newRewriteQuery = copyObject (query);
 	newRewriteQuery->limitCount = NULL;
 	newRewriteQuery->limitOffset = NULL;
 	SetSublinkRewritten(newRewriteQuery, false);
 
-	/* if aggregation query has no sublinks or only sublinks in HAVING newRewriteQuery has no sublinks */
+	/* if aggregation query has no sublinks or only sublinks in HAVING
+	 * newRewriteQuery has no sublinks */
 	if (!hasNonHavingSublink (query))
 		newRewriteQuery->hasSubLinks = false;
 
@@ -85,7 +88,8 @@ rewriteCopyAggregateQuery (Query *query) //TODO adapt rewritten non-agg copy map
 
 	createWithoutAggCopyMap(newRewriteQuery, attrMap);
 
-	/* create new top query node and adapt copy map of aggregation for this node */
+	/* create new top query node and adapt copy map of aggregation for this
+	 * node */
 	newTopQuery = makeQuery();
 	Provinfo(newTopQuery)->copyInfo = copyObject(GetInfoCopyMap(query)); //CHECK necessary? do queries above access this?
 	createNewTopCopyMap(newTopQuery, attrMap);
@@ -118,7 +122,8 @@ rewriteCopyAggregateQuery (Query *query) //TODO adapt rewritten non-agg copy map
 
 	SetProvRewrite(newRewriteQuery,false);
 	SetProvRewrite(query,false);
-	adaptRTEsForJoins(list_make1(linitial(newTopQuery->jointree->fromlist)), newTopQuery, "joinAggAndRewrite");
+	adaptRTEsForJoins(list_make1(linitial(newTopQuery->jointree->fromlist)),
+			newTopQuery, "joinAggAndRewrite");
 
 	/* add provenance attributes of sub queries to targetlist */
 	pList = copyAddProvAttrs (newTopQuery, list_make1_int (2), pList);
@@ -153,7 +158,8 @@ createNewTopCopyMap (Query *newTop, List *attrMap)
 	CopyMap *map;
 
 	map = GetInfoCopyMap(newTop);
-	copyMapWalker(map, NULL, attrMap, setRtindexRelEntryWalker, mapInVarsAttrWalker);
+	copyMapWalker(map, NULL, attrMap, setRtindexRelEntryWalker,
+			mapInVarsAttrWalker);
 }
 
 /*
