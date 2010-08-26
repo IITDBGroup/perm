@@ -17,11 +17,31 @@
 #include "provrewrite/prov_copy_equi.h"
 #include "provrewrite/prov_nodes.h"
 
+/* data structures */
+typedef struct CaseInfo {
+	List *vars;
+	List *conditions;
+} CaseInfo;
+
+typedef struct VarEqualitiesContext {
+	List **result;
+	Node *root;
+	bool outerJoin;
+} VarEqualitiesContext;
+
+/* create a CaseInfo struct */
+#define CREATE_CASEINFO(result) \
+	do { \
+		result = ((CaseInfo *) palloc(sizeof(CaseInfo))); \
+		result->vars = NIL; \
+		result->conditions = NIL; \
+	} while (0)
+
 /* macro to create an empty CopyMap */
 #define CREATE_COPYMAP \
 	((CopyMap *) palloc(sizeof(CopyMap)))
 
-
+/* prototypes */
 extern void generateCopyMaps (Query *query);
 extern bool isPropagating (CopyMapRelEntry *entry);
 extern bool shouldRewriteQuery (Query *query);
@@ -34,8 +54,16 @@ extern CopyMapEntry *getCopyMapEntry (CopyMap *map, Oid relation);
 extern void removeConditionsForAttrs (CopyMap *map, Oid relation);
 extern List *getQueryOutAttrs (Query *query);
 extern CopyMap *addTransitiveClosure (CopyMap *mapIn, EqGraph *eqGraph);
-extern void copyMapWalker (CopyMap *map, void *context, void *attrContext,
-							bool (*relWalker) (CopyMapRelEntry *entry, void *context),
-							bool (*attrWalker) (CopyMapRelEntry *entry, CopyMapEntry *attr, void *context));
-
+extern bool inclusionCondWalker (AttrInclusions *incl,
+		bool (*condWalker) (InclusionCond *cond, void *context),
+		void *context);
+extern void copyMapWalker (List *entries, void *context, void *attrContext,
+		void *inclContext,
+		bool (*relWalker) (CopyMapRelEntry *entry, void *context),
+		bool (*attrWalker) (CopyMapRelEntry *entry, CopyMapEntry *attr,
+				void *context),
+		bool (*inclWalker) (CopyMapRelEntry *entry, CopyMapEntry *attr,
+				AttrInclusions *incl, void *context));
+extern bool dummyAttrWalker (CopyMapRelEntry *entry, CopyMapEntry *attr,
+		void *context);
 #endif /*PROV_COPY_MAP_H_*/

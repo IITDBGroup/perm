@@ -122,26 +122,33 @@ extern void setIgnoreRTE (RangeTblEntry *rte);
 extern void removeProvInfoNodes (Query *query);
 extern bool queryHasRewriteChildren (Query *query);
 extern bool hasProvenanceSubquery (Query *query);
-extern List *addProvenanceAttrsForRange (Query *query, int min, int max, List *pList);
+extern List *addProvenanceAttrsForRange (Query *query, int min, int max,
+		List *pList);
 extern List *addProvenanceAttrs (Query *query, List *subList, List *pList);
 extern List *findBaseRelationsForProvenanceQuery (Query *query);
-extern void findBaseRelationsForProvenanceRTE (RangeTblEntry *rte, List **result);
+extern void findBaseRelationsForProvenanceRTE (RangeTblEntry *rte,
+		List **result);
 extern void getRTindexForProvTE (Query *query, Var* var);
 
 /* node creation support functions */
 extern Query *generateQueryFromBaseRelation (RangeTblEntry *rte);
 extern RangeTblEntry *generateQueryRTEFromRelRTE (RangeTblEntry *rte);
-extern void addSubqueryToRTWithParam (Query *query, Query *subQuery, char *aliasName, bool inFrom, AclMode reqPerms, bool append);
+extern void addSubqueryToRTWithParam (Query *query, Query *subQuery,
+		char *aliasName, bool inFrom, AclMode reqPerms, bool append);
 extern void addSubqueryToRT (Query *query, Query* subQuery, char *aliasName);
 extern void correctSubQueryAlias (Query *query);
 extern void correctRecurSubQueryAlias (Query *query);
 extern void correctRTEAlias (RangeTblEntry *rte);
-extern void addConditionToQualWithAnd (Query *query, Node *condition, bool and);
+extern void addConditionToQualWithAnd (Query *query, Node *condition,
+		bool and);
 extern void adaptRTEsForJoins(List *subJoins, Query *query, char *joinRTEname);
 extern void recreateJoinRTEs (Query *query);
 extern JoinExpr *createJoinExpr (Query *query, JoinType joinType);
-extern JoinExpr *createJoinOnAttrs (Query *query, JoinType joinType, Index leftRT, Index rightRT, List *leftAttrs, List *rightAttrs, bool useNotDistinct);
-extern Node *replaceSubExpression (Node *node, List *searchList, List *replaceList, int flags);
+extern JoinExpr *createJoinOnAttrs (Query *query, JoinType joinType,
+		Index leftRT, Index rightRT, List *leftAttrs, List *rightAttrs,
+		bool useNotDistinct);
+extern Node *replaceSubExpression (Node *node, List *searchList,
+		List *replaceList, int flags);
 
 /* expression creation support functions */
 extern Node *createEqualityConditionForVars (Var *leftChild, Var *rightChild);
@@ -149,12 +156,15 @@ extern Node *createEqualityConditionForNodes (Node *left, Node *right);
 extern Node *createSmallerCondition (Node *left, Node *right);
 extern Node *createSmallerEqCondition (Node *left, Node *right);
 extern Node *createBiggerCondition (Node *left, Node *right);
-extern Node *createNotDistinctConditionForVars (Var *leftChild, Var *rightChild);
+extern Node *createNotDistinctConditionForVars (Var *leftChild,
+		Var *rightChild);
 extern Node *createAndFromList (List *exprs);
 
 /* node navigation and search support functions */
-extern bool findRTindexInFrom (Index rtindex, Query *query, List **rtList, List **joinPath);
-extern bool findRTindexInJoin (Index rtindex, JoinExpr *joinExpr, List** rtList, List **joinPath);
+extern bool findRTindexInFrom (Index rtindex, Query *query, List **rtList,
+		List **joinPath);
+extern bool findRTindexInJoin (Index rtindex, JoinExpr *joinExpr,
+		List** rtList, List **joinPath);
 extern Node *getJoinTreeNode (Query *query, Index rtindex);
 extern List *getAggrExprs (Node *node);
 extern Node **getJoinForJoinQual (Query *query, Node *node);

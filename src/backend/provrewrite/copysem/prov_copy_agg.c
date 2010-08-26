@@ -91,7 +91,7 @@ rewriteCopyAggregateQuery (Query *query) //TODO adapt rewritten non-agg copy map
 	/* create new top query node and adapt copy map of aggregation for this
 	 * node */
 	newTopQuery = makeQuery();
-	Provinfo(newTopQuery)->copyInfo = copyObject(GetInfoCopyMap(query)); //CHECK necessary? do queries above access this?
+	Provinfo(newTopQuery)->copyInfo = copyObject(GET_COPY_MAP(query)); //CHECK necessary? do queries above access this?
 	createNewTopCopyMap(newTopQuery, attrMap);
 
 	/* copy ORDER BY clause */
@@ -157,9 +157,9 @@ createNewTopCopyMap (Query *newTop, List *attrMap)
 {
 	CopyMap *map;
 
-	map = GetInfoCopyMap(newTop);
-	copyMapWalker(map, NULL, attrMap, setRtindexRelEntryWalker,
-			mapInVarsAttrWalker);
+	map = GET_COPY_MAP(newTop);
+	copyMapWalker(map->entries, NULL, attrMap, NULL, setRtindexRelEntryWalker,
+			mapInVarsAttrWalker, NULL);
 }
 
 /*
@@ -171,8 +171,9 @@ createWithoutAggCopyMap (Query *rewrite, List *attrMap)
 {
 	CopyMap *map;
 
-	map = GetInfoCopyMap(rewrite);
-	copyMapWalker(map, NULL, attrMap, NULL, mapOutVarsAttrWalker);
+	map = GET_COPY_MAP(rewrite);
+	copyMapWalker(map->entries, NULL, attrMap, NULL, NULL,
+			mapOutVarsAttrWalker, NULL);
 }
 
 /*
@@ -194,16 +195,16 @@ setRtindexRelEntryWalker (CopyMapRelEntry *entry, void *context)
 static bool
 mapInVarsAttrWalker (CopyMapRelEntry *entry, CopyMapEntry *attr, void *context)
 {
-	ListCell *lc;
-	Var *var;
+//	ListCell *lc;
+//	Var *var;
 
-	foreach(lc, attr->inVars)
-	{
-		var = (Var *) lfirst(lc);
-
-		var->varno = 2;
-		var->varattno = listPositionInt((List *) context, var->varattno) + 1;
-	}
+//	foreach(lc, attr->inVars)
+//	{
+//		var = (Var *) lfirst(lc);
+//
+//		var->varno = 2;
+//		var->varattno = listPositionInt((List *) context, var->varattno) + 1;
+//	}
 
 	return false;
 }
@@ -215,15 +216,15 @@ mapInVarsAttrWalker (CopyMapRelEntry *entry, CopyMapEntry *attr, void *context)
 static bool
 mapOutVarsAttrWalker (CopyMapRelEntry *entry, CopyMapEntry *attr, void *context)
 {
-	ListCell *lc;
-	Var *var;
-
-	foreach(lc, attr->outVars)
-	{
-		var = (Var *) lfirst(lc);
-
-		var->varattno = listPositionInt((List *) context, var->varattno) + 1;
-	}
+//	ListCell *lc;
+//	Var *var;
+//
+//	foreach(lc, attr->outVars)
+//	{
+//		var = (Var *) lfirst(lc);
+//
+//		var->varattno = listPositionInt((List *) context, var->varattno) + 1;
+//	}
 
 	return false;
 }

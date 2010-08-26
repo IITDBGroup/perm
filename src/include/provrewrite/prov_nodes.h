@@ -59,32 +59,38 @@ typedef struct CopyMap {
  * CopyProvInfo
  */
 
-typedef struct CopyProvInfo
-{
-	NodeTag type;
-	CopyMap *inMap;
-	CopyMap *outMap;
-//	List *outAttrs;
-} CopyProvInfo;
+//typedef struct CopyProvInfo
+//{
+//	NodeTag type;
+//	CopyMap *inMap;
+//	CopyMap *outMap;
+////	List *outAttrs;
+//} CopyProvInfo;
 
 
 
 /*
  * An entry in a copy map.
  */
-typedef struct CopyMapRelEntry
+typedef struct CopyMapRelEntry CopyMapRelEntry;
+
+struct CopyMapRelEntry
 {
 	NodeTag type;
 	Oid relation;
 	int refNum;
-	List *eqList;
-	List *attrEntries;
-	Index rtindex;
-	bool propagate;
-} CopyMapRelEntry;
+	List *attrEntries;		// CopyMapEntries for each attr of the base rel.
+	Index rtindex;			// input rte the relation is coming from
+	bool isStatic;			// content of the map is data independent
+	bool noRewrite;			/* if the map is static and cannot cause the
+							inclusion of this relations tuples in the
+							provenance this is true */
+	CopyMapRelEntry *child; // rel map for the same relation in a sub query.
+};
 
 /*
- * Maps a base relation attribute to a list of attributes of a query block.
+ * For a base relation attribute stores a list of attribute inclusion
+ * conditions for the attributes of an query block.
  */
 
 typedef struct CopyMapEntry
@@ -92,20 +98,54 @@ typedef struct CopyMapEntry
 	NodeTag type;
 	Var *baseRelAttr;
 	char *provAttrName;
-	List *inVars;
-	List *outVars;
+	List *outAttrIncls;
+	bool isStaticTrue;	// this map contains at most one member independent of the data
+//	bool minOneStatic;	// is guaranteed to contain at least one member
+	bool isStaticFalse;	// this map is always empty
 } CopyMapEntry;
 
 /*
- * An attribute reference with a possible condition attached. Used in the
- * eqList of an copy map entry.
+ * Stores the conditions that have to be fulfilled for an attribute to belong
+ * to the copy map entry for a base relation attribute.
  */
 
-typedef struct EquivalenceAttr {
+typedef struct AttrInclusions {
 	NodeTag type;
-	Var attr;
-	Node *condition;
-} EquivalenceAttr;
+	Var *attr;
+	List *inclConds;
+	bool isStatic;
+} AttrInclusions;
+
+/*
+ * Stores an condition, that if fulfilled causes an attribute X to belong to
+ * the CopyMapEntry for a base relation attribute. Such conditions are stated
+ * over the copy map entry for the input of the query block of X and the
+ * attribute values of the attributes of the query block of X. There are three
+ * types of conditions:
+ * 		-INCL_EXISTS: the condition is true, if an attribute Y is present in
+ * 					the input copy map. Y is stored in existsAttr
+ * 		-INCL_EQUAL: the condition is true, if a certain attribute Y of the
+ * 					input of the query block of X is equal to X and Y is in the
+ * 					input copy map. Y is stored in existsAttr. The attribute
+ * 					from which X is derived is stored in eqVar.
+ * 		-INCL_IF: the condition is true, if an attribute Y is in the input copy
+ * 					map and a condition C is fulfilled. Y is stored in
+ * 					existsAttr. C is stored in cond.
+ */
+
+typedef enum InclCondType {
+	INCL_EXISTS,
+	INCL_EQUAL,
+	INCL_IF
+} InclCondType;
+
+typedef struct InclusionCond {
+	NodeTag type;
+	InclCondType inclType;
+	Node *existsAttr;	// used in all condition types
+	List *eqVars;			// for INCL_EQUAL the Y attribut
+	Node *cond;			// for INCL_EQUAL
+} InclusionCond;
 
 /*
  * Datastructure that stores information for a query node that is needed for
@@ -438,9 +478,11 @@ extern InequalityGraphNode *makeInequalityGraphNodeNIL (void);
 extern QueryPushdownInfo *makeQueryPushdownInfo (void);
 extern SelScope *makeSelScope (void);
 extern CopyMap *makeCopyMap (void);
-extern CopyProvInfo *makeCopyProvInfo (void);
+//extern CopyProvInfo *makeCopyProvInfo (void);
 extern CopyMapRelEntry *makeCopyMapRelEntry (void);
 extern CopyMapEntry *makeCopyMapEntry (void);
+extern AttrInclusions *makeAttrInclusions (void);
+extern InclusionCond *makeInclusionCond (void);
 extern TransProvInfo *makeTransProvInfo (void);
 extern TransSubInfo *makeTransSubInfo (int id, SubOperationType opType);
 
@@ -490,8 +532,64 @@ extern bool provNodesEquals(void *a, void *b);
 	((ProvInfo *) ((Query *) query)->provInfo)
 
 /* get the copymap stored in a provinfo */
-#define GetInfoCopyMap(query) \
+#define GET_COPY_MAP(query) \
 	((CopyMap *) (Provinfo(query))->copyInfo)
+
+/* set the copymap of a query */
+#define SET_COPY_MAP(query, copymap) \
+	do {Provinfo(query)->copyInfo = (Node *) copymap;} while (0)
+
+/* copy the basic fields of a copymapentry */
+#define COPY_BASIC_COPYREL(out,in) \
+	do { \
+		ListCell *lc; \
+		CopyMapEntry *attrEntry, *newEntry; \
+		out = makeCopyMapRelEntry(); \
+		out->relation = in->relation; \
+		out->refNum = in->refNum; \
+		foreach(lc,in->attrEntries) \
+		{ \
+			attrEntry = (CopyMapEntry *) lfirst(lc); \
+			newEntry = makeCopyMapEntry(); \
+			newEntry->baseRelAttr = copyObject(attrEntry->baseRelAttr); \
+			newEntry->provAttrName = pstrdup(attrEntry->provAttrName); \
+			out->attrEntries = lappend(out->attrEntries, newEntry); \
+		} \
+		out->child = in; \
+	} while (0)
+
+/* copy the basic fields of an AttrInclusions node */
+#define COPY_BASIC_COPYAINLC(out,in) \
+	do { \
+		out = makeAttrInclusions(); \
+		out->attr = copyObject(in->attr); \
+		out->isStatic = in->isStatic; \
+	} while (0)
+
+/* create an exists inclusion condition for a var */
+#define MAKE_EXISTS_INCL(result, incl) \
+	do { \
+		result = makeInclusionCond(); \
+		result->existsAttr = (incl); \
+	} while (0)
+
+/* create an equality inclusion condition for a var */
+#define MAKE_EQUAL_INCL(result, left, right) \
+	do { \
+		result = makeInclusionCond(); \
+		result->inclType = INCL_EQUAL; \
+		result->existsAttr = left; \
+		result->eqVar = right; \
+	} while (0)
+
+/* create an conditional inclusion condition for a var */
+#define MAKE_COND_INCL(result, incl, condition) \
+	do { \
+		result = makeInclusionCond(); \
+		result->inclType = INCL_IF; \
+		result->existsAttr = incl; \
+		result->cond = condition; \
+	} while (0)
 
 /* true if the sublinks of a query have been rewritten */
 #define IsSublinkRewritten(query) \
@@ -508,6 +606,15 @@ extern bool provNodesEquals(void *a, void *b);
 /* get ContributionType */
 #define ContributionType(query) \
 	(((ProvInfo *) ((Query *) query)->provInfo)->contribution)
+
+/* macros to distinguish between different copy contribution types */
+#define IS_TRANSC(ctype) \
+	(ctype == CONTR_COPY_COMPLETE_TRANSITIVE \
+		|| ctype == CONTR_COPY_PARTIAL_TRANSITIVE)
+
+#define IS_PARTIALC(ctype) \
+	(ctype == CONTR_COPY_PARTIAL_NONTRANSITIVE \
+		|| ctype == CONTR_COPY_PARTIAL_TRANSITIVE)
 
 /* Checks if the expr of a SelectionInfo contains no aggregates, no volatile
  * functions and no sublinks. */

@@ -274,9 +274,11 @@ static InequalityGraphNode *_copyInequalityGraphNode(InequalityGraphNode *from);
 static QueryPushdownInfo *_copyQueryPushdownInfo(QueryPushdownInfo *from);
 static SelScope *_copySelScope(SelScope *from);
 static CopyMap *_copyCopyMap(CopyMap *from);
-static CopyProvInfo *_copyCopyProvInfo(CopyProvInfo *from);
+//static CopyProvInfo *_copyCopyProvInfo(CopyProvInfo *from);
 static CopyMapRelEntry *_copyCopyMapRelEntry(CopyMapRelEntry *from);
 static CopyMapEntry *_copyCopyMapEntry(CopyMapEntry *from);
+static AttrInclusions *_copyAttrInclusions(AttrInclusions *from);
+static InclusionCond *_copyInclusionCond(InclusionCond *from);
 static TransProvInfo *_copyTransProvInfo(TransProvInfo *from);
 static TransSubInfo *_copyTransSubInfo(TransSubInfo *from);
 static XsltFuncExpr *_copyXsltFuncExpr(XsltFuncExpr *from);
@@ -301,9 +303,11 @@ static PushdownInfo *_readPushdownInfo(void);
 static InequalityGraph *_readInequalityGraph(void);
 static InequalityGraphNode *_readInequalityGraphNode(void);
 static CopyMap *_readCopyMap(void);
-static CopyProvInfo *_readCopyProvInfo(void);
+//static CopyProvInfo *_readCopyProvInfo(void);
 static CopyMapRelEntry *_readCopyMapRelEntry(void);
 static CopyMapEntry *_readCopyMapEntry(void);
+static AttrInclusions *_readAttrInclusions(void);
+static InclusionCond *_readInclusionCond(void);
 static TransProvInfo *_readTransProvInfo(void);
 static TransSubInfo *_readTransSubInfo(void);
 static XsltFuncExpr *_readXsltFuncExpr(void);
@@ -320,9 +324,11 @@ static void _outInequalityGraph(StringInfo str, InequalityGraph *node);
 static void _outInequalityGraphNode(StringInfo str, InequalityGraphNode *node);
 static void _outQueryPushdownInfo(StringInfo str, QueryPushdownInfo *node);
 static void _outCopyMap (StringInfo str, CopyMap *node);
-static void _outCopyProvInfo (StringInfo str, CopyProvInfo *node);
+//static void _outCopyProvInfo (StringInfo str, CopyProvInfo *node);
 static void _outCopyMapRelEntry (StringInfo str, CopyMapRelEntry *node);
 static void _outCopyMapEntry (StringInfo str, CopyMapEntry *node);
+static void _outAttrInclusions (StringInfo str, AttrInclusions *node);
+static void _outInclusionCond (StringInfo str, InclusionCond *node);
 static void _outSelScope(StringInfo str, SelScope *node);
 static void _outTransProvInfo(StringInfo str, TransProvInfo *node);
 static void _outTransSubInfo(StringInfo str, TransSubInfo *node);
@@ -345,9 +351,11 @@ static bool _equalInequalityGraphNode(InequalityGraphNode *a, InequalityGraphNod
 static bool _equalQueryPushdownInfo(QueryPushdownInfo *a, QueryPushdownInfo *b);
 static bool _equalSelScope(SelScope *a, SelScope *b);
 static bool _equalCopyMap (CopyMap *a, CopyMap *b);
-static bool _equalCopyProvInfo (CopyProvInfo *a, CopyProvInfo *b);
+//static bool _equalCopyProvInfo (CopyProvInfo *a, CopyProvInfo *b);
 static bool _equalCopyMapRelEntry (CopyMapRelEntry *a, CopyMapRelEntry *b);
 static bool _equalCopyMapEntry (CopyMapEntry *a, CopyMapEntry *b);
+static bool _equalAttrInclusions (AttrInclusions *a, AttrInclusions *b);
+static bool _equalInclusionCond (InclusionCond *a, InclusionCond *b);
 static bool _equalVarLengthIntArray (int *a, int *b, int numA, int numB);
 static bool _equalTransProvInfo (TransProvInfo *a, TransProvInfo *b);
 static bool _equalTransSubInfo (TransSubInfo *a, TransSubInfo *b);
@@ -598,18 +606,18 @@ makeCopyMap (void)
 	return result;
 }
 
-CopyProvInfo *
-makeCopyProvInfo (void)
-{
-	CopyProvInfo *result;
-
-	result = makeNode(CopyProvInfo);
-
-	result->inMap = NULL;
-	result->outMap = NULL;
-
-	return result;
-}
+//CopyProvInfo *
+//makeCopyProvInfo (void)
+//{
+//	CopyProvInfo *result;
+//
+//	result = makeNode(CopyProvInfo);
+//
+//	result->inMap = NULL;
+//	result->outMap = NULL;
+//
+//	return result;
+//}
 
 CopyMapRelEntry *
 makeCopyMapRelEntry (void)
@@ -619,11 +627,12 @@ makeCopyMapRelEntry (void)
 	result = makeNode(CopyMapRelEntry);
 
 	result->attrEntries = NIL;
-	result->eqList = NIL;
 	result->relation = InvalidOid;
 	result->rtindex = -1;
-	result->propagate = true;
-
+	result->isStatic = false;
+	result->noRewrite = false;
+	result->refNum = -1;
+	result->child = NULL;
 	return result;
 }
 
@@ -634,8 +643,40 @@ makeCopyMapEntry (void)
 
 	result = makeNode(CopyMapEntry);
 
-	result->inVars = NIL;
-	result->outVars = NIL;
+	result->baseRelAttr = NULL;
+	result->isStaticTrue = false;
+	result->isStaticFalse = false;
+	result->outAttrIncls = NIL;
+	result->provAttrName = NULL;
+
+	return result;
+}
+
+AttrInclusions *
+makeAttrInclusions (void)
+{
+	AttrInclusions *result;
+
+	result = makeNode(AttrInclusions);
+
+	result->attr = NULL;
+	result->inclConds = NIL;
+	result->isStatic = false;
+
+	return result;
+}
+
+InclusionCond *
+makeInclusionCond (void)
+{
+	InclusionCond *result;
+
+	result = makeNode(InclusionCond);
+
+	result->cond = NULL;
+	result->eqVars = NIL;
+	result->existsAttr = NULL;
+	result->inclType = INCL_EXISTS;
 
 	return result;
 }
@@ -717,14 +758,20 @@ provNodesEquals(void *a, void *b)
 	case T_CopyMap:
 		retval = _equalCopyMap(a,b);
 		break;
-	case T_CopyProvInfo:
-		retval = _equalCopyProvInfo(a,b);
-		break;
+//	case T_CopyProvInfo:
+//		retval = _equalCopyProvInfo(a,b);
+//		break;
 	case T_CopyMapRelEntry:
 		retval = _equalCopyMapRelEntry(a,b);
 		break;
 	case T_CopyMapEntry:
 		retval = _equalCopyMapEntry(a,b);
+		break;
+	case T_AttrInclusions:
+		retval = _equalAttrInclusions(a,b);
+		break;
+	case T_InclusionCond:
+		retval = _equalInclusionCond(a,b);
 		break;
 	case T_TransProvInfo:
 		retval = _equalTransProvInfo(a,b);
@@ -903,14 +950,14 @@ _equalCopyMap (CopyMap *a, CopyMap *b)
 	return true;
 }
 
-static bool
-_equalCopyProvInfo(CopyProvInfo *a, CopyProvInfo *b)
-{
-	COMPARE_NODE_FIELD(inMap);
-	COMPARE_NODE_FIELD(outMap);
-
-	return true;
-}
+//static bool
+//_equalCopyProvInfo(CopyProvInfo *a, CopyProvInfo *b)
+//{
+//	COMPARE_NODE_FIELD(inMap);
+//	COMPARE_NODE_FIELD(outMap);
+//
+//	return true;
+//}
 
 
 
@@ -919,10 +966,11 @@ _equalCopyMapRelEntry(CopyMapRelEntry *a, CopyMapRelEntry *b)
 {
 	COMPARE_SCALAR_FIELD(relation);
 	COMPARE_SCALAR_FIELD(refNum);
-	COMPARE_NODE_FIELD(eqList);
 	COMPARE_NODE_FIELD(attrEntries);
 	COMPARE_SCALAR_FIELD(rtindex);
-	COMPARE_SCALAR_FIELD(propagate);
+	COMPARE_SCALAR_FIELD(isStatic);
+	COMPARE_SCALAR_FIELD(noRewrite);
+	COMPARE_NODE_FIELD(child);
 
 	return true;
 }
@@ -932,8 +980,30 @@ _equalCopyMapEntry(CopyMapEntry *a, CopyMapEntry *b)
 {
 	COMPARE_NODE_FIELD(baseRelAttr);
 	COMPARE_STRING_FIELD(provAttrName);
-	COMPARE_NODE_FIELD(inVars);
-	COMPARE_NODE_FIELD(outVars);
+	COMPARE_NODE_FIELD(outAttrIncls);
+	COMPARE_SCALAR_FIELD(isStaticTrue);
+	COMPARE_SCALAR_FIELD(isStaticFalse);
+
+	return true;
+}
+
+static bool
+_equalAttrInclusions (AttrInclusions *a, AttrInclusions *b)
+{
+	COMPARE_NODE_FIELD(attr);
+	COMPARE_NODE_FIELD(inclConds);
+	COMPARE_SCALAR_FIELD(isStatic);
+
+	return true;
+}
+
+static bool
+_equalInclusionCond (InclusionCond *a, InclusionCond *b)
+{
+	COMPARE_SCALAR_FIELD(inclType);
+	COMPARE_NODE_FIELD(existsAttr);
+	COMPARE_NODE_FIELD(eqVars);
+	COMPARE_NODE_FIELD(cond);
 
 	return true;
 }
@@ -1045,14 +1115,20 @@ outProvNode(StringInfo str, void *obj)
 	case T_CopyMap:
 		_outCopyMap(str, obj);
 		break;
-	case T_CopyProvInfo:
-		_outCopyProvInfo(str, obj);
-		break;
+//	case T_CopyProvInfo:
+//		_outCopyProvInfo(str, obj);
+//		break;
 	case T_CopyMapRelEntry:
 		_outCopyMapRelEntry(str, obj);
 		break;
 	case T_CopyMapEntry:
 		_outCopyMapEntry(str, obj);
+		break;
+	case T_AttrInclusions:
+		_outAttrInclusions(str, obj);
+		break;
+	case T_InclusionCond:
+		_outInclusionCond(str, obj);
 		break;
 	case T_TransProvInfo:
 		_outTransProvInfo(str, obj);
@@ -1256,14 +1332,14 @@ _outCopyMap (StringInfo str, CopyMap *node)
 	WRITE_INT_FIELD(rtindex);
 }
 
-static void
-_outCopyProvInfo(StringInfo str, CopyProvInfo *node)
-{
-	WRITE_NODE_TYPE("COPYPROVINFO");
-
-	WRITE_NODE_FIELD(inMap);
-	WRITE_NODE_FIELD(outMap);
-}
+//static void
+//_outCopyProvInfo(StringInfo str, CopyProvInfo *node)
+//{
+//	WRITE_NODE_TYPE("COPYPROVINFO");
+//
+//	WRITE_NODE_FIELD(inMap);
+//	WRITE_NODE_FIELD(outMap);
+//}
 
 
 
@@ -1274,10 +1350,11 @@ _outCopyMapRelEntry(StringInfo str, CopyMapRelEntry *node)
 
 	WRITE_OID_FIELD(relation);
 	WRITE_INT_FIELD(refNum);
-	WRITE_NODE_FIELD(eqList);
 	WRITE_NODE_FIELD(attrEntries);
 	WRITE_INT_FIELD(rtindex);
-	WRITE_BOOL_FIELD(propagate);
+	WRITE_BOOL_FIELD(isStatic);
+	WRITE_BOOL_FIELD(noRewrite);
+	WRITE_NODE_FIELD(child);
 }
 
 static void
@@ -1287,8 +1364,30 @@ _outCopyMapEntry(StringInfo str, CopyMapEntry *node)
 
 	WRITE_NODE_FIELD(baseRelAttr);
 	WRITE_STRING_FIELD(provAttrName);
-	WRITE_NODE_FIELD(inVars);
-	WRITE_NODE_FIELD(outVars);
+	WRITE_NODE_FIELD(outAttrIncls);
+	WRITE_BOOL_FIELD(isStaticTrue);
+	WRITE_BOOL_FIELD(isStaticFalse);
+}
+
+static void
+_outAttrInclusions (StringInfo str, AttrInclusions *node)
+{
+	WRITE_NODE_TYPE("ATTRINCLUSIONS");
+
+	WRITE_NODE_FIELD(attr);
+	WRITE_NODE_FIELD(inclConds);
+	WRITE_BOOL_FIELD(isStatic);
+}
+
+static void
+_outInclusionCond (StringInfo str, InclusionCond *node)
+{
+	WRITE_NODE_TYPE("INCLUSIONCOND");
+
+	WRITE_ENUM_FIELD(inclType, InclCondType);
+	WRITE_NODE_FIELD(existsAttr);
+	WRITE_NODE_FIELD(eqVars);
+	WRITE_NODE_FIELD(cond);
 }
 
 static void
@@ -1394,12 +1493,16 @@ parseProvNodeString(char *token, int length)
 		retval = _readInequalityGraph();
 	else if (MATCH("INEQUALITYGRAPHNODE", 19))
 		retval = _readInequalityGraphNode();
-	else if (MATCH("COPYPROVINFO", 12))
-		retval = _readCopyProvInfo();
+//	else if (MATCH("COPYPROVINFO", 12))
+//		retval = _readCopyProvInfo();
 	else if (MATCH("COPYMAP", 7))
 		retval = _readCopyMap();
 	else if (MATCH("COPYMAPRELENTRY", 15))
 		retval = _readCopyMapRelEntry();
+	else if (MATCH("ATTRINCLUSIONS", 14))
+		retval = _readAttrInclusions();
+	else if (MATCH("INCLUSIONCOND", 13))
+		retval = _readInclusionCond();
 	else if (MATCH("COPYMAPENTRY", 12))
 		retval = _readCopyMapEntry();
 	else if (MATCH("TRANSPROVINFO", 13))
@@ -1552,16 +1655,16 @@ _readCopyMap(void)
 	READ_DONE();
 }
 
-static CopyProvInfo *
-_readCopyProvInfo(void)
-{
-	READ_LOCALS(CopyProvInfo);
-
-	READ_NODE_FIELD(inMap);
-	READ_NODE_FIELD(outMap);
-
-	READ_DONE();
-}
+//static CopyProvInfo *
+//_readCopyProvInfo(void)
+//{
+//	READ_LOCALS(CopyProvInfo);
+//
+//	READ_NODE_FIELD(inMap);
+//	READ_NODE_FIELD(outMap);
+//
+//	READ_DONE();
+//}
 
 static CopyMapRelEntry *
 _readCopyMapRelEntry(void)
@@ -1570,10 +1673,11 @@ _readCopyMapRelEntry(void)
 
 	READ_OID_FIELD(relation);
 	READ_INT_FIELD(refNum);
-	READ_NODE_FIELD(eqList);
 	READ_NODE_FIELD(attrEntries);
 	READ_INT_FIELD(rtindex);
-	READ_BOOL_FIELD(propagate);
+	READ_BOOL_FIELD(isStatic);
+	READ_BOOL_FIELD(noRewrite);
+	// READ_NODE_FIELD(child); do not read child
 
 	READ_DONE();
 }
@@ -1585,8 +1689,34 @@ _readCopyMapEntry(void)
 
 	READ_NODE_FIELD(baseRelAttr);
 	READ_STRING_FIELD(provAttrName);
-	READ_NODE_FIELD(inVars);
-	READ_NODE_FIELD(outVars);
+	READ_NODE_FIELD(outAttrIncls);
+	READ_BOOL_FIELD(isStaticTrue);
+	READ_BOOL_FIELD(isStaticFalse);
+
+	READ_DONE();
+}
+
+static AttrInclusions *
+_readAttrInclusions(void)
+{
+	READ_LOCALS(AttrInclusions);
+
+	READ_NODE_FIELD(attr);
+	READ_NODE_FIELD(inclConds);
+	READ_BOOL_FIELD(isStatic);
+
+	READ_DONE();
+}
+
+static InclusionCond *
+_readInclusionCond(void)
+{
+	READ_LOCALS(InclusionCond);
+
+	READ_ENUM_FIELD(inclType, InclCondType);
+	READ_NODE_FIELD(existsAttr);
+	READ_NODE_FIELD(eqVars);
+	READ_NODE_FIELD(cond);
 
 	READ_DONE();
 }
@@ -1684,14 +1814,20 @@ void *copyProvNode (void *from)
 		case T_CopyMap:
 			retval = _copyCopyMap(from);
 			break;
-		case T_CopyProvInfo:
-			retval = _copyCopyProvInfo(from);
-			break;
+//		case T_CopyProvInfo:
+//			retval = _copyCopyProvInfo(from);
+//			break;
 		case T_CopyMapRelEntry:
 			retval = _copyCopyMapRelEntry(from);
 			break;
 		case T_CopyMapEntry:
 			retval = _copyCopyMapEntry(from);
+			break;
+		case T_AttrInclusions:
+			retval = _copyAttrInclusions(from);
+			break;
+		case T_InclusionCond:
+			retval = _copyInclusionCond(from);
 			break;
 		case T_TransProvInfo:
 			retval = _copyTransProvInfo(from);
@@ -1944,16 +2080,16 @@ _copyCopyMap(CopyMap *from)
 	return newnode;
 }
 
-static CopyProvInfo *
-_copyCopyProvInfo(CopyProvInfo *from)
-{
-	CopyProvInfo *newnode = makeNode(CopyProvInfo);
-
-	COPY_NODE_FIELD(inMap);
-	COPY_NODE_FIELD(outMap);
-
-	return newnode;
-}
+//static CopyProvInfo *
+//_copyCopyProvInfo(CopyProvInfo *from)
+//{
+//	CopyProvInfo *newnode = makeNode(CopyProvInfo);
+//
+//	COPY_NODE_FIELD(inMap);
+//	COPY_NODE_FIELD(outMap);
+//
+//	return newnode;
+//}
 
 static CopyMapRelEntry *
 _copyCopyMapRelEntry(CopyMapRelEntry *from)
@@ -1962,10 +2098,13 @@ _copyCopyMapRelEntry(CopyMapRelEntry *from)
 
 	COPY_SCALAR_FIELD(relation);
 	COPY_SCALAR_FIELD(refNum);
-	COPY_NODE_FIELD(eqList);
 	COPY_NODE_FIELD(attrEntries);
 	COPY_SCALAR_FIELD(rtindex);
-	COPY_SCALAR_FIELD(propagate);
+	COPY_SCALAR_FIELD(isStatic);
+	COPY_SCALAR_FIELD(noRewrite);
+
+	// do not copy child TODO reconstruction
+	newnode->child = NULL;
 
 	return newnode;
 }
@@ -1977,8 +2116,34 @@ _copyCopyMapEntry(CopyMapEntry *from)
 
 	COPY_NODE_FIELD(baseRelAttr);
 	COPY_STRING_FIELD(provAttrName);
-	COPY_NODE_FIELD(inVars);
-	COPY_NODE_FIELD(outVars);
+	COPY_NODE_FIELD(outAttrIncls);
+	COPY_SCALAR_FIELD(isStaticTrue);
+	COPY_SCALAR_FIELD(isStaticFalse);
+
+	return newnode;
+}
+
+static AttrInclusions *
+_copyAttrInclusions(AttrInclusions *from)
+{
+	AttrInclusions *newnode = makeNode(AttrInclusions);
+
+	COPY_NODE_FIELD(attr);
+	COPY_NODE_FIELD(inclConds);
+	COPY_SCALAR_FIELD(isStatic);
+
+	return newnode;
+}
+
+static InclusionCond *
+_copyInclusionCond(InclusionCond *from)
+{
+	InclusionCond *newnode = makeNode(InclusionCond);
+
+	COPY_SCALAR_FIELD(inclType);
+	COPY_NODE_FIELD(existsAttr);
+	COPY_NODE_FIELD(eqVars);
+	COPY_NODE_FIELD(cond);
 
 	return newnode;
 }

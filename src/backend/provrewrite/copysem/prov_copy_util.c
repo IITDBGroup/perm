@@ -19,6 +19,7 @@
 #include "nodes/makefuncs.h"
 #include "parser/parsetree.h"
 #include "parser/parse_expr.h"
+#include "optimizer/clauses.h"
 
 #include "provrewrite/prov_util.h"
 #include "provrewrite/provlog.h"
@@ -28,13 +29,135 @@
 #include "provrewrite/prov_nodes.h"
 #include "provrewrite/provstack.h"
 
-
+static List *getRTindicesForJoin (Node *joinTreeNode);
 static void addProvAttrFromStack (Query *query, Index rtindex, List **pList,
 		List **subPstack);
 static void addDummyProvenanceAttributesForRTE (Query *query, Index rtindex,
 		List **pList);
 static void addDummyProvenanceAttrsForBaseRel (CopyMapRelEntry *rel,
 		Query *query, List **pList);
+
+
+/*
+ * Replace all Var nodes in a condition with base RTE vars. This means all
+ * references to join Vars are replaced by the base RTE var they represent.
+ */
+
+Node *
+conditionOnRteVarsMutator (Node *node, Query *context)
+{
+	if (node == NULL)
+		return NULL;
+
+	if (IsA(node, Var))
+	{
+		Var *in;
+
+		in = (Var *) node;
+
+		return copyObject(resolveToRteVar(in, context));
+	}
+
+	return expression_tree_mutator(node, conditionOnRteVarsMutator,
+			(void *) context);
+}
+
+/*
+ * Resolve the join alias jars to the RTE vars they are derived from.
+ */
+
+List *
+getRteVarsForJoin (Query *query, JoinExpr *join)
+{
+	List *result;
+	ListCell *lc;
+	RangeTblEntry *rte;
+	Var *in;
+
+	rte = rt_fetch(join->rtindex, query->rtable);
+
+	foreach(lc, rte->joinaliasvars)
+	{
+		in = (Var *) lfirst(lc);
+		result = lappend(result, copyObject(resolveToRteVar(in, query)));
+	}
+
+	return result;
+}
+
+/*
+ *
+ */
+
+List *
+getCopyRelsForRtindex (Query *query, Index rtindex)
+{
+	CopyMap *map = GET_COPY_MAP(query);
+	List *result = NIL;
+	ListCell *lc;
+	CopyMapRelEntry *rel;
+	RangeTblEntry *rte;
+
+	// get RTE
+	rte = rt_fetch(rtindex, query->rtable);
+
+	/* if it's a join get the indicies of the base rte accessed by the join and
+	 * try for each CopyMapRelEntry if it belongs to one of these indices. */
+	if (rte->rtekind == RTE_JOIN)
+	{
+		List *rtIndices;
+		ListCell *innerLc;
+		RangeTblEntry *baseRte;
+
+		rtIndices = getRTindicesForJoin(getJoinTreeNode(query, rtindex));
+
+		foreach(lc, map->entries)
+		{
+			rel = (CopyMapRelEntry *) lfirst(lc);
+
+			foreach(innerLc, rtIndices)
+			{
+				if (rel->rtindex == lfirst_int(innerLc))
+				{
+					result = lappend(result, rel);
+					break;
+				}
+			}
+		}
+	}
+
+	foreach(lc, map->entries)
+	{
+		rel = (CopyMapRelEntry *) lfirst(lc);
+
+		if (rel->rtindex == rtindex)
+			result = lappend(result, rel);
+	}
+
+	return result;
+}
+
+/*
+ * Get the range table indices for all range table entries accessed by a join.
+ */
+
+static List *
+getRTindicesForJoin (Node *joinTreeNode)
+{
+	if (IsA(joinTreeNode, JoinExpr))
+	{
+		JoinExpr *join = (JoinExpr *) joinTreeNode;
+
+		return list_concat(getRTindicesForJoin(join->larg),
+				getRTindicesForJoin(join->rarg));
+	}
+	else
+	{
+		RangeTblRef *rtRef = (RangeTblRef *) joinTreeNode;
+
+		return list_make1_int(rtRef->rtindex);
+	}
+}
 
 /*
  *
@@ -49,7 +172,7 @@ copyAddProvAttrsForSet (Query *query, List *subList, List *pList)
 	List *curPstack;
 	Index rtIndex;
 
-	map = GetInfoCopyMap(query);
+	map = GET_COPY_MAP(query);
 	curPstack = popListAndReverse (&pStack, list_length(subList));
 
 	foreach(lc, map->entries)
@@ -57,7 +180,7 @@ copyAddProvAttrsForSet (Query *query, List *subList, List *pList)
 		rel = (CopyMapRelEntry *) lfirst(lc);
 
 		/* is propagating? then we have to have an rte for it */
-		if (rel->propagate)
+		if (!rel->noRewrite)
 		{
 			rtIndex = rel->rtindex;
 
@@ -95,7 +218,7 @@ copyAddProvAttrForNonRewritten (Query *query)
 
 	targetList = query->targetList;
 
-	foreach(lc, GetInfoCopyMap(query)->entries)
+	foreach(lc, GET_COPY_MAP(query)->entries)
 	{
 		entry = (CopyMapRelEntry *) lfirst(lc);
 
@@ -149,7 +272,7 @@ copyAddProvAttrs (Query *query, List *subList, List *pList)
 
 		/* if current rte contains parts that are rewritten, then obtain
 		 * provenance attributes from this rte's subquery.*/
-		if (shouldRewriteRTEforMap(GetInfoCopyMap(query), curSubquery))
+		if (shouldRewriteRTEforMap(GET_COPY_MAP(query), curSubquery))
 			addProvAttrFromStack (query, curSubquery, &pList, &subPStack);
 		/* is a not rewritten RTE. Create dummy provenance attributes */
 		else
@@ -220,7 +343,7 @@ addDummyProvenanceAttributesForRTE (Query *query, Index rtindex, List **pList)
 	ListCell *lc;
 	CopyMapRelEntry *entry;
 
-	entries = getAllEntriesForRTE(GetInfoCopyMap(query), rtindex);
+	entries = getAllEntriesForRTE(GET_COPY_MAP(query), rtindex);
 
 	foreach(lc, entries)
 	{

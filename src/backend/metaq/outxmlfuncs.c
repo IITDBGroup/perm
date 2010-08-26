@@ -2583,16 +2583,16 @@ _outCopyMap (StringInfo str, CopyMap *node, int depth)
 	WRITE_NODE_END("COPYMAP");
 }
 
-static void
-_outCopyProvInfo(StringInfo str, CopyProvInfo *node, int depth)
-{
-	WRITE_NODE_START("COPYPROVINFO");
-
-	WRITE_NODE_ELEM(inMap);
-	WRITE_NODE_ELEM(outMap);
-
-	WRITE_NODE_END("COPYPROVINFO");
-}
+//static void
+//_outCopyProvInfo(StringInfo str, CopyProvInfo *node, int depth)
+//{
+//	WRITE_NODE_START("COPYPROVINFO");
+//
+//	WRITE_NODE_ELEM(inMap);
+//	WRITE_NODE_ELEM(outMap);
+//
+//	WRITE_NODE_END("COPYPROVINFO");
+//}
 
 
 
@@ -2603,10 +2603,11 @@ _outCopyMapRelEntry(StringInfo str, CopyMapRelEntry *node, int depth)
 
 	WRITE_OID_ELEM(relation);
 	WRITE_INT_ELEM(refNum);
-	WRITE_NODE_ELEM(eqList);
 	WRITE_NODE_ELEM(attrEntries);
 	WRITE_INT_ELEM(rtindex);
-	WRITE_BOOL_ELEM(propagate);
+	WRITE_BOOL_ELEM(isStatic);
+	WRITE_BOOL_ELEM(noRewrite);
+	WRITE_NODE_ELEM(child);
 
 	WRITE_NODE_END("COPYMAPRELENTRY");
 }
@@ -2618,10 +2619,35 @@ _outCopyMapEntry(StringInfo str, CopyMapEntry *node, int depth)
 
 	WRITE_NODE_ELEM(baseRelAttr);
 	WRITE_STRING_ELEM(provAttrName);
-	WRITE_NODE_ELEM(inVars);
-	WRITE_NODE_ELEM(outVars);
+	WRITE_NODE_ELEM(outAttrIncls);
+	WRITE_BOOL_ELEM(isStaticTrue);
+	WRITE_BOOL_ELEM(isStaticFalse);
 
 	WRITE_NODE_END("COPYMAPENTRY");
+}
+
+static void
+_outAttrInclusions(StringInfo str, AttrInclusions *node, int depth)
+{
+	WRITE_NODE_START("ATTRINCLUSIONS");
+
+	WRITE_NODE_ELEM(attr);
+	WRITE_NODE_ELEM(inclConds);
+	WRITE_BOOL_ELEM(isStatic);
+
+	WRITE_NODE_END("ATTRINCLUSIONS");
+}
+
+static void
+_outInclusionCond(StringInfo str, InclusionCond *node, int depth)
+{
+	WRITE_NODE_START("INCLUSIONCOND");
+
+	WRITE_NODE_ELEM(existsAttr);
+	WRITE_NODE_ELEM(eqVar);
+	WRITE_NODE_ELEM(cond);
+
+	WRITE_NODE_END("INCLUSIONCOND");
 }
 
 static void
@@ -3068,14 +3094,20 @@ _outNodeXml(StringInfo str, void *obj, int depth)
 			case T_CopyMap:
 				_outCopyMap(str, obj, depth);
 				break;
-			case T_CopyProvInfo:
-				_outCopyProvInfo(str, obj, depth);
-				break;
+//			case T_CopyProvInfo:
+//				_outCopyProvInfo(str, obj, depth);
+//				break;
 			case T_CopyMapRelEntry:
 				_outCopyMapRelEntry(str, obj, depth);
 				break;
 			case T_CopyMapEntry:
 				_outCopyMapEntry(str, obj, depth);
+				break;
+			case T_AttrInclusions:
+				_outAttrInclusions(str, obj, depth);
+				break;
+			case T_InclusionCond:
+				_outInclusionCond(str, obj, depth);
 				break;
 			default:
 

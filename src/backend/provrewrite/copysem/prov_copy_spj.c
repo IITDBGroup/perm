@@ -115,7 +115,7 @@ rewriteRTEsCopy (Query *query, List **subList, Index maxRtindex)
 				;
 			/* rte is base relation */
 			else if (rte->rtekind == RTE_RELATION || rte->isProvBase)
-				rewriteCopyBaseRel (rte, rtindex, GetInfoCopyMap(query));
+				rewriteCopyBaseRel (rte, rtindex, GET_COPY_MAP(query));
 
 			/* rte is subquery */
 			else if (rte->rtekind == RTE_SUBQUERY)
@@ -142,7 +142,7 @@ rteShouldRewrite (Query *query, Index rtindex)
 {
 	CopyMap *map;
 
-	map = GetInfoCopyMap(query);
+	map = GET_COPY_MAP(query);
 
 	if(shouldRewriteRTEforMap(map, rtindex))
 		return true;

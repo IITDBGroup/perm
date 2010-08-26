@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * prov_copy_equi.c
- *	  PERM C
+ *	  PERM C -
  *
  * Portions Copyright (c) 2008 Boris Glavic
  *
