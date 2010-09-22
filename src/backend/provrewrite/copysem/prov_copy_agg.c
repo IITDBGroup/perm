@@ -86,7 +86,7 @@ rewriteCopyAggregateQuery (Query *query) //TODO adapt rewritten non-agg copy map
 
 	attrMap = rewriteAggrSubqueryForRewrite (newRewriteQuery, true);
 
-	createWithoutAggCopyMap(newRewriteQuery, attrMap);
+	createWithoutAggCopyMap(newRewriteQuery, attrMap);//TODO new adaptation of copy map
 
 	/* create new top query node and adapt copy map of aggregation for this
 	 * node */

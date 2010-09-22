@@ -55,6 +55,7 @@
 #include "provrewrite/prov_copy_map.h"
 #include "provrewrite/prov_copy_agg.h"
 #include "provrewrite/prov_copy_set.h"
+#include "provrewrite/prov_copy_inclattr.h"
 #include "provrewrite/prov_trans_main.h"
 #include "provrewrite/prov_trans_bitset.h"
 
@@ -195,6 +196,7 @@ traverseQueryTree (RangeTblEntry *rteQuery, Query *query, char *cursorName)
 			case CONTR_COPY_COMPLETE_NONTRANSITIVE:
 				generateCopyMaps(query);
 				query = rewriteQueryNodeCopy (query);
+				addTopCopyInclExpr(query);
 			break;
 			case CONTR_TRANS_SET:
 			case CONTR_TRANS_SQL:

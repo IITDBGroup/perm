@@ -47,10 +47,10 @@ typedef struct EquiGraphNode {
 } EquiGraphNode;
 
 // macros
-#define MAKE_EQUINODE(nodeholder,var,graph) \
+#define MAKE_EQUINODE(nodeholder,thevar,graph) \
 	do { \
 		nodeholder = (EquiGraphNode *) palloc(sizeof(EquiGraphNode)); \
-		nodeholder->var = copyObject(var); \
+		nodeholder->nodeVar = copyObject(thevar); \
 		nodeholder->sEdges = NIL; \
 		nodeholder->nsEdges = NIL; \
 		nodeholder->pos = 0; \
@@ -74,8 +74,8 @@ static void analyzeAttrPaths (CopyMapEntry *attr, CopyMapRelEntry *relEntry);
 static StaticType getInclusionStaticType (Var *inclVar, Var *baseVar,
 		CopyMapRelEntry *rel);
 
-static void handleSetOps (Query *query, List *subMaps);
-static CopyMap *handleSetOp (Query *query, List *subMaps, Node *setOp);
+//static void handleSetOps (Query *query);
+static void handleSetOp (Query *query, Node *setOp);
 static void generateAggCopyMap (Query *query, Index rtindex);
 static void handleProjectionCopyMap (Query *query, Index rtindex);
 static void mapChildVarsToTargetEntries (Query *query, Index rtindex,
@@ -90,22 +90,19 @@ static void analyzeConditionForCopy (Query *query, Node *condition,
 static void addEquiGraphEdge (List *eq, List **equiGraph);
 static bool hasEdge (EquiGraphNode *left, EquiGraphNode *right, bool onlyS);
 static void addCondForEquiGraph(List *equiGraph, List *rels);
+static void addEqualityForNonStaticPaths (EquiGraphNode *start,
+		EquiGraphNode *end, EquiGraphNode *cur, bool *haveSeen,
+		AttrInclusions *attr, List *eqPath, bool edgeIsStatic);
+static int getNodePos (List *graph, Var *var);
 static void searchStaticPath (EquiGraphNode *root, EquiGraphNode *node,
 		bool *hasStatic, int numNodes);
 static int compareEquiNode (void *left, void *right);
-static bool findVarEqualitiesWalker (Node *node, List **context);
+static bool findVarEqualitiesWalker (Node *node, VarEqualitiesContext *context);
 static bool addEqualityCondsForVarsWalker (CopyMapRelEntry *entry,
 		CopyMapEntry *attr, void *context);
 static bool hasEqualityForVar (InclusionCond *cond, void *context);
 static bool hasExistsForVar (InclusionCond *cond, void *context);
-static void setPropagateFlags (Query *query);
-static void setPropagateFlagsForQueryNode (Query *query);
 
-static CopyMap *getCopyMapForRtindex (List *maps, Index rtindex);
-static void swtichInAndOutVars (CopyMap *map);
-static void mapJoinAttrs (CopyMapEntry *attr, List *joinVars, Index rtindex);
-static CopyMap *mergeMaps (CopyMap *left, CopyMap *right);
-static void emptyMap (CopyMap *map);
 static void setCopyMapRTindices (CopyMap *map, Index rtindex);
 static CopyMapRelEntry * getRelEntry (CopyMap *map, Oid rel, int refNum);
 
@@ -173,14 +170,12 @@ generateCopyMapForQueryNode (Query *query, ContributionType contr, Index rtindex
 	ListCell *lc;
 	ListCell *innerLc;
 	RangeTblEntry *rte;
-	List *subMaps;
 	CopyMap *currentMap;
 	CopyMap *newMap;
 	CopyMapRelEntry *newRel;
 	CopyMapRelEntry *curRel;
 	int i;
 
-	subMaps = NIL;
 	//TODO add empty maps for sublinks at first
 
 	// generate empty copy map for query
@@ -200,11 +195,9 @@ generateCopyMapForQueryNode (Query *query, ContributionType contr, Index rtindex
 		case RTE_SUBQUERY:
 			currentMap = generateCopyMapForQueryNode(rte->subquery, contr, i + 1);
 			setCopyMapRTindices (currentMap, i + 1);
-			subMaps = lappend(subMaps, currentMap);
 			break;
 		case RTE_RELATION:
 			currentMap = generateBaseRelCopyMap(rte, i + 1);
-			subMaps = lappend(subMaps, currentMap);
 			break;
 		default:
 			//TODO
@@ -224,10 +217,10 @@ generateCopyMapForQueryNode (Query *query, ContributionType contr, Index rtindex
 		}
  	}
 
-	/* create the map for the query based on the submaps */
-	/* set operation query */
+	/* create the map for the query node based on the set operations applied
+	 * in the query node*/
 	if (query->setOperations)
-		handleSetOps(query, subMaps);
+		handleSetOp(query, query->setOperations);
 	/* SPJ or ASPJ */
 	else
 	{
@@ -240,110 +233,46 @@ generateCopyMapForQueryNode (Query *query, ContributionType contr, Index rtindex
 			handleProjectionCopyMap(query, rtindex);
 	}
 
-	/* link sub CopyRelMaps */
-
 	return GET_COPY_MAP(query);
 }
 
-
-
 ///*
-// *
+// * Create the CopyMap for an set operation query from the CopyMaps of its range table entries.
 // */
 //
-//static CopyMap *
-//generateCopyMapCDCForQuery (Query *query, Index rtindex)
+//static void
+//handleSetOps (Query *query)
 //{
-//	ListCell *lc;
-//	RangeTblEntry *rte;
-//	List *subMaps;
-//	CopyMap *currentMap;
-//	int i;
+////	ListCell *lc, *innerLc, *attrLc;
+////	CopyMapRelEntry *relEntry;
+////	CopyMapEntry *attr;
+////	Var *var;
 //
-//	//TODO add empty maps for sublinks at first
+//	handleSetOp (query, query->setOperations);
 //
-//	subMaps = NIL;
 //
-//	/* call us self to generate Copy maps of subqueries */
-//	foreachi(lc, i, query->rtable)
-//	{
-//		rte = (RangeTblEntry *) lfirst(lc);
+////	foreach(lc, map->entries)
+////	{
+////		relEntry = (CopyMapRelEntry *) lfirst(lc);
+////
+////		foreach(innerLc, relEntry->attrEntries)
+////		{
+////			attr = (CopyMapEntry *) lfirst(innerLc);
+////
+////			attr->inVars = copyObject(attr->outVars);
+////
+////			foreach(attrLc, attr->outVars)
+////			{
+////				var = (Var *) lfirst(attrLc);
+////
+////				var->varno = 1;//CHECK OK?
+////			}
+////
+////		}
+////	}
 //
-//		switch(rte->rtekind)
-//		{
-//		case RTE_SUBQUERY:
-//			currentMap = generateCopyMapCDCForQuery(rte->subquery, i + 1);
-//			setCopyMapRTindices (currentMap, i + 1);
-//			subMaps = lappend(subMaps, currentMap);
-//			break;
-//		case RTE_RELATION:
-//			currentMap = generateBaseRelCopyMap(rte, i + 1);
-//			subMaps = lappend(subMaps, currentMap);
-//			break;
-//		default:
-//			//TODO
-//			break;
-//		}
-// 	}
-//
-//	/* set operation query */
-//	if (query->setOperations)
-//		handleSetOps(query, subMaps);
-//
-//	/* SPJ or ASPJ */
-//	else
-//	{
-//		Provinfo(query)->copyInfo = (Node *) handleJoins(query, subMaps);
-//
-//		/* use these to generate copy map for the current query */
-//		if (query->hasAggs)
-//			generateAggCopyMap(query, rtindex);
-//		else
-//			handleProjectionCopyMap(query, rtindex);
-//	}
-//
-//	GET_COPY_MAP(query)->rtindex = rtindex;
-//
-//	return copyObject(GET_COPY_MAP(query));
+//	//Provinfo(query)->copyInfo = (Node *) map;
 //}
-
-/*
- * Create the CopyMap for an set operation query from the CopyMaps of its range table entries.
- */
-
-static void
-handleSetOps (Query *query, List *subMaps)
-{
-//	CopyMap *map;
-//	ListCell *lc, *innerLc, *attrLc;
-//	CopyMapRelEntry *relEntry;
-//	CopyMapEntry *attr;
-//	Var *var;
-
-	//map = handleSetOp (query, subMaps, query->setOperations);
-
-//	foreach(lc, map->entries)
-//	{
-//		relEntry = (CopyMapRelEntry *) lfirst(lc);
-//
-//		foreach(innerLc, relEntry->attrEntries)
-//		{
-//			attr = (CopyMapEntry *) lfirst(innerLc);
-//
-//			attr->inVars = copyObject(attr->outVars);
-//
-//			foreach(attrLc, attr->outVars)
-//			{
-//				var = (Var *) lfirst(attrLc);
-//
-//				var->varno = 1;//CHECK OK?
-//			}
-//
-//		}
-//	}
-
-	//Provinfo(query)->copyInfo = (Node *) map;
-}
 
 
 /*
@@ -351,44 +280,80 @@ handleSetOps (Query *query, List *subMaps)
  * right input.
  */
 
-static CopyMap *
-handleSetOp (Query *query, List *subMaps, Node *setOp)
+static void
+handleSetOp (Query *query, Node *setOp)
 {
-//	CopyMap *rMap;
-//	CopyMap *lMap;
-//	SetOperationStmt *setOper;
-//	RangeTblRef *rtRef;
+	List *rels;
+	CopyMapRelEntry *rel;
+	CopyMap *map = GET_COPY_MAP(query);
+	SetOperationStmt *setOper;
 
-//	if(IsA(setOp, SetOperationStmt))
-//	{
-//		setOper = (SetOperationStmt *) setOp;
-//
-//		/* get maps for children */
-//		lMap = handleSetOp(query, subMaps, setOper->larg);
-//		rMap = handleSetOp(query, subMaps, setOper->rarg);
-//
-//		/* merge child maps */
-//		switch(setOper->op)
-//		{
-//		case SETOP_EXCEPT:
-//			emptyMap(rMap);
-//		case SETOP_UNION:
-//		case SETOP_INTERSECT:
-//			return mergeMaps(lMap,rMap);
-//		default:
-//			return NULL; //TODO error
-//		}
-//
-//	}
-//	else
-//	{
-//		rtRef = (RangeTblRef *) setOp;
-//		lMap = (CopyMap *) getCopyMapForRtindex(subMaps, rtRef->rtindex);
-//
-//		return lMap;
-//	}
+	if(IsA(setOp, SetOperationStmt))
+	{
+		setOper = (SetOperationStmt *) setOp;
 
-	return NULL;
+		switch(setOper->op)
+		{
+		case SETOP_EXCEPT:
+			handleSetOp(query, setOper->larg);
+			break;
+		case SETOP_UNION:
+		case SETOP_INTERSECT:
+			handleSetOp(query, setOper->larg);
+			handleSetOp(query, setOper->rarg);
+			break;
+		default:
+			//TODO error
+			break;
+		}
+	}
+	else
+	{
+		RangeTblRef *rtRef;
+		ListCell *newLc, *childLc, *lc;
+		ListCell *outAttrLc;
+		CopyMapRelEntry *relChild;
+		CopyMapEntry *attrEntry;
+		CopyMapEntry *childAttrEntry;
+		AttrInclusions *newIncl;
+		AttrInclusions *childIncl;
+		InclusionCond *newCond;
+		Var *childVar;
+
+		rtRef = (RangeTblRef *) setOp;
+		rels = getAllEntriesForRTE(map, rtRef->rtindex);
+
+		foreach(lc, rels)
+		{
+			rel = (CopyMapRelEntry *) lfirst(lc);
+			relChild = rel->child;
+
+			/*for each CopyMapRelEntry generate basic exists include
+			 * conditions */
+			forboth(newLc, rel->attrEntries, childLc, relChild->attrEntries)
+			{
+				attrEntry = (CopyMapEntry *) lfirst(newLc);
+				childAttrEntry = (CopyMapEntry *) lfirst(childLc);
+
+				/* add all attributes inclusions from the child CopyMapEntry
+				 * and for each add a exists condition for the child attribute.
+				 */
+				foreach(outAttrLc, childAttrEntry->outAttrIncls)
+				{
+					childIncl = (AttrInclusions *) lfirst(outAttrLc);
+					COPY_BASIC_COPYAINLC(newIncl, childIncl);
+					childVar = (Var *) copyObject(newIncl->attr);
+					childVar->varno = rel->rtindex;
+					MAKE_EXISTS_INCL(newCond, (Node *) childVar);
+					newIncl->inclConds = list_make1(newCond);
+					newIncl->attr->varno = 1;
+
+					attrEntry->outAttrIncls = lappend (attrEntry->outAttrIncls,
+							newIncl);
+				}
+			}
+		}
+	}
 }
 
 /*
@@ -677,7 +642,6 @@ handleJoins (Query *query)
 {
 	ListCell *lc;
 	Node *joinItem;
-	List *joinMaps = NIL;
 	CopyMap *map;
 	List *equiGraph = NIL;
 
@@ -771,12 +735,12 @@ handleJoinTreeItem (Query *query, Node *joinItem, List **equiGraph)
 }
 
 /*
- * Analyses a join or where condition to find equality comparisons that imply
+ * Analyzes a join or where condition to find equality comparisons that imply
  * transitive copy between two attributes. E.g., in
  *
  * 			SELECT a FROM R WHERE a = b;
  *
- * the values of attribute b are implicitely copied to attribute a.
+ * the values of attribute b are implicitly copied to attribute a.
  */
 
 static void analyzeConditionForCopy(Query *query, Node *condition,
@@ -786,7 +750,6 @@ static void analyzeConditionForCopy(Query *query, Node *condition,
 	List *eqConds = NIL;
 	List *equal;
 	ListCell *lc;
-	Var *left, *right;
 	VarEqualitiesContext *context;
 
 	/* replace join vars with base RTE vars */
@@ -796,6 +759,7 @@ static void analyzeConditionForCopy(Query *query, Node *condition,
 	context = (VarEqualitiesContext *) palloc(sizeof(VarEqualitiesContext));
 	context->result = &eqConds;
 	context->root = condition;
+	context->outerJoin = false; //TODO check
 
 	findVarEqualitiesWalker(baseCondition, context);
 
@@ -806,8 +770,6 @@ static void analyzeConditionForCopy(Query *query, Node *condition,
 		equal = (List *) lfirst(lc);
 
 		addEquiGraphEdge(equal, equiGraph);
-//		copyMapWalker(relEntries, NULL, (void *) equal, NULL, NULL,
-//				addEqualityCondsForVarsWalker, NULL);
 	}
 }
 
@@ -830,9 +792,9 @@ addEquiGraphEdge (List *eq, List **equiGraph)
 	foreach(lc, *equiGraph)
 	{
 		cur = (EquiGraphNode *) lfirst(lc);
-		if (equal(leftNode, cur->var))
+		if (equal(leftNode, cur->nodeVar))
 			leftNode = cur;
-		else if (equal(rightNode, cur->var))
+		else if (equal(rightNode, cur->nodeVar))
 			rightNode = cur;
 	}
 
@@ -914,13 +876,13 @@ static void
 addCondForEquiGraph (List *equiGraph, List *rels)
 {
 	int numNodes = list_length(equiGraph);
-	bool *hasStatic = palloc0(numNodes * numNodes * sizeof(bool));
-	bool *haveSeen = NULL;
-	int i;
+	bool *hasStatic = (bool *) palloc0(numNodes * numNodes * sizeof(bool));
+	bool *haveSeen = (bool *) palloc0(numNodes * sizeof(bool));
+	int i, j;
 	EquiGraphNode *cur;
 	CopyMapRelEntry *rel;
 	CopyMapEntry *attr;
-	ListCell *lc, *innerLc;
+	ListCell *lc, *innerLc, *attLc;
 	List *newAttrIncls;
 	AttrInclusions *attrIncl;
 	AttrInclusions *newAttrIncl;
@@ -965,12 +927,14 @@ addCondForEquiGraph (List *equiGraph, List *rels)
 					continue;
 
 				// add attr includes for static reachable nodes
-				for (j = 0; j < (nodePos + 1) * nodeNum ; j++)
+				for (j = 0; j < numNodes ; j++)
 				{
+					/* has a static connection to the node, add an attr inclusion
+					 * with an EXISTS */
 					if (HAS_STATIC_POS(nodePos,j) && j != nodePos)
 					{
-						Var *toVar = (Var *) copyObject((EquiGraphNode *)
-								list_nth(equiGraph, j))->nodeVar;
+						Var *toVar = (Var *) copyObject(((EquiGraphNode *)
+								list_nth(equiGraph, j))->nodeVar);
 						newAttrIncl = makeAttrInclusions();
 						newAttrIncl->attr = toVar;
 						MAKE_EXISTS_INCL(inclCond, copyObject(attrIncl->attr));
@@ -978,14 +942,89 @@ addCondForEquiGraph (List *equiGraph, List *rels)
 
 						newAttrIncls = lappend(newAttrIncls, newAttrIncl);
 					}
-				}
+					/* has no static connection, add equality cond for all non
+					 * static paths between the two nodes. */
+					else if (j != nodePos)
+					{
+						MemSetAligned(haveSeen, 0, numNodes * sizeof(bool));
+						newAttrIncl = makeAttrInclusions();
+						newAttrIncl->attr = (Var *) copyObject(((EquiGraphNode *)
+								list_nth(equiGraph, j))->nodeVar);
+						addEqualityForNonStaticPaths(
+								(EquiGraphNode *) list_nth(equiGraph, nodePos),
+								(EquiGraphNode *) list_nth(equiGraph, j),
+								(EquiGraphNode *) list_nth(equiGraph, nodePos),
+								haveSeen, newAttrIncl, NIL, true);
 
-				/* add equality incl conds for paths to non static reachable
-				 * nodes */
+						newAttrIncls = lappend(newAttrIncls, newAttrIncl);
+					}
+				}
 			}
 
 			attr->outAttrIncls = list_concat(attr->outAttrIncls, newAttrIncls);
 		}
+	}
+}
+
+/*
+ *
+ */
+
+static void
+addEqualityForNonStaticPaths (EquiGraphNode *start, EquiGraphNode *end,
+		EquiGraphNode *cur, bool *haveSeen, AttrInclusions *attr, List *eqPath,
+		bool edgeIsStatic)
+{
+	ListCell *oldTail = NULL;
+	ListCell *lc;
+	InclusionCond *newCond;
+	EquiGraphNode *newNode;
+
+	// have already seen this node, we have gone through a cycle
+	if (haveSeen[cur->pos])
+		return;
+	haveSeen[cur->pos] = true;
+
+	// add to eqPath
+	if (cur != start && !edgeIsStatic)
+	{
+		if (list_length(eqPath) > 0)
+			oldTail = eqPath->tail;
+		eqPath = lappend(eqPath, cur->nodeVar);
+	}
+
+	// is the end node? So we have a path. Make an inclusion condition for it.
+	if (cur == end)
+	{
+		MAKE_EQUAL_INCL(newCond, copyObject(start->nodeVar), copyObject(eqPath));
+		attr->inclConds = lappend(attr->inclConds, newCond);
+		if (cur != start && !edgeIsStatic)
+			list_delete_cell(eqPath, oldTail, eqPath->tail);
+		haveSeen[cur->pos] = false;
+
+		return;
+	}
+
+	// process children
+	foreach(lc, cur->sEdges)
+	{
+		newNode = (EquiGraphNode *) lfirst(lc);
+		addEqualityForNonStaticPaths(start, end, newNode, haveSeen, attr,
+				eqPath, true);
+	}
+
+	foreach(lc, cur->nsEdges)
+	{
+		newNode = (EquiGraphNode *) lfirst(lc);
+		addEqualityForNonStaticPaths(start, end, newNode, haveSeen, attr,
+				eqPath, false);
+	}
+
+	// remove cur from eqPath and set haveSeen to false
+	if (cur != start && !edgeIsStatic)
+	{
+		list_delete_cell(eqPath, eqPath->tail, oldTail);
+		haveSeen[cur->pos] = false;
 	}
 }
 
@@ -1005,9 +1044,7 @@ getNodePos (List *graph, Var *var)
 
 		if (node->nodeVar->varno == var->varno
 				&& node->nodeVar->varattno == var->varattno)
-		{
 			return node->pos;
-		}
 	}
 
 	return -1;
@@ -1030,7 +1067,7 @@ searchStaticPath (EquiGraphNode *root, EquiGraphNode *node, bool *hasStatic,
 	{
 		cur = (EquiGraphNode *) lfirst(lc);
 
-		if (!HASSTATIC(root, cur))
+		if (!HAS_STATIC(root, cur))
 		{
 			MARK_STATIC_PATH(root, cur);
 			searchStaticPath (root, cur, hasStatic, numNodes);
@@ -1083,10 +1120,10 @@ findVarEqualitiesWalker (Node *node, VarEqualitiesContext *context)
 		right = getVarFromTeIfSimple(lsecond(op->args));
 
 		// check that equality compares Vars (possibly casted)
-		if (left == NULL && right == NULL)
+		if (left == NULL || right == NULL)
 			return false;
 
-		if (!context->outerJoin && isInAndOrTop(node, context->root))
+		if (!context->outerJoin && exprInAndOrTop(node, context->root))
 			useEqual = makeInteger(0L);
 		else
 			useEqual = makeInteger(1L);
@@ -1108,47 +1145,47 @@ static bool
 addEqualityCondsForVarsWalker (CopyMapRelEntry *entry, CopyMapEntry *attr,
 		 void *context)
 {
-	ListCell *lc;
-	Var *left  = (Var *) linitial((List *) context);
-	Var *right = (Var *) lsecond((List *) context);
-	Value *useEqual = (Value *) lthird((List *) context);
-	AttrInclusions *attrIncl;
-	InclusionCond *cond;
-
-	// walk through all attribute inclusions and if either left or right is found
-	foreach(lc, attr->outAttrIncls)
-	{
-		attrIncl = (AttrInclusions *) lfirst(lc);
-		// is AttrInclusion for left?
-		if (equal(incl->attr, left))
-		{
-			if (intVal(useEqual) == 0)
-			{
-				if (!includionCondWalker(incl, hasExistsForVar, right))
-				{
-					MAKE_EQUAL_INCL
-				}
-			}
-			else
-			{
-			// if the equality condition for left and right does not exist, add it.
-				if (!inclusionCondWalker(incl, hasEqualityForVar, right))
-				{
-					MAKE_EQUAL_INCL(cond, (Node *) left, right);
-					incl->inclConds = lappend(incl->inclConds, cond);
-				}
-			}
-		}
-		if (equal(incl->attr, right))
-		{
-			// if the equality condition for left and right does not exist, add it.
-			if (!inclusionCondWalker(incl, hasEqualityForVar, left))
-			{
-				MAKE_EQUAL_INCL(cond, (Node *) right, left);
-				incl->inclConds = lappend(incl->inclConds, cond);
-			}
-		}
-	}
+//	ListCell *lc;
+//	Var *left  = (Var *) linitial((List *) context);
+//	Var *right = (Var *) lsecond((List *) context);
+//	Value *useEqual = (Value *) lthird((List *) context);
+//	AttrInclusions *attrIncl;
+//	InclusionCond *cond;
+//
+//	// walk through all attribute inclusions and if either left or right is found
+//	foreach(lc, attr->outAttrIncls)
+//	{
+//		attrIncl = (AttrInclusions *) lfirst(lc);
+//		// is AttrInclusion for left?
+//		if (equal(incl->attr, left))
+//		{
+//			if (intVal(useEqual) == 0)
+//			{
+//				if (!includionCondWalker(incl, hasExistsForVar, right))
+//				{
+//					//MAKE_EQUAL_INCL
+//				}
+//			}
+//			else
+//			{
+//			// if the equality condition for left and right does not exist, add it.
+//				if (!inclusionCondWalker(incl, hasEqualityForVar, right))
+//				{
+//					MAKE_ONEEQUAL_INCL(cond, (Node *) left, right);
+//					incl->inclConds = lappend(incl->inclConds, cond);
+//				}
+//			}
+//		}
+//		if (equal(incl->attr, right))
+//		{
+//			// if the equality condition for left and right does not exist, add it.
+//			if (!inclusionCondWalker(incl, hasEqualityForVar, left))
+//			{
+//				MAKE_ONEEQUAL_INCL(cond, (Node *) right, left);
+//				incl->inclConds = lappend(incl->inclConds, cond);
+//			}
+//		}
+//	}
 
 	return true;
 }
@@ -1160,7 +1197,7 @@ addEqualityCondsForVarsWalker (CopyMapRelEntry *entry, CopyMapEntry *attr,
 static bool
 hasEqualityForVar (InclusionCond *cond, void *context)
 {
-	if (equal(cond->eqVar, context))
+	if (equal(cond->eqVars, context))
 		return true;
 
 	return false;
@@ -1179,197 +1216,52 @@ hasExistsForVar (InclusionCond *cond, void *context)
 	return false;
 }
 
-/*
- * From a list of CopyMaps return the one that represents RTE with index "rtindex".
- */
-
-static CopyMap *
-getCopyMapForRtindex (List *maps, Index rtindex)
-{
-	CopyMap *result;
-	ListCell *lc;
-
-	foreach(lc, maps)
-	{
-		result = (CopyMap *) lfirst(lc);
-
-		if (result->rtindex == rtindex)
-			return result;
-	}
-
-	return NULL;
-}
-
-/*
- * Copies the outVars list to the inVars list and deletes the outVars list for each CopyMapRelEntry
- * of a CopyMap.
- */
-
-static void
-swtichInAndOutVars (CopyMap *map)
-{
-//	ListCell *lc, *innerLc;
-//	CopyMapEntry *attrEntry;
-//	CopyMapRelEntry *entry;
+///*
+// * From a list of CopyMaps return the one that represents RTE with index "rtindex".
+// */
 //
-//	foreach(lc, map->entries)
-//	{
-//		entry = (CopyMapRelEntry *) lfirst(lc);
-//
-//		/* generate the new Var mapping for each attr */
-//		foreach(innerLc, entry->attrEntries)
-//		{
-//			attrEntry = (CopyMapEntry *) lfirst(innerLc);
-//			attrEntry->inVars = attrEntry->outVars;
-//			attrEntry->outVars = NIL;
-//		}
-//	}
-}
-
-/*
- * Maps each var of a copy map attr entry used in a join to the output var of the join.
- */
-
-static void
-mapJoinAttrs (CopyMapEntry *attr, List *joinVars, Index rtindex)
-{
-//	ListCell *lc, *innerLc;
-//	List *newIns;
-//	Var *joinVar;
-//	Var *newVar;
-//	Var *attrVar;
-//	int i;
-//
-//	newIns = copyObject(attr->inVars);
-//
-//	foreach(lc, attr->inVars)
-//	{
-//		attrVar = (Var *) lfirst(lc);
-//
-//		foreachi(innerLc, i, joinVars)
-//		{
-//			joinVar = (Var *) lfirst(innerLc);
-//
-//			/* found the in Var, map it to joinVar */
-//			if(equal(joinVar, attrVar))
-//			{
-//				newVar = makeVar(rtindex, i + 1, joinVar->vartype, joinVar->vartypmod, 0);
-//				newIns = lappend(newIns, newVar);
-//			}
-//		}
-//	}
-//
-//	attr->inVars = newIns;
-}
-
-
-/*
- * Top-down traversal to set the propagate flags, such that each query nodes
- * copy map contains the information which subqueries should be rewritten.
- */
-
-static void
-setPropagateFlags (Query *query)
-{
-//	CopyMapRelEntry *entry;
+//static CopyMap *
+//getCopyMapForRtindex (List *maps, Index rtindex)
+//{
+//	CopyMap *result;
 //	ListCell *lc;
 //
-//	foreach(lc, GetInfoCopyMap(query)->entries)
+//	foreach(lc, maps)
 //	{
-//		entry = (CopyMapRelEntry *) lfirst(lc);
+//		result = (CopyMap *) lfirst(lc);
 //
-//		entry->propagate = isPropagating(entry);
+//		if (result->rtindex == rtindex)
+//			return result;
 //	}
 //
-//	setPropagateFlagsForQueryNode(query);
-}
+//	return NULL;
+//}
 
-/*
- *
- */
-
-static void
-setPropagateFlagsForQueryNode (Query *query)
-{
-//	CopyMapRelEntry *superEntry;
-//	CopyMapRelEntry *subEntry;
-//	RangeTblEntry *rte;
-//	CopyMap *subCopyMap;
-//	ListCell *lc;
+///*
+// * Copies the outVars list to the inVars list and deletes the outVars list for each CopyMapRelEntry
+// * of a CopyMap.
+// */
 //
-//	/* for each base relation entry, check if it is not propagating, and if so
-//	 *  push this info down into the child query nodes copy maps. */
-//	foreach(lc, GetInfoCopyMap(query)->entries)
-//	{
-//		superEntry = (CopyMapRelEntry *) lfirst(lc);
-//
-//		if(!superEntry->propagate)
-//		{
-//			rte = rt_fetch(superEntry->rtindex, query->rtable);
-//
-//			if(rte->rtekind == RTE_SUBQUERY)
-//			{
-//				subCopyMap = GetInfoCopyMap(rte->subquery);
-//
-//				subEntry = getRelEntry(subCopyMap, superEntry->relation,
-//						superEntry->refNum);
-//				subEntry->propagate = false;
-//			}
-//		}
-//	}
-//
-//	/* decend into tree */
-//	foreach(lc, query->rtable)
-//	{
-//		rte = (RangeTblEntry *) lfirst(lc);
-//
-//		if(rte->rtekind == RTE_SUBQUERY)
-//			setPropagateFlagsForQueryNode(rte->subquery);
-//	}
-
-}
-
-
-/*
- * Merges to CopyMap structs by appending their lists of entries. A new allocated CopyMap is
- * returned with all entries is returned.
- */
-static CopyMap *
-mergeMaps (CopyMap *left, CopyMap *right)
-{
-	CopyMap *result;
-
-	result = makeCopyMap();
-	result->entries = copyObject(left->entries);
-	result->entries = list_concat(result->entries, copyObject(right->entries));
-
-	return result;
-}
-
-/*
- * Delete the inVars and outVars lists of each CopyMapRelEntry of a CopyMap.
- */
-
-static void
-emptyMap (CopyMap *map)
-{
-//	ListCell *lc, *attrLc;
-//	CopyMapRelEntry *relEntry;
-//	CopyMapEntry *attr;
-//
-//	foreach(lc, map->entries)
-//	{
-//		relEntry = (CopyMapRelEntry *) lfirst(lc);
-//
-//		foreach(attrLc, relEntry->attrEntries)
-//		{
-//			attr = (CopyMapEntry *) lfirst(attrLc);
-//
-//			attr->inVars = NIL;
-//			attr->outVars = NIL;
-//		}
-//	}
-}
+//static void
+//swtichInAndOutVars (CopyMap *map)
+//{
+////	ListCell *lc, *innerLc;
+////	CopyMapEntry *attrEntry;
+////	CopyMapRelEntry *entry;
+////
+////	foreach(lc, map->entries)
+////	{
+////		entry = (CopyMapRelEntry *) lfirst(lc);
+////
+////		/* generate the new Var mapping for each attr */
+////		foreach(innerLc, entry->attrEntries)
+////		{
+////			attrEntry = (CopyMapEntry *) lfirst(innerLc);
+////			attrEntry->inVars = attrEntry->outVars;
+////			attrEntry->outVars = NIL;
+////		}
+////	}
+//}
 
 /*
  * Generates a CopyMap struct for a base relation.

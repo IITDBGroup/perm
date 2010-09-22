@@ -4427,6 +4427,10 @@ DATA(insert OID = 3779 ( query_sql_to_simple_xml PGNSP PGUID 12 1  0 f f t f i 1
 DESCR("Convert a SQL statement given as text into a simple XML representation.");
 DATA(insert OID = 3780 (  reconstructMap		PGNSP PGUID 12 1 0 t f f f i 2 25 "1562 23" _null_ _null_ _null_ reconstructMap - _null_ _null_ ));
 DESCR("reconstruct a bitset mapping provenance representation into  text.");
+DATA(insert OID = 3781 (  bitset_contains	PGNSP PGUID 12 1  0 f f f f i 2 16 "1562 1562" _null_ _null_ _null_ bitset_contains - _null_ _null_ ));
+DESCR("Checks for two varbit parameters if the bitset represented by the right parameter is contained in the bitset represented by the left parameter");
+DATA(insert OID = 3782 (  bitset_nonzero_repeat	PGNSP PGUID 12 1  0 f f f f i 2 16 "1562 23" _null_ _null_ _null_ bitset_nonzero_repeat - _null_ _null_ ));
+DESCR("Checks for a varbit parameter if each consecutive group of bits contains has at least one bit set to 1. The length of the groups is given as the second parameter");
 
 
 /*

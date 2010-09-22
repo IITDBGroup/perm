@@ -49,6 +49,8 @@ typedef struct TransRepQueryIndex
 extern Datum bitor_with_null(PG_FUNCTION_ARGS);
 extern Datum reconstructTransToSQL (PG_FUNCTION_ARGS);
 extern Datum reconstructMap (PG_FUNCTION_ARGS);
+extern Datum bitset_contains(PG_FUNCTION_ARGS);
+extern Datum bitset_nonzero_repeat(PG_FUNCTION_ARGS);
 extern void dropTransProvQueryIndex (void);
 extern int generateTransProvQueryIndex (Query *query, char *cursorName);
 extern int generateTransXmlQueryIndex (Query *query, char *cursorName);

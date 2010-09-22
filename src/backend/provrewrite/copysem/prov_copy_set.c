@@ -95,7 +95,7 @@ rewriteCopySetQuery (Query *query)
 	addSubqueryToRTWithParam (newTop, orig, "originalSet", false, ACL_NO_RIGHTS, false);
 
 	/* adapt copy map accordingly */
-	context = (int *) palloc(sizeof(int));
+	context = (int *) palloc(sizeof(int));//TODO adapt to new style copy map
 	*context = 1;
 	copyMapWalker(GET_COPY_MAP(newTop)->entries, context, context, NULL,
 			addVarnoRelMapWalker, addVarnoAttrMapWalker, NULL);

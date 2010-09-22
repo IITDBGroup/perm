@@ -73,6 +73,7 @@ typedef struct CopyMap {
  * An entry in a copy map.
  */
 typedef struct CopyMapRelEntry CopyMapRelEntry;
+typedef struct CopyProvAttrInfo CopyProvAttrInfo;
 
 struct CopyMapRelEntry
 {
@@ -86,6 +87,7 @@ struct CopyMapRelEntry
 							inclusion of this relations tuples in the
 							provenance this is true */
 	CopyMapRelEntry *child; // rel map for the same relation in a sub query.
+	CopyProvAttrInfo *provAttrInfo;
 };
 
 /*
@@ -146,6 +148,18 @@ typedef struct InclusionCond {
 	List *eqVars;			// for INCL_EQUAL the Y attribut
 	Node *cond;			// for INCL_EQUAL
 } InclusionCond;
+
+/*
+ *
+ */
+
+struct CopyProvAttrInfo
+{
+	NodeTag type;
+	Var *provVar;
+	Node *bitSetComposition;
+	int outAttrNum;
+};
 
 /*
  * Datastructure that stores information for a query node that is needed for
@@ -573,14 +587,24 @@ extern bool provNodesEquals(void *a, void *b);
 		result->existsAttr = (incl); \
 	} while (0)
 
-/* create an equality inclusion condition for a var */
+/* create an equality inclusion condition for a single var */
+#define MAKE_ONEEQUAL_INCL(result, left, right) \
+	do { \
+		result = makeInclusionCond(); \
+		result->inclType = INCL_EQUAL; \
+		result->existsAttr = left; \
+		result->eqVars = list_make1(right); \
+	} while (0)
+
+/* create an equality inclusion condition for a list of vars */
 #define MAKE_EQUAL_INCL(result, left, right) \
 	do { \
 		result = makeInclusionCond(); \
 		result->inclType = INCL_EQUAL; \
 		result->existsAttr = left; \
-		result->eqVar = right; \
+		result->eqVars = right; \
 	} while (0)
+
 
 /* create an conditional inclusion condition for a var */
 #define MAKE_COND_INCL(result, incl, condition) \

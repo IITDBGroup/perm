@@ -385,7 +385,8 @@ typedef enum NodeTag
 	T_XsltFuncExpr,
 	T_ThisExpr,
 	T_AttrInclusions,
-	T_InclusionCond
+	T_InclusionCond,
+	T_CopyProvAttrInfo
 } NodeTag;
 
 /*

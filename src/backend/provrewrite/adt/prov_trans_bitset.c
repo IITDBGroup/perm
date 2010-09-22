@@ -227,6 +227,75 @@ reconstructMap (PG_FUNCTION_ARGS)
 }
 
 /*
+ * For two bitsets (Varbit Datums) determine if the right set is included in
+ * the left one.
+ */
+
+Datum
+bitset_contains(PG_FUNCTION_ARGS)
+{
+	VarBit	   *arg1;
+	VarBit	   *arg2;
+
+	if (PG_ARGISNULL(0) ||  PG_ARGISNULL(1))
+		PG_RETURN_BOOL(false);
+
+	arg1 = PG_GETARG_VARBIT_P(0);
+	arg2 = PG_GETARG_VARBIT_P(1);
+
+	PG_RETURN_BOOL(bitsetContains(arg1,arg2));
+}
+
+/*
+ *
+ */
+
+Datum
+bitset_nonzero_repeat(PG_FUNCTION_ARGS)
+{
+	VarBit *arg1;
+	int32 arg2;
+	bits8 *p1;
+	bits8 temp;
+	bool foundOne = false;
+	int i;
+
+	if (PG_ARGISNULL(0) ||  PG_ARGISNULL(1))
+		PG_RETURN_BOOL(false);
+
+	arg1 = PG_GETARG_VARBIT_P(0);
+	arg2 = PG_GETARG_INT32(1);
+
+	p1 = VARBITS(arg1);
+	temp = *p1;
+
+	/* for each byte of the varbit set check for each bit if it is set by
+	 * shifting and comparing with the high bit. For each sub-bitstring of
+	 * length arg2 check that we have found at least one 1 bit */
+	for(i = 1; i <= VARBITLEN(arg1); i++)
+	{
+		if (!(i % BITS_PER_BYTE))
+		{
+			p1++;
+			temp = *p1;
+		}
+		if (!(i % arg2))
+		{
+			if (!foundOne)
+				PG_RETURN_BOOL(false);
+			foundOne = false;
+		}
+
+		foundOne |= IS_HIGHBIT_SET(temp);
+		temp <<= 1;
+	}
+
+	if (!foundOne)
+		PG_RETURN_BOOL(false);
+	PG_RETURN_BOOL(true);
+}
+
+/*
  * Given a bitset representing the mapping provenance, generate a string representation.
  * The global structure transProvQuerIndex is accessed that stores string representations
  * for the complete mapping provenance (list of all mappings corresponding to the query)
@@ -636,7 +705,7 @@ generateTransXmlQueryIndex (Query *query, char *cursorName)//TODO merge with SQL
 
 	/* generate the data structure inside the private memory
 	 * context of this module (It cannot be droped after execution
-	 * of a query, if we are fetching from a cursos).
+	 * of a query, if we are fetching from a cursor).
 	 */
 	oldCtx = MemoryContextSwitchTo(funcPrivateContext);
 	transProvQueryIndex->queryInfos =

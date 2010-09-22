@@ -13,7 +13,7 @@ top_builddir = ../../../..
 include $(top_builddir)/src/Makefile.global
 
 OBJS = prov_copy_spj.o prov_copy_map.o prov_copy_equi.o prov_copy_util.o prov_copy_agg.o \
-		prov_copy_set.o
+		prov_copy_set.o prov_copy_inclattr.o
 
 all: SUBSYS.o
 

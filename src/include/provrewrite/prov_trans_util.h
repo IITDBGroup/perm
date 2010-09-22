@@ -41,6 +41,9 @@ typedef enum TransProjType
 #define MAKE_VARBIT_CONST(varbitset) \
 	(makeRelabelType((Expr *) makeConst(BITOID, -1, -1, datumCopy(varbitset, false, -1), false, false), VARBITOID, -1, COERCE_EXPLICIT_CAST))
 
+#define MAKE_EMPTY_BITSET_CONST(length) \
+	(MAKE_VARBIT_CONST(VarBitPGetDatum(generateEmptyBitset(length))))
+
 #define COPY_VARBIT(input) \
 		(DatumGetVarBitP(datumCopy(((Datum) input), false, -1)))
 
@@ -49,6 +52,15 @@ typedef enum TransProjType
 
 #define MAKE_SETOR_FUNC_NO_NULL(args) \
 	(makeFuncExpr(F_BITOR, VARBITOID, args, COERCE_EXPLICIT_CALL))
+
+#define MAKE_SETCONT_FUNC(args) \
+	(makeFuncExpr(F_BITSET_CONTAINS, BOOLOID, args, COERCE_EXPLICIT_CALL))
+
+#define MAKE_SETNEQ_FUNC(argl,argr) \
+	(makeBoolExpr(NOT_EXPR, list_make1(makeFuncExpr(F_BITEQ, BOOLOID, list_make2(argl, argr), COERCE_EXPLICIT_CALL))))
+
+#define MAKE_SETREPEAT_FUNC(argl,argr) \
+	(makeFuncExpr(F_BITSET_NONZERO_REPEAT, BOOLOID, list_make2(argl, argr), COERCE_EXPLICIT_CALL))
 
 #define TSET_LARG(sub) \
 	((TransSubInfo *) (((TransSubInfo *) sub)->children->head->data.ptr_value))

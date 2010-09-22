@@ -26,6 +26,7 @@
 #include "provrewrite/provattrname.h"
 #include "provrewrite/prov_copy_util.h"
 #include "provrewrite/prov_copy_map.h"
+#include "provrewrite/prov_copy_inclattr.h"
 #include "provrewrite/prov_nodes.h"
 #include "provrewrite/provstack.h"
 
@@ -164,7 +165,7 @@ getRTindicesForJoin (Node *joinTreeNode)
  */
 
 List *
-copyAddProvAttrsForSet (Query *query, List *subList, List *pList)
+copyAddProvAttrsForSet (Query *query, List *subList, List *pList)//TODO add copy map attributes
 {
 	CopyMap *map;
 	CopyMapRelEntry *rel;
@@ -262,6 +263,7 @@ copyAddProvAttrs (Query *query, List *subList, List *pList)
 	ListCell *subqLc;
 	List *subPStack;
 	Index curSubquery;
+	int origAttrNum = list_length(query->targetList);
 
 	subPStack = popListAndReverse (&pStack, list_length(subList));
 
@@ -281,6 +283,9 @@ copyAddProvAttrs (Query *query, List *subList, List *pList)
 			addDummyProvenanceAttributesForRTE(query, curSubquery, &pList);
 		}
 	}
+
+	/* add copy map attributes */
+	generateCopyMapAttributs(query, origAttrNum);
 
 	/* return changed pList */
 	return pList;

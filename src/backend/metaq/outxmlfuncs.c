@@ -2644,7 +2644,7 @@ _outInclusionCond(StringInfo str, InclusionCond *node, int depth)
 	WRITE_NODE_START("INCLUSIONCOND");
 
 	WRITE_NODE_ELEM(existsAttr);
-	WRITE_NODE_ELEM(eqVar);
+	WRITE_NODE_ELEM(eqVars);
 	WRITE_NODE_ELEM(cond);
 
 	WRITE_NODE_END("INCLUSIONCOND");
