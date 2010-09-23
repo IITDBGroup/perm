@@ -88,6 +88,7 @@ struct CopyMapRelEntry
 							provenance this is true */
 	CopyMapRelEntry *child; // rel map for the same relation in a sub query.
 	CopyProvAttrInfo *provAttrInfo;
+	List *provAttrs;
 };
 
 /*

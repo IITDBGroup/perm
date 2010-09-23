@@ -638,6 +638,7 @@ makeCopyMapRelEntry (void)
 	result->refNum = -1;
 	result->child = NULL;
 	result->provAttrInfo = NULL;
+	result->provAttrs = NIL;
 
 	return result;
 }
@@ -978,6 +979,7 @@ _equalCopyMapRelEntry(CopyMapRelEntry *a, CopyMapRelEntry *b)
 	COMPARE_SCALAR_FIELD(noRewrite);
 	COMPARE_NODE_FIELD(child);
 	COMPARE_NODE_FIELD(provAttrInfo);
+	COMPARE_NODE_FIELD(provAttrs);
 
 	return true;
 }
@@ -1376,6 +1378,7 @@ _outCopyMapRelEntry(StringInfo str, CopyMapRelEntry *node)
 	WRITE_BOOL_FIELD(noRewrite);
 	WRITE_NODE_FIELD(child);
 	WRITE_NODE_FIELD(provAttrInfo);
+	WRITE_NODE_FIELD(provAttrs);
 }
 
 static void
@@ -1712,6 +1715,7 @@ _readCopyMapRelEntry(void)
 	READ_BOOL_FIELD(noRewrite);
 	// READ_NODE_FIELD(child); do not read child
 	READ_NODE_FIELD(provAttrInfo);
+	READ_NODE_FIELD(provAttrs);
 
 	READ_DONE();
 }
@@ -2152,6 +2156,7 @@ _copyCopyMapRelEntry(CopyMapRelEntry *from)
 	COPY_SCALAR_FIELD(isStatic);
 	COPY_SCALAR_FIELD(noRewrite);
 	COPY_NODE_FIELD(provAttrInfo);
+	COPY_NODE_FIELD(provAttrs);
 	// do not copy child TODO reconstruction
 	newnode->child = NULL;
 

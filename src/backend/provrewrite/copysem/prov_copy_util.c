@@ -267,6 +267,7 @@ copyAddProvAttrs (Query *query, List *subList, List *pList)
 
 	subPStack = popListAndReverse (&pStack, list_length(subList));
 
+	//TODO iterate over rel maps
 	/* for each subquery of query ... */
 	foreach (subqLc, subList)
 	{
@@ -280,6 +281,7 @@ copyAddProvAttrs (Query *query, List *subList, List *pList)
 		else
 		{
 			pop(&subPStack);
+			//CHECK ok to not add NULLs here?
 			addDummyProvenanceAttributesForRTE(query, curSubquery, &pList);
 		}
 	}

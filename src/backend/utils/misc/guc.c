@@ -277,7 +277,7 @@ char	   *session_authorization_string;
 bool prov_use_set_optimization = true;
 bool prov_use_wl_union_semantics = false;
 bool prov_use_sublink_optimization_left_join = true;
-bool prov_use_sublink_move_to_target = true;
+bool prov_use_sublink_move_to_target = false;
 bool prov_use_sublink_transfrom_top_level_any_to_join = true;
 bool prov_use_unnest_JA = true;
 bool prov_use_optimizer = false;

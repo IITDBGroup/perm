@@ -60,9 +60,10 @@ addTopCopyInclExpr (Query *query)
 	int tlPos;
 //	int baseAttrPos;
 	Node *condition;
+	List *newTarget;
 
 	// remove the copymap attributes
-	list_truncate(query->targetList, origAttrNum + numProvAttr);
+	newTarget = list_truncate(query->targetList, origAttrNum + numProvAttr);//TODO
 
 	tlPos = list_length(query->targetList) - numProvAttr;
 
@@ -76,15 +77,15 @@ addTopCopyInclExpr (Query *query)
 		 * constants */
 		if (relEntry->noRewrite)
 		{
-			Var *var;
+			Node *attrExpr;
 
 			foreach(innerLc, relEntry->attrEntries)
 			{
 				provAttr = (TargetEntry *) list_nth(query->targetList,
 						tlPos++);
-				var = (Var *) provAttr->expr;
-				provAttr->expr = (Expr *) makeNullConst(var->vartype,
-						var->vartypmod);
+				attrExpr = (Node *) provAttr->expr;
+				provAttr->expr = (Expr *) makeNullConst(exprType(attrExpr),
+						exprTypmod(attrExpr));
 			}
 		}
 		// is static: provenance attribute values are taken from the input
@@ -111,6 +112,7 @@ addTopCopyInclExpr (Query *query)
 		}
 	}
 
+	query->targetList = newTarget;
 	//TODO remove CopyMaps
 }
 
@@ -248,7 +250,7 @@ generateVarBitConstruction (Query *query, CopyMapRelEntry *rel, int numAttrs)
 				{
 					attr = (AttrInclusions *) lfirst(outLc);
 					outAtt = attr->attr->varattno;
-					bitSingleton = (inAtt * numAttrs) + outAtt + 1;
+					bitSingleton = (inAtt * numAttrs) + outAtt;
 					bitset = varBitOr(generateVarbitSetElem
 							(bitLength, bitSingleton), bitset);
 				}
@@ -269,7 +271,7 @@ generateVarBitConstruction (Query *query, CopyMapRelEntry *rel, int numAttrs)
 		{
 			attr = (AttrInclusions *) lfirst(outLc);
 			outAtt = attr->attr->varattno;
-			bitSingleton = inAtt * numAttrs + outAtt + 1;
+			bitSingleton = (inAtt * numAttrs) + outAtt;
 
 			// out attribute is included statically
 			if (attr->isStatic)

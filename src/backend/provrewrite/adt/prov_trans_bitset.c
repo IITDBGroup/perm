@@ -274,11 +274,8 @@ bitset_nonzero_repeat(PG_FUNCTION_ARGS)
 	 * length arg2 check that we have found at least one 1 bit */
 	for(i = 1; i <= VARBITLEN(arg1); i++)
 	{
-		if (!(i % BITS_PER_BYTE))
-		{
-			p1++;
-			temp = *p1;
-		}
+		foundOne = foundOne || IS_HIGHBIT_SET(temp);
+
 		if (!(i % arg2))
 		{
 			if (!foundOne)
@@ -286,12 +283,15 @@ bitset_nonzero_repeat(PG_FUNCTION_ARGS)
 			foundOne = false;
 		}
 
-		foundOne |= IS_HIGHBIT_SET(temp);
-		temp <<= 1;
+		if (!(i % BITS_PER_BYTE))
+		{
+			p1++;
+			temp = *p1;
+		}
+		else
+			temp <<= 1;
 	}
 
-	if (!foundOne)
-		PG_RETURN_BOOL(false);
 	PG_RETURN_BOOL(true);
 }
 
