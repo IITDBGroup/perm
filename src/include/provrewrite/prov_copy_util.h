@@ -20,6 +20,6 @@ extern List *getRteVarsForJoin (Query *query, JoinExpr *join);
 extern List *getCopyRelsForRtindex (Query *query, Index rtindex);
 extern List *copyAddProvAttrsForSet (Query *query, List *subList, List *pList);
 extern List *copyAddProvAttrForNonRewritten (Query *query);
-extern List *copyAddProvAttrs (Query *query, List *subList, List *pList);
+extern void copyAddProvAttrs (Query *query, List *subList);
 
 #endif /*PROV_COPY_UTIL_H_*/

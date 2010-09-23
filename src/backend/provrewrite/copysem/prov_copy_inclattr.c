@@ -48,24 +48,24 @@ static Node *getInputBitset (Query *query, CopyMapRelEntry *rel,
  */
 
 void
-addTopCopyInclExpr (Query *query)
+addTopCopyInclExpr (Query *query, int origAttrNum)
 {
 	CopyMapRelEntry *relEntry;
 	CopyMap *map = GET_COPY_MAP(query);
 	TargetEntry *provAttr;
 	ListCell *lc, *innerLc;
-	int numProvAttr = list_length(((List *) linitial(pStack)));
-	int origAttrNum = list_length(query->targetList) - numProvAttr
-			- list_length(map->entries);
+//	int numProvAttr = list_length(((List *) linitial(pStack)));
+//	int origAttrNum = list_length(query->targetList) - numProvAttr
+//			- list_length(map->entries);
 	int tlPos;
 //	int baseAttrPos;
 	Node *condition;
 	List *newTarget;
+	CopyMapEntry *attrEntry;
 
 	// remove the copymap attributes
-	newTarget = list_truncate(query->targetList, origAttrNum + numProvAttr);//TODO
-
-	tlPos = list_length(query->targetList) - numProvAttr;
+	newTarget = list_truncate(query->targetList, origAttrNum);//TODO
+	tlPos = list_length(newTarget);
 
 	/* for each copy map rel entry add the conditional inclusion checks to the
 	 * provenance attributes from the base relation represented by this entry */
@@ -77,37 +77,58 @@ addTopCopyInclExpr (Query *query)
 		 * constants */
 		if (relEntry->noRewrite)
 		{
-			Node *attrExpr;
+			Expr *attrExpr;
 
 			foreach(innerLc, relEntry->attrEntries)
 			{
-				provAttr = (TargetEntry *) list_nth(query->targetList,
-						tlPos++);
-				attrExpr = (Node *) provAttr->expr;
-				provAttr->expr = (Expr *) makeNullConst(exprType(attrExpr),
-						exprTypmod(attrExpr));
+				attrEntry = (CopyMapEntry *) lfirst(innerLc);
+
+				attrExpr = (Expr *) makeNullConst(
+						attrEntry->baseRelAttr->vartype,
+						attrEntry->baseRelAttr->vartypmod);
+				provAttr = makeTargetEntry(attrExpr, ++tlPos,
+						attrEntry->provAttrName, false);
+				newTarget = lappend(newTarget, provAttr);
+//				provAttr = (TargetEntry *) list_nth(query->targetList,
+//						tlPos++);
+//				attrExpr = (Node *) provAttr->expr;
+//				provAttr->expr = (Expr *) makeNullConst(exprType(attrExpr),
+//						exprTypmod(attrExpr));
 			}
 		}
 		// is static: provenance attribute values are taken from the input
 		else if (relEntry->isStatic)
-			tlPos += list_length(relEntry->attrEntries);
+		{
+			foreach(innerLc, relEntry->provAttrs)
+			{
+				provAttr = (TargetEntry *) lfirst(innerLc);
+				provAttr->resno = ++tlPos;
+				newTarget = lappend(newTarget, provAttr);
+			}
+//			tlPos += list_length(relEntry->attrEntries);
+		}
 		/* neither static nor always NULL. Need to add checks for inclusion
 		 * of provenance */
 		else
 		{
+			int i;
+
 			if (IS_PARTIALC(ContributionType(query)))
 				condition = createPartialFinalInclConds(relEntry, origAttrNum);
 			else
 				condition = createCompleteFinalInclConds(relEntry,
 						origAttrNum);
 
-			foreach(innerLc, relEntry->attrEntries)
+			foreachi(innerLc, i, relEntry->attrEntries)
 			{
-				provAttr = (TargetEntry *) list_nth(query->targetList,
-						tlPos++);
+				attrEntry = (CopyMapEntry *) lfirst(innerLc);
 
+				provAttr = (TargetEntry *) list_nth(relEntry->provAttrs, i);
 				provAttr->expr = (Expr *) makeCaseForProvAttr(condition,
 						provAttr->expr);
+				provAttr->resno = ++tlPos;
+
+				newTarget = lappend(newTarget, provAttr);
 			}
 		}
 	}
@@ -180,13 +201,13 @@ generateCopyMapAttributs (Query *query, int numQAttrs)
 	CopyProvAttrInfo *attrInfo;
 	ListCell *lc;
 	TargetEntry *te;
-	int i;
+	int i = 0;
 	int copyAttrPos;
 
-	copyAttrPos = list_length(query->targetList) + 1;
+	copyAttrPos = list_length(query->targetList);
 
 	// for each copy rel map...
-	foreachi(lc,i,map->entries)
+	foreach(lc, map->entries)
 	{
 		rel = (CopyMapRelEntry *) lfirst(lc);
 
@@ -194,16 +215,24 @@ generateCopyMapAttributs (Query *query, int numQAttrs)
 		attrInfo = makeNode(CopyProvAttrInfo);
 		attrInfo->bitSetComposition = generateVarBitConstruction(query, rel,
 				numQAttrs);
-		attrInfo->provVar = makeVar(map->rtindex, copyAttrPos + i, VARBITOID,
-				-1, 0);
 		attrInfo->outAttrNum = numQAttrs;
+		if (!rel->noRewrite && !rel->isStatic)
+			attrInfo->provVar = makeVar(map->rtindex, ++copyAttrPos,
+					VARBITOID, -1, 0);
+		else
+			attrInfo->provVar = NULL;
 
 		rel->provAttrInfo = attrInfo;
 
 		// append copy map attribute for current rel map to target list
-		te = makeTargetEntry((Expr *) copyObject(attrInfo->bitSetComposition),
-				copyAttrPos + i, appendIdToString("copymap_", &i) ,false);
-		query->targetList = lappend(query->targetList, te);
+		if (!rel->noRewrite && !rel->isStatic)
+		{
+			i++;
+			te = makeTargetEntry((Expr *)
+					copyObject(attrInfo->bitSetComposition),
+					copyAttrPos, appendIdToString("copymap_", &i) ,false);
+			query->targetList = lappend(query->targetList, te);
+		}
 	}
 }
 
@@ -277,7 +306,7 @@ generateVarBitConstruction (Query *query, CopyMapRelEntry *rel, int numAttrs)
 			if (attr->isStatic)
 			{
 				condition = (Node *) MAKE_VARBIT_CONST(generateVarbitSetElem(
-						numAttrs, bitSingleton));
+						bitLength, bitSingleton));
 				exprs = lappend(exprs, condition);
 			}
 			// non-static create conditional for each InclusionCond
@@ -427,7 +456,7 @@ getInputBitset (Query *query, CopyMapRelEntry *rel, CopyMapEntry *attr, int outA
 			break;
 	}
 
-	bitSingleton = (numQAttrs * baseAttrPos) + outAttr + 1;
+	bitSingleton = (numQAttrs * baseAttrPos) + outAttr;
 
 	return (Node *) MAKE_VARBIT_CONST(generateVarbitSetElem(bitLength, bitSingleton));
 }

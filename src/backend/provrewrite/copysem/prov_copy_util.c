@@ -31,6 +31,8 @@
 #include "provrewrite/provstack.h"
 
 static List *getRTindicesForJoin (Node *joinTreeNode);
+static void addProvAttrsForRelEntry (Query *query, CopyMapRelEntry *rel,
+		CopyMapRelEntry *child);
 static void addProvAttrFromStack (Query *query, Index rtindex, List **pList,
 		List **subPstack);
 static void addDummyProvenanceAttributesForRTE (Query *query, Index rtindex,
@@ -108,7 +110,7 @@ getCopyRelsForRtindex (Query *query, Index rtindex)
 	{
 		List *rtIndices;
 		ListCell *innerLc;
-		RangeTblEntry *baseRte;
+//		RangeTblEntry *baseRte;
 
 		rtIndices = getRTindicesForJoin(getJoinTreeNode(query, rtindex));
 
@@ -257,40 +259,81 @@ copyAddProvAttrForNonRewritten (Query *query)
  * provenance attributes to generate a consistent output schema.
  */
 
-List *
-copyAddProvAttrs (Query *query, List *subList, List *pList)
+void
+copyAddProvAttrs (Query *query, List *subList)
 {
-	ListCell *subqLc;
-	List *subPStack;
-	Index curSubquery;
+	ListCell *lc;
+//	List *subPStack;
+//	Index curSubquery;
 	int origAttrNum = list_length(query->targetList);
+	CopyMap *map = GET_COPY_MAP(query);
+	CopyMapRelEntry *rel, *relChild;
 
-	subPStack = popListAndReverse (&pStack, list_length(subList));
+//	subPStack = popListAndReverse (&pStack, list_length(subList));
+
+	// for each rel entry get the provenance attributes from the child
+	foreach(lc, map->entries)
+	{
+		rel = (CopyMapRelEntry *) lfirst(lc);
+		relChild = rel->child;
+
+		if (!rel->noRewrite)
+			addProvAttrsForRelEntry(query, rel, relChild);
+	}
 
 	//TODO iterate over rel maps
 	/* for each subquery of query ... */
-	foreach (subqLc, subList)
-	{
-		curSubquery = (Index) lfirst_int(subqLc);
-
-		/* if current rte contains parts that are rewritten, then obtain
-		 * provenance attributes from this rte's subquery.*/
-		if (shouldRewriteRTEforMap(GET_COPY_MAP(query), curSubquery))
-			addProvAttrFromStack (query, curSubquery, &pList, &subPStack);
-		/* is a not rewritten RTE. Create dummy provenance attributes */
-		else
-		{
-			pop(&subPStack);
-			//CHECK ok to not add NULLs here?
-			addDummyProvenanceAttributesForRTE(query, curSubquery, &pList);
-		}
-	}
+//	foreach (subqLc, subList)
+//	{
+//		curSubquery = (Index) lfirst_int(subqLc);
+//
+//		/* if current rte contains parts that are rewritten, then obtain
+//		 * provenance attributes from this rte's subquery.*/
+//		if (shouldRewriteRTEforMap(GET_COPY_MAP(query), curSubquery))
+//			addProvAttrFromStack (query, curSubquery, &pList, &subPStack);
+//		/* is a not rewritten RTE. Create dummy provenance attributes */
+//		else
+//		{
+//			pop(&subPStack);
+//			//CHECK ok to not add NULLs here?
+//			addDummyProvenanceAttributesForRTE(query, curSubquery, &pList);
+//		}
+//	}
 
 	/* add copy map attributes */
 	generateCopyMapAttributs(query, origAttrNum);
 
 	/* return changed pList */
-	return pList;
+//	return pList;
+}
+
+static void
+addProvAttrsForRelEntry (Query *query, CopyMapRelEntry *rel,
+		CopyMapRelEntry *child)
+{
+	ListCell *lc;
+	Index curResno = list_length(query->targetList);
+	TargetEntry *newTe, *te;
+	Expr *expr;
+
+	foreach(lc, child->provAttrs)
+	{
+		te = (TargetEntry *) lfirst(lc);
+
+		/* create new TE */
+		expr = (Expr *) makeVar (rel->child->rtindex,
+					te->resno,
+					exprType ((Node *) te->expr),
+					exprTypmod ((Node *) te->expr),
+					0);
+		newTe = makeTargetEntry(expr, ++curResno, te->resname, false);
+
+		/* adapt varno und varattno if referenced rte is used in a join-RTE */
+		getRTindexForProvTE (query, (Var *) expr);
+
+		query->targetList = lappend(query->targetList, newTe);
+		rel->provAttrs = lappend(rel->provAttrs, newTe);
+	}
 }
 
 /*

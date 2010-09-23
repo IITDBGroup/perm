@@ -52,7 +52,7 @@ extern CopyMapRelEntry *getEntryForBaseRel (CopyMap *map, Index rtindex);
 extern void addCopyMapEntry (CopyMap *map, Oid relation);
 extern CopyMapEntry *getCopyMapEntry (CopyMap *map, Oid relation);
 extern void removeConditionsForAttrs (CopyMap *map, Oid relation);
-extern List *getQueryOutAttrs (Query *query);
+//extern List *getQueryOutAttrs (Query *query);
 extern CopyMap *addTransitiveClosure (CopyMap *mapIn, EqGraph *eqGraph);
 extern bool inclusionCondWalker (AttrInclusions *incl,
 		bool (*condWalker) (InclusionCond *cond, void *context),

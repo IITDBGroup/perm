@@ -111,25 +111,25 @@ static CopyMapRelEntry * getRelEntry (CopyMap *map, Oid rel, int refNum);
 /*
  *
  */
-List *
-getQueryOutAttrs (Query *query)
-{
-	TargetEntry *te;
-	ListCell *lc;
-	List *result;
-
-	result = NIL;
-
-	foreach(lc, query->targetList)
-	{
-		te = (TargetEntry *) lfirst(lc);
-
-		if (!te->resjunk && IsA(te->expr, Var)) //TODO add support for casts
-			result = list_append_unique(result, te->expr);
-	}
-
-	return result;
-}
+//List *
+//getQueryOutAttrs (Query *query)
+//{
+//	TargetEntry *te;
+//	ListCell *lc;
+//	List *result;
+//
+//	result = NIL;
+//
+//	foreach(lc, query->targetList)
+//	{
+//		te = (TargetEntry *) lfirst(lc);
+//
+//		if (!te->resjunk && IsA(te->expr, Var)) //TODO add support for casts
+//			result = list_append_unique(result, te->expr);
+//	}
+//
+//	return result;
+//}
 
 /*
  * Generate the CopyMap data structure for a query. A CopyMap is produced for
@@ -177,6 +177,7 @@ generateCopyMapForQueryNode (Query *query, ContributionType contr, Index rtindex
 	int i;
 
 	//TODO add empty maps for sublinks at first
+	ContributionType(query) = contr;
 
 	// generate empty copy map for query
 	newMap = makeCopyMap();
@@ -792,9 +793,9 @@ addEquiGraphEdge (List *eq, List **equiGraph)
 	foreach(lc, *equiGraph)
 	{
 		cur = (EquiGraphNode *) lfirst(lc);
-		if (equal(leftNode, cur->nodeVar))
+		if (equal(left, cur->nodeVar))
 			leftNode = cur;
-		else if (equal(rightNode, cur->nodeVar))
+		else if (equal(right, cur->nodeVar))
 			rightNode = cur;
 	}
 
@@ -955,13 +956,15 @@ addCondForEquiGraph (List *equiGraph, List *rels)
 								(EquiGraphNode *) list_nth(equiGraph, j),
 								(EquiGraphNode *) list_nth(equiGraph, nodePos),
 								haveSeen, newAttrIncl, NIL, true);
-
-						newAttrIncls = lappend(newAttrIncls, newAttrIncl);
+						if (newAttrIncl->inclConds != NIL)
+							newAttrIncls = lappend(newAttrIncls, newAttrIncl);
 					}
 				}
 			}
 
-			attr->outAttrIncls = list_concat(attr->outAttrIncls, newAttrIncls);
+			if (newAttrIncls != NIL)
+				attr->outAttrIncls = list_concat(attr->outAttrIncls,
+						newAttrIncls);
 		}
 	}
 }
@@ -999,7 +1002,7 @@ addEqualityForNonStaticPaths (EquiGraphNode *start, EquiGraphNode *end,
 		MAKE_EQUAL_INCL(newCond, copyObject(start->nodeVar), copyObject(eqPath));
 		attr->inclConds = lappend(attr->inclConds, newCond);
 		if (cur != start && !edgeIsStatic)
-			list_delete_cell(eqPath, oldTail, eqPath->tail);
+			list_delete_cell(eqPath, eqPath->tail, oldTail);
 		haveSeen[cur->pos] = false;
 
 		return;
@@ -1413,6 +1416,29 @@ inferStaticCopy (Query *query, ContributionType contr)
 		relEntry->isStatic = isStaticTrue;
 		relEntry->noRewrite = noRewrite;
 	}
+
+	/* push down noRewrite and isStatic to children */ //TODO static too?
+	foreach(lc, map->entries)
+	{
+		CopyMapRelEntry *child;
+
+		relEntry = (CopyMapRelEntry *) lfirst(lc);
+		if (relEntry->noRewrite)
+		{
+			child = relEntry;
+			while((child = child->child) != NULL)
+			{
+				child->noRewrite = true;
+				child->isStatic = false;
+			}
+		}
+		if (relEntry->isStatic)
+		{
+			child = relEntry;
+			while((child = child->child) != NULL)
+				child->isStatic= true;
+		}
+	}
 }
 
 /*
@@ -1437,7 +1463,7 @@ inferStaticCopyQueryNode (Query *query, ContributionType contr)
 			inferStaticCopyQueryNode(rte->subquery, contr);
 	}
 
-	// check static for each attr entry is it is static
+	// for each path of attr entries check if it is static
 	foreach(lc, map->entries)
 	{
 		relEntry = (CopyMapRelEntry *) lfirst(lc);
@@ -1657,6 +1683,7 @@ shouldRewriteRTEforMap (CopyMap *map, Index rtindex)
 	foreach(lc, map->entries)
 	{
 		entry = (CopyMapRelEntry *) lfirst(lc);
+		entry = entry->child;
 
 		if ((rtindex == -1 || entry->rtindex == rtindex) && !entry->noRewrite)
 			return true;
@@ -1703,8 +1730,8 @@ getEntryForBaseRel (CopyMap *map, Index rtindex)
 	{
 		cur = (CopyMapRelEntry *) lfirst(lc);
 
-		if (cur->rtindex == rtindex)
-			return cur;
+		if (cur->child->rtindex == rtindex)
+			return cur->child;
 	}
 
 	return NULL;

@@ -851,8 +851,9 @@ generateVarbitSetElem (int n, int value)
 	bits8 *cur;
 	int realLength;
 
-	value--;
+	Assert(value <= n);
 
+	value--;
 	realLength = VARBITTOTALLEN(n);
 	result = (VarBit *) palloc0(realLength);
 	SET_VARSIZE(result, realLength);

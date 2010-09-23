@@ -194,9 +194,14 @@ traverseQueryTree (RangeTblEntry *rteQuery, Query *query, char *cursorName)
 			case CONTR_COPY_PARTIAL_NONTRANSITIVE:
 			case CONTR_COPY_COMPLETE_TRANSITIVE:
 			case CONTR_COPY_COMPLETE_NONTRANSITIVE:
+			{
+				int numQAttrs;
+
+				numQAttrs = list_length(query->targetList);
 				generateCopyMaps(query);
 				query = rewriteQueryNodeCopy (query);
-				addTopCopyInclExpr(query);
+				addTopCopyInclExpr(query, numQAttrs);
+			}
 			break;
 			case CONTR_TRANS_SET:
 			case CONTR_TRANS_SQL:

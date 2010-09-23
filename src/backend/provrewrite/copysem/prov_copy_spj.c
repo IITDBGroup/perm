@@ -59,13 +59,14 @@ rewriteSPJQueryCopy (Query *query)
 	correctSubQueryAlias (query);
 
 	/* correct join RTEs (add provenance attributes) */
-	correctJoinRTEs (query, &subList);
+//	correctJoinRTEs (query, &subList);
 
 	/* add provenance attributes of sub queries to targetlist */
-	pList = copyAddProvAttrs (query, subList, pList);
+	//pList = copyAddProvAttrs (query, subList, pList);
+	copyAddProvAttrs (query, subList);
 
 	/* push list of provenance attributes to pStack */
-	push(&pStack, pList);
+	//push(&pStack, pList);
 
 	/* if a distinct clause is present include provenance attributes
 	 * otherwise we would incorrectly omit duplicate result tuples with
@@ -99,7 +100,8 @@ rewriteRTEsCopy (Query *query, List **subList, Index maxRtindex)
 	 * sublink rewrite we ignore them.
 	 */
 
-	for(lc = query->rtable->head, i = 0; lc != NULL && i < maxRtindex; lc = lc->next, i++)
+	for(lc = query->rtable->head, i = 0; lc != NULL && i < maxRtindex;
+			lc = lc->next, i++)
 	{
 		rte = (RangeTblEntry *) lfirst(lc);
 
@@ -111,20 +113,19 @@ rewriteRTEsCopy (Query *query, List **subList, Index maxRtindex)
 		{
 			/* rte is a stored provenance query */
 			if (rte->provAttrs != NIL)
-			//	rewriteRTEwithProvenance (rtindex, rte, query);
+			//TODO	rewriteRTEwithProvenance (rtindex, rte, query);
 				;
-			/* rte is base relation */
-			else if (rte->rtekind == RTE_RELATION || rte->isProvBase)
-				rewriteCopyBaseRel (rte, rtindex, GET_COPY_MAP(query));
-
 			/* rte is subquery */
 			else if (rte->rtekind == RTE_SUBQUERY)
 				rte->subquery = rewriteQueryNodeCopy (rte->subquery);
-
+			/* rte is base relation */
+			else if (rte->rtekind == RTE_RELATION || rte->isProvBase)
+				rewriteCopyBaseRel (rte, rtindex, GET_COPY_MAP(query));
 		}
+
 		/* add empty provenace attr list to stack */
-		else if (rte->rtekind != RTE_JOIN)
-			push(&pStack, NIL);
+//		else if (rte->rtekind != RTE_JOIN)
+//			push(&pStack, NIL);
 
 		/* rte is not a join RTE so add it to subList*/
 		if (rte->rtekind != RTE_JOIN)
@@ -158,7 +159,7 @@ static void
 rewriteCopyBaseRel (RangeTblEntry *rte, Index rtindex, CopyMap *map)
 {
 	ListCell *lc;
-	List *pList;
+//	List *pList;
 	TargetEntry *te;
 	Expr *expr;
 	char *namestr;
@@ -166,7 +167,7 @@ rewriteCopyBaseRel (RangeTblEntry *rte, Index rtindex, CopyMap *map)
 	CopyMapRelEntry *entry;
 	CopyMapEntry *attr;
 
-	pList = NIL;
+//	pList = NIL;
 
 	/* get copy map entry for base relation */
 	entry = getEntryForBaseRel(map, rtindex);
@@ -184,11 +185,13 @@ rewriteCopyBaseRel (RangeTblEntry *rte, Index rtindex, CopyMap *map)
 		te->resorigtbl = rte->relid;
 		te->resorigcol = attr->baseRelAttr->varattno;
 
-		pList = lappend(pList, te);
+		entry->provAttrs = lappend(entry->provAttrs, te);
+//		pList = lappend(pList, te);
 	}
 
 	/* push the provenance attrs on pStack */
-	push(&pStack, pList);
+	//push(&pStack, pList);
+//	entry->provAttrs = pList;//CHECK
 
 	/* if the baseRelStack is activated push a RTE for this base relation on the baseRelStack */
 	if (baseRelStackActive)

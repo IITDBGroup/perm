@@ -61,8 +61,8 @@ rewriteCopyAggregateQuery (Query *query) //TODO adapt rewritten non-agg copy map
 	 * attributes. */
 	if (!shouldRewriteQuery(query))
 	{
-		pList = copyAddProvAttrForNonRewritten(query);
-		pStack = lcons(pList, pStack);
+//		pList = copyAddProvAttrForNonRewritten(query);
+//		pStack = lcons(pList, pStack);
 
 		return query;
 	}
@@ -92,6 +92,7 @@ rewriteCopyAggregateQuery (Query *query) //TODO adapt rewritten non-agg copy map
 	 * node */
 	newTopQuery = makeQuery();
 	Provinfo(newTopQuery)->copyInfo = copyObject(GET_COPY_MAP(query)); //CHECK necessary? do queries above access this?
+	//TODO recreate child links
 	createNewTopCopyMap(newTopQuery, attrMap);
 
 	/* copy ORDER BY clause */
@@ -126,10 +127,11 @@ rewriteCopyAggregateQuery (Query *query) //TODO adapt rewritten non-agg copy map
 			newTopQuery, "joinAggAndRewrite");
 
 	/* add provenance attributes of sub queries to targetlist */
-	pList = copyAddProvAttrs (newTopQuery, list_make1_int (2), pList);
+//	pList =
+	copyAddProvAttrs (newTopQuery, list_make1_int (2));
 
 	/* push list of provenance attributes to pStack */
-	pStack = lcons(pList, pStack);
+//	pStack = lcons(pList, pStack);
 
 	/* correct sublevelsup if we are rewritting a sublink query */
 	//OPTIMIZE mark sublink queries so we don't have to run increaseSublevelsUpMutator for non sublink queries
@@ -142,7 +144,7 @@ rewriteCopyAggregateQuery (Query *query) //TODO adapt rewritten non-agg copy map
 	pfree(context);
 
 	/* push list of provenance attributes to pStack */
-	pStack = lcons(pList, pStack);
+//	pStack = lcons(pList, pStack);
 
 	return newTopQuery;
 }
