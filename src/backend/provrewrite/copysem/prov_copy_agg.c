@@ -27,15 +27,8 @@
 #include "provrewrite/prov_copy_util.h"
 #include "provrewrite/prov_sublink_agg.h"
 
-/* Function declarations */
-static bool setRtindexRelEntryWalker (CopyMapRelEntry *entry, void *context);
-static bool mapInVarsAttrWalker (CopyMapRelEntry *entry, CopyMapEntry *attr,
-		void *context);
-static bool mapOutVarsAttrWalker (CopyMapRelEntry *entry, CopyMapEntry *attr,
-		void *context);
-
-static void createWithoutAggCopyMap (Query *rewrite, List *attrMap);
-static void createNewTopCopyMap (Query *newTop, List *attrMap);
+/* Prototypes */
+static void createWithoutAggCopyMap (Query *rewrite, List *attrMap, CopyMap *origMap);
 
 /*
  * Rewrite an aggregation query using copy contribution semantics (C-CS).
@@ -53,6 +46,7 @@ rewriteCopyAggregateQuery (Query *query) //TODO adapt rewritten non-agg copy map
 	int *context;
 	RangeTblEntry *rte;
 	List *attrMap;
+	CopyMap *origMap;
 
 	pList = NIL;
 	subList = NIL;
@@ -60,24 +54,20 @@ rewriteCopyAggregateQuery (Query *query) //TODO adapt rewritten non-agg copy map
 	/* Should the query be rewritten at all? If not fake provenance
 	 * attributes. */
 	if (!shouldRewriteQuery(query))
-	{
-//		pList = copyAddProvAttrForNonRewritten(query);
-//		pStack = lcons(pList, pStack);
-
 		return query;
-	}
-
-	/* have to rewrite aggregation query */
-
-	/* get group by attributes */
-	groupByTLEs = getGroupByTLEs (query);
 
 	/* copy query node and strip off aggregation and limit-clause and add a
 	 * the CopyMap of the aggregation but adapt it. */
-	newRewriteQuery = copyObject (query);
+	origMap = GET_COPY_MAP(query);
+	newRewriteQuery = query;
+	query = copyObject(query);
+	Provinfo(query)->copyInfo = NULL;
 	newRewriteQuery->limitCount = NULL;
 	newRewriteQuery->limitOffset = NULL;
 	SetSublinkRewritten(newRewriteQuery, false);
+
+	/* get group by attributes */
+	groupByTLEs = getGroupByTLEs (query);
 
 	/* if aggregation query has no sublinks or only sublinks in HAVING
 	 * newRewriteQuery has no sublinks */
@@ -86,14 +76,13 @@ rewriteCopyAggregateQuery (Query *query) //TODO adapt rewritten non-agg copy map
 
 	attrMap = rewriteAggrSubqueryForRewrite (newRewriteQuery, true);
 
-	createWithoutAggCopyMap(newRewriteQuery, attrMap);//TODO new adaptation of copy map
+	createWithoutAggCopyMap(newRewriteQuery, attrMap, origMap);
 
 	/* create new top query node and adapt copy map of aggregation for this
 	 * node */
 	newTopQuery = makeQuery();
-	Provinfo(newTopQuery)->copyInfo = copyObject(GET_COPY_MAP(query)); //CHECK necessary? do queries above access this?
-	//TODO recreate child links
-	createNewTopCopyMap(newTopQuery, attrMap);
+	Provinfo(newTopQuery)->copyInfo = (Node *) origMap;
+//	createNewTopCopyMap(newTopQuery, attrMap);
 
 	/* copy ORDER BY clause */
 	checkOrderClause(newTopQuery, query);
@@ -149,84 +138,83 @@ rewriteCopyAggregateQuery (Query *query) //TODO adapt rewritten non-agg copy map
 	return newTopQuery;
 }
 
-
 /*
  *
  */
 
 static void
-createNewTopCopyMap (Query *newTop, List *attrMap)
+createWithoutAggCopyMap (Query *rewrite, List *attrMap, CopyMap *origMap)
 {
 	CopyMap *map;
+	ListCell *lc, *attLc, *oldAttLc, *attInclLc;
+	CopyMapRelEntry *rel, *newRel;
+	CopyMapEntry *attr, *oldAtt;
+	AttrInclusions *attIncl, *newAttrIncl, *innerAIncl;
+	InclusionCond *newCond;
+	Var *aggSubVar, *topVar;
 
-	map = GET_COPY_MAP(newTop);
-	copyMapWalker(map->entries, NULL, attrMap, NULL, setRtindexRelEntryWalker,
-			mapInVarsAttrWalker, NULL);
+	map = makeCopyMap();
+	map->rtindex = 2; //CHECK
+
+	/* The new CopyMap is a layer between the origMap and the child of origMap.
+	 * Create the same CopyMapRelEntries as found in origMap and copy its basic
+	 * properties. */
+	foreach(lc, origMap->entries)
+	{
+		rel = (CopyMapRelEntry *) lfirst(lc);
+		COPY_BASIC_COPYREL(newRel, rel);
+		newRel->isStatic = rel->isStatic;
+		newRel->noRewrite = rel->noRewrite;
+		newRel->rtindex = 2;
+		newRel->child = rel->child;
+		rel->child = newRel;
+
+		/* For each new attr entry add adapted versions of the original
+		 * AttrInclusions and for the original attr entry replace the
+		 * AttrInclusions with simple copying.*/
+		forboth(attLc, newRel->attrEntries, oldAttLc, rel->attrEntries)
+		{
+			attr = (CopyMapEntry *) lfirst(attLc);
+			oldAtt = (CopyMapEntry *) lfirst(oldAttLc);
+
+			attr->outAttrIncls = copyObject(oldAtt->outAttrIncls);
+			oldAtt->outAttrIncls = NULL;
+
+			/* For each original AttrInclusions adapt the outVar and
+			 * create a new AttrInclusions for the origMap. */
+			foreach(attInclLc, attr->outAttrIncls)
+			{
+				attIncl = (AttrInclusions *) lfirst(attInclLc);
+
+				// adapt the outVar varattno
+				topVar = copyObject(attIncl->attr);
+				attIncl->attr->varattno =
+						listPositionInt(attrMap, topVar->varattno) + 1;
+
+				/* create simple exists inclusion for original used in new top
+				 * query */
+				aggSubVar = copyObject(attIncl->attr);
+				aggSubVar->varno = 2;
+				MAKE_EXISTS_INCL(newCond, aggSubVar);
+				innerAIncl = makeAttrInclusions();
+				innerAIncl->attr = copyObject(aggSubVar);
+				innerAIncl->inclConds = list_make1(newCond);
+				MAKE_EXISTS_INCL(newCond, innerAIncl);
+
+
+				newAttrIncl = makeAttrInclusions();
+				newAttrIncl->attr = topVar;
+				//TODO adapt varattno??
+				newAttrIncl->isStatic = attIncl->isStatic;
+				newAttrIncl->inclConds = list_make1(newCond);
+
+				oldAtt->outAttrIncls = lappend(oldAtt->outAttrIncls, newAttrIncl);
+			}
+		}
+
+		map->entries = lappend(map->entries, newRel);
+	}
+
+	SET_COPY_MAP(rewrite, map);
 }
 
-/*
- *
- */
-
-static void
-createWithoutAggCopyMap (Query *rewrite, List *attrMap)
-{
-	CopyMap *map;
-
-	map = GET_COPY_MAP(rewrite);
-	copyMapWalker(map->entries, NULL, attrMap, NULL, NULL,
-			mapOutVarsAttrWalker, NULL);
-}
-
-/*
- *
- */
-
-static bool
-setRtindexRelEntryWalker (CopyMapRelEntry *entry, void *context)
-{
-	entry->rtindex = 2;
-
-	return false;
-}
-
-/*
- *
- */
-
-static bool
-mapInVarsAttrWalker (CopyMapRelEntry *entry, CopyMapEntry *attr, void *context)
-{
-//	ListCell *lc;
-//	Var *var;
-
-//	foreach(lc, attr->inVars)
-//	{
-//		var = (Var *) lfirst(lc);
-//
-//		var->varno = 2;
-//		var->varattno = listPositionInt((List *) context, var->varattno) + 1;
-//	}
-
-	return false;
-}
-
-/*
- *
- */
-
-static bool
-mapOutVarsAttrWalker (CopyMapRelEntry *entry, CopyMapEntry *attr, void *context)
-{
-//	ListCell *lc;
-//	Var *var;
-//
-//	foreach(lc, attr->outVars)
-//	{
-//		var = (Var *) lfirst(lc);
-//
-//		var->varattno = listPositionInt((List *) context, var->varattno) + 1;
-//	}
-
-	return false;
-}

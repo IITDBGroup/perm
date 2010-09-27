@@ -98,38 +98,8 @@ static void searchStaticPath (EquiGraphNode *root, EquiGraphNode *node,
 		bool *hasStatic, int numNodes);
 static int compareEquiNode (void *left, void *right);
 static bool findVarEqualitiesWalker (Node *node, VarEqualitiesContext *context);
-static bool addEqualityCondsForVarsWalker (CopyMapRelEntry *entry,
-		CopyMapEntry *attr, void *context);
-static bool hasEqualityForVar (InclusionCond *cond, void *context);
-static bool hasExistsForVar (InclusionCond *cond, void *context);
 
 static void setCopyMapRTindices (CopyMap *map, Index rtindex);
-static CopyMapRelEntry * getRelEntry (CopyMap *map, Oid rel, int refNum);
-
-
-
-/*
- *
- */
-//List *
-//getQueryOutAttrs (Query *query)
-//{
-//	TargetEntry *te;
-//	ListCell *lc;
-//	List *result;
-//
-//	result = NIL;
-//
-//	foreach(lc, query->targetList)
-//	{
-//		te = (TargetEntry *) lfirst(lc);
-//
-//		if (!te->resjunk && IsA(te->expr, Var)) //TODO add support for casts
-//			result = list_append_unique(result, te->expr);
-//	}
-//
-//	return result;
-//}
 
 /*
  * Generate the CopyMap data structure for a query. A CopyMap is produced for
@@ -236,45 +206,6 @@ generateCopyMapForQueryNode (Query *query, ContributionType contr, Index rtindex
 
 	return GET_COPY_MAP(query);
 }
-
-///*
-// * Create the CopyMap for an set operation query from the CopyMaps of its range table entries.
-// */
-//
-//static void
-//handleSetOps (Query *query)
-//{
-////	ListCell *lc, *innerLc, *attrLc;
-////	CopyMapRelEntry *relEntry;
-////	CopyMapEntry *attr;
-////	Var *var;
-//
-//	handleSetOp (query, query->setOperations);
-//
-//
-////	foreach(lc, map->entries)
-////	{
-////		relEntry = (CopyMapRelEntry *) lfirst(lc);
-////
-////		foreach(innerLc, relEntry->attrEntries)
-////		{
-////			attr = (CopyMapEntry *) lfirst(innerLc);
-////
-////			attr->inVars = copyObject(attr->outVars);
-////
-////			foreach(attrLc, attr->outVars)
-////			{
-////				var = (Var *) lfirst(attrLc);
-////
-////				var->varno = 1;//CHECK OK?
-////			}
-////
-////		}
-////	}
-//
-//	//Provinfo(query)->copyInfo = (Node *) map;
-//}
-
 
 /*
  * Create the CopyMap for a set operation from the CopyMaps of its left and
@@ -1140,131 +1071,6 @@ findVarEqualitiesWalker (Node *node, VarEqualitiesContext *context)
 			(void *) context);
 }
 
-/*
- * Gets all AttrInclusions that reference a var
- */
-
-static bool
-addEqualityCondsForVarsWalker (CopyMapRelEntry *entry, CopyMapEntry *attr,
-		 void *context)
-{
-//	ListCell *lc;
-//	Var *left  = (Var *) linitial((List *) context);
-//	Var *right = (Var *) lsecond((List *) context);
-//	Value *useEqual = (Value *) lthird((List *) context);
-//	AttrInclusions *attrIncl;
-//	InclusionCond *cond;
-//
-//	// walk through all attribute inclusions and if either left or right is found
-//	foreach(lc, attr->outAttrIncls)
-//	{
-//		attrIncl = (AttrInclusions *) lfirst(lc);
-//		// is AttrInclusion for left?
-//		if (equal(incl->attr, left))
-//		{
-//			if (intVal(useEqual) == 0)
-//			{
-//				if (!includionCondWalker(incl, hasExistsForVar, right))
-//				{
-//					//MAKE_EQUAL_INCL
-//				}
-//			}
-//			else
-//			{
-//			// if the equality condition for left and right does not exist, add it.
-//				if (!inclusionCondWalker(incl, hasEqualityForVar, right))
-//				{
-//					MAKE_ONEEQUAL_INCL(cond, (Node *) left, right);
-//					incl->inclConds = lappend(incl->inclConds, cond);
-//				}
-//			}
-//		}
-//		if (equal(incl->attr, right))
-//		{
-//			// if the equality condition for left and right does not exist, add it.
-//			if (!inclusionCondWalker(incl, hasEqualityForVar, left))
-//			{
-//				MAKE_ONEEQUAL_INCL(cond, (Node *) right, left);
-//				incl->inclConds = lappend(incl->inclConds, cond);
-//			}
-//		}
-//	}
-
-	return true;
-}
-
-/*
- *
- */
-
-static bool
-hasEqualityForVar (InclusionCond *cond, void *context)
-{
-	if (equal(cond->eqVars, context))
-		return true;
-
-	return false;
-}
-
-/*
- *
- */
-
-static bool
-hasExistsForVar (InclusionCond *cond, void *context)
-{
-	if (equal(cond->existsAttr, context))
-		return true;
-
-	return false;
-}
-
-///*
-// * From a list of CopyMaps return the one that represents RTE with index "rtindex".
-// */
-//
-//static CopyMap *
-//getCopyMapForRtindex (List *maps, Index rtindex)
-//{
-//	CopyMap *result;
-//	ListCell *lc;
-//
-//	foreach(lc, maps)
-//	{
-//		result = (CopyMap *) lfirst(lc);
-//
-//		if (result->rtindex == rtindex)
-//			return result;
-//	}
-//
-//	return NULL;
-//}
-
-///*
-// * Copies the outVars list to the inVars list and deletes the outVars list for each CopyMapRelEntry
-// * of a CopyMap.
-// */
-//
-//static void
-//swtichInAndOutVars (CopyMap *map)
-//{
-////	ListCell *lc, *innerLc;
-////	CopyMapEntry *attrEntry;
-////	CopyMapRelEntry *entry;
-////
-////	foreach(lc, map->entries)
-////	{
-////		entry = (CopyMapRelEntry *) lfirst(lc);
-////
-////		/* generate the new Var mapping for each attr */
-////		foreach(innerLc, entry->attrEntries)
-////		{
-////			attrEntry = (CopyMapEntry *) lfirst(innerLc);
-////			attrEntry->inVars = attrEntry->outVars;
-////			attrEntry->outVars = NIL;
-////		}
-////	}
-//}
 
 /*
  * Generates a CopyMap struct for a base relation.
@@ -1417,7 +1223,7 @@ inferStaticCopy (Query *query, ContributionType contr)
 		relEntry->noRewrite = noRewrite;
 	}
 
-	/* push down noRewrite and isStatic to children */ //TODO static too?
+	/* push down noRewrite and isStatic to children */
 	foreach(lc, map->entries)
 	{
 		CopyMapRelEntry *child;
@@ -1599,49 +1405,6 @@ getInclusionStaticType (Var *inclVar, Var *baseVar, CopyMapRelEntry *rel)
 }
 
 /*
- *
- */
-
-//static void
-//inferStaticAttrEntry (CopyMapEntry *attr, CopyMapRelEntry *relEntry)
-//{
-//	AttrInclusions *attrIncl;
-//
-//	// no attr inclusions means that this attr will never in the copy map
-//	if (list_length(attr->outAttrIncls) == 0)
-//		attr->staticValue = !(attr->isStatic = attr->minOneStatic = true);
-//
-//
-//}
-
-
-
-/*
- * Checks if the provenance of a baserelation represented by a CopyMapRelEntry
- * should be propagated further up in the query. For CCT-CS it should be
- * propagated if for each base relation attribute there is at least one
- * attribute in the query that is directly copied from this base relation
- * attribute.
- */
-
-bool
-isPropagating (CopyMapRelEntry *entry)
-{
-//	ListCell *lc;
-//	CopyMapEntry *attr;
-//
-//	foreach(lc, entry->attrEntries)
-//	{
-//		attr = (CopyMapEntry *) lfirst(lc);
-//
-//		if(!attr->outVars)
-//			return false;
-//	}
-
-	return true;
-}
-
-/*
  * Checks if a query node should be rewritten.
  */
 
@@ -1737,27 +1500,6 @@ getEntryForBaseRel (CopyMap *map, Index rtindex)
 	return NULL;
 }
 
-/*
- * Get the CopyMapRelEntry for the "refNum"th reference to the relation with
- * Oid "rel".
- */
-
-static CopyMapRelEntry *
-getRelEntry (CopyMap *map, Oid rel, int refNum)
-{
-	CopyMapRelEntry *entry;
-	ListCell *lc;
-
-	foreach(lc, map->entries)
-	{
-		entry = (CopyMapRelEntry *) lfirst(lc);
-
-		if (entry->relation == rel && entry->refNum == refNum)
-			return entry;
-	}
-
-	return NULL;
-}
 
 /*
  * A generic walker that applies a function to each of the relentries and attr

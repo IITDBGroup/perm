@@ -19,6 +19,7 @@
 #include "nodes/nodes.h"
 #include "utils/guc.h"
 #include "parser/parsetree.h"
+#include "optimizer/clauses.h"
 
 #include "provrewrite/provlog.h"
 #include "provrewrite/prov_nodes.h"
@@ -32,7 +33,7 @@
 #include "provrewrite/provrewrite.h"
 
 /* */
-static Query *rewriteDummyCopySet (Query *top);
+//static Query *rewriteDummyCopySet (Query *top);
 static void rewriteSetRTEs (Query *newTop, List **subList);
 static void createRangeTable (Query *top, Query *query);
 static void restructureSetOperationQueryNode (Query *top);
@@ -41,13 +42,18 @@ static SetOperation getSetOpType (SetOperationStmt *setOp);
 
 static void replaceSetOperationSubTrees (Query *top, Node *node, Node **parentPointer, SetOperation rootType);
 static void replaceSetOperatorSubtree (Query *top, SetOperationStmt *setOp, Node **parent);
-static void correctRelMapsVarno (List *relMaps);
+//static void correctRelMapsVarno (List *relMaps);
+static void correctNoRewriteRelEntry (CopyMapRelEntry *rel);
 
 static void setRelMapsAttrno (List *relMaps, int newVarno);
-static void setRelMapsVarno (List *relMaps, int newVarno, bool subMode);
-static bool setVarnoToOneMapWalker (CopyMapRelEntry *entry, CopyMapEntry *attr, void *context);
-static bool addVarnoAttrMapWalker (CopyMapRelEntry *entry, CopyMapEntry *attr, void *context);
-static bool addVarnoRelMapWalker (CopyMapRelEntry *entry, void *context);
+//static void setRelMapsVarno (List *relMaps, int newVarno, bool subMode);
+static void adaptCondVarnos (InclusionCond *cond, int varno);
+static bool adaptVarnoWalker (Node *node, int *context);
+static void addSimpleInclusionCond (CopyMapRelEntry *old, CopyMapRelEntry *new, int rtindex);
+
+//static bool setVarnoToOneMapWalker (CopyMapRelEntry *entry, CopyMapEntry *attr, void *context);
+//static bool addVarnoAttrMapWalker (CopyMapRelEntry *entry, CopyMapEntry *attr, void *context);
+//static bool addVarnoRelMapWalker (CopyMapRelEntry *entry, void *context);
 
 //static RangeTblRef *getRtRefFromList (List *list, Index rtIndex);
 
@@ -59,23 +65,19 @@ static bool addVarnoRelMapWalker (CopyMapRelEntry *entry, void *context);
 Query *
 rewriteCopySetQuery (Query *query)
 {
-	List *pList;
 	List *subList;
 	Query *newTop;
 	Query *orig;
 	int numSubs;
 	int *context;
 
-	pList = NIL;
 	subList = NIL;
 
 	orig = copyObject(query);
 
 	/* Should the query be rewritten at all? If not fake provenance attributes. */
 	if (!shouldRewriteQuery(query))//CHECK can this happen at all, because we would never rewrite the set query node anyway?
-		return rewriteDummyCopySet(query);
-
-	/* we have to rewrite set query */
+		return query;
 
 	/* remove RTEs produced by postgres rewriter */
 	removeDummyRewriterRTEs(query);
@@ -94,12 +96,12 @@ rewriteCopySetQuery (Query *query)
 	/* add original query as first range table entry */
 	addSubqueryToRTWithParam (newTop, orig, "originalSet", false, ACL_NO_RIGHTS, false);
 
-	/* adapt copy map accordingly */
-	context = (int *) palloc(sizeof(int));//TODO adapt to new style copy map
-	*context = 1;
-	copyMapWalker(GET_COPY_MAP(newTop)->entries, context, context, NULL,
-			addVarnoRelMapWalker, addVarnoAttrMapWalker, NULL);
-	pfree(context);
+//	/* adapt copy map accordingly */
+//	context = (int *) palloc(sizeof(int));//TODO adapt to new style copy map
+//	*context = 1;
+//	copyMapWalker(GET_COPY_MAP(newTop)->entries, context, context, NULL,
+//			addVarnoRelMapWalker, addVarnoAttrMapWalker, NULL);
+//	pfree(context);
 
 	/* rewrite the subqueries used in the set operation */
 	numSubs = list_length(query->rtable);
@@ -112,8 +114,7 @@ rewriteCopySetQuery (Query *query)
 	createCopyJoinsForSetOp (newTop, query);
 
 	/* add provenance attributes from subqueries to target list */
-	pList = copyAddProvAttrsForSet (newTop, subList, pList);
-	push(&pStack, pList);
+	copyAddProvAttrs(newTop, subList);
 
 	/* increase sublevelsup of vars in case we are rewritting in an sublink query */
 	context = (int *) palloc(sizeof(int));
@@ -122,6 +123,16 @@ rewriteCopySetQuery (Query *query)
 	pfree(context);
 
 	return newTop;
+}
+
+/*
+ *
+ */
+
+static void
+adaptCopyMapForNewSetTop (Query *newTop, Query *sub)
+{
+
 }
 
 /*
@@ -193,7 +204,8 @@ getSetOpType (SetOperationStmt *setOp)
 
 
 /*
- *
+ * Create the range table for the new top query joining the original set
+ * operation with the rewritten input's.
  */
 
 static void
@@ -203,39 +215,52 @@ createRangeTable (Query *top, Query *query)
 	RangeTblEntry *rte;
 	Index curRte;
 	CopyMap *map;
-	CopyMap *oldMap;
-	List *relMaps;
-	int i;
+	List *origRtable;
+//	List *relMaps;
+	List *rtIndexMapping = NIL;
+	CopyMapRelEntry *relEntry;
+	int i, rtIndex;
 
 	curRte = 2;
 	map = GET_COPY_MAP(top);
-	oldMap = GET_COPY_MAP(query);
+	origRtable = query->rtable;
+	query->rtable = NIL;
 
-	foreachi(lc, i, query->rtable)
+	// add subqueries that should be rewritten to top range table.
+	foreachi(lc, i, origRtable)
 	{
 		rte = (RangeTblEntry *) lfirst(lc);
+		query->rtable = lappend(query->rtable, copyObject(rte));
 
-		/* rte should be rewritten add it to new top rtable */
-		if(shouldRewriteRTEforMap(oldMap, i + 1))
+		/* rte should be rewritten add it to new top rtable and store its old
+		 * rtindex */
+		if(shouldRewriteRTEforMap(map, i + 1))
 		{
-			top->rtable = lappend(top->rtable, copyObject(rte));
-
-			relMaps = getAllEntriesForRTE(map, i + 2);
-
-			setRelMapsVarno(relMaps, curRte, false);
-
+			top->rtable = lappend(top->rtable, rte);
+			rtIndexMapping = lappend_int(rtIndexMapping, i + 1);
 			curRte++;
 		}
 		/* should not be rewritten change copy map to */
-		else
-		{
-			relMaps = getAllEntriesForRTE(map, i + 2);
-			setRelMapsVarno(relMaps, 0, false);
-		}
+//		else
+//		{
+//			relMaps = getAllEntriesForRTE(map, i + 2);
+//			setRelMapsVarno(relMaps, 0, false);
+//		}
 	}
 
-	/* set the rtindex of the CopyMapRelEntries */
-	correctRelMapsVarno(map->entries);
+	foreach(lc, map->entries)
+	{
+		relEntry = (CopyMapRelEntry *) lfirst(lc);
+		rtIndex = listPositionInt(rtIndexMapping, relEntry->child->rtindex) + 2;
+
+		if (rtIndex != -1)
+			setRelMapsAttrno(list_make1(relEntry), rtIndex);
+		else
+			correctNoRewriteRelEntry (relEntry);
+	}
+
+//	/* set the rtindex of the CopyMapRelEntries */
+//	correctRelMapsVarno(map->entries);
 }
 
 /*
@@ -243,31 +268,42 @@ createRangeTable (Query *top, Query *query)
  */
 
 static void
-correctRelMapsVarno (List *relMaps)
+correctNoRewriteRelEntry (CopyMapRelEntry *rel)
 {
-	ListCell *lc;
-	CopyMapRelEntry *entry;
-	CopyMapEntry *attr;
-	Var *var;
-
-	foreach(lc, relMaps)
-	{
-		entry = (CopyMapRelEntry *) lfirst(lc);
-
-		attr = (CopyMapEntry *) linitial(entry->attrEntries);
-//
-//		if (attr->inVars)
-//		{
-//			var = (Var *) linitial(attr->inVars);
-//
-//			entry->rtindex = var->varno;
-//		}
-//		else
-//			entry->rtindex = 0;
-
-	}
-
+	rel->rtindex = -1;
+	//CHECK necessary at all???
 }
+
+///*
+// *
+// */
+//
+//static void
+//correctRelMapsVarno (List *relMaps)
+//{
+//	ListCell *lc;
+//	CopyMapRelEntry *entry;
+//	CopyMapEntry *attr;
+//	Var *var;
+//
+//	foreach(lc, relMaps)
+//	{
+//		entry = (CopyMapRelEntry *) lfirst(lc);
+//
+//		attr = (CopyMapEntry *) linitial(entry->attrEntries);
+////
+////		if (attr->inVars)
+////		{
+////			var = (Var *) linitial(attr->inVars);
+////
+////			entry->rtindex = var->varno;
+////		}
+////		else
+////			entry->rtindex = 0;
+//
+//	}
+//
+//}
 
 /*
  *
@@ -276,25 +312,45 @@ correctRelMapsVarno (List *relMaps)
 static void
 setRelMapsAttrno (List *relMaps, int newVarno)
 {
-	ListCell *lc, *innerLc, *attrLc;
+	ListCell *lc, *innerLc, *attrLc, *condLc, *inCondLc;
 	CopyMapRelEntry *rel;
 	CopyMapEntry *attr;
-	Var *var;
+	AttrInclusions *attIncl, *innerIncl;
+	InclusionCond *cond, *innerCond;
+//	Var *var;
 
 	foreach(lc, relMaps)
 	{
 		rel = (CopyMapRelEntry *) lfirst(lc);
+		rel->child->rtindex = newVarno;
 
 		foreach(innerLc, rel->attrEntries)
 		{
 			attr = (CopyMapEntry *) lfirst(innerLc);
 
-//			foreach(attrLc, attr->inVars)
-//			{
-//				var = (Var *) lfirst(attrLc);
-//
-//				var->varno = newVarno;
-//			}
+			foreach(attrLc, attr->outAttrIncls)
+			{
+				attIncl = (AttrInclusions *) lfirst(attrLc);
+
+				foreach(condLc, attIncl->inclConds)
+				{
+					cond = (InclusionCond *) lfirst(condLc);
+
+					if (IsA(cond->existsAttr, AttrInclusions))
+					{
+						innerIncl = (AttrInclusions *) cond->existsAttr;
+
+						innerIncl->attr->varno = newVarno;
+
+						foreach(inCondLc, innerIncl->inclConds)
+						{
+							innerCond = (InclusionCond *) lfirst(inCondLc);
+
+							adaptCondVarnos(innerCond, newVarno);
+						}
+					}
+				}
+			}
 		}
 	}
 }
@@ -304,36 +360,88 @@ setRelMapsAttrno (List *relMaps, int newVarno)
  */
 
 static void
-setRelMapsVarno (List *relMaps, int newVarno, bool subMode)
+adaptCondVarnos (InclusionCond *cond, int varno)
 {
-	ListCell *lc, *innerLc, *attrLc;
-	CopyMapRelEntry *rel;
-	CopyMapEntry *attr;
 	Var *var;
+	ListCell *lc;
 
-	foreach(lc, relMaps)
+	if (IsA(cond->existsAttr,Var))
 	{
-		rel = (CopyMapRelEntry *) lfirst(lc);
+		var = (Var *) cond->existsAttr;
+		var->varno = varno;
+	}
 
-		if (subMode)
-			rel->rtindex = newVarno;
-
-		foreach(innerLc, rel->attrEntries)
+	if (cond->inclType == INCL_EQUAL)
+	{
+		foreach(lc, cond->eqVars)
 		{
-			attr = (CopyMapEntry *) lfirst(innerLc);
-
-//			if (newVarno == 1 && !subMode)
-//				attr->outVars = NIL;
-//
-//			foreach(attrLc, attr->inVars)
-//			{
-//				var = (Var *) lfirst(attrLc);
-//
-//				var->varno = newVarno;
-//			}
+			var = (Var *) lfirst(lc);
+			var->varno = varno;
 		}
 	}
+
+	if (cond->inclType == INCL_IF)
+		adaptVarnoWalker(cond->cond, &varno);
 }
+
+/*
+ *
+ */
+
+static bool
+adaptVarnoWalker (Node *node, int *context)
+{
+	Var *var;
+
+	if (node == NULL)
+		return false;
+
+	if (IsA(node, Var))
+	{
+		var = (Var *) node;
+
+//TODO		if (var->varlevelsup == 0) only if not in sublink
+		var->varno = *context;
+	}
+
+	return expression_tree_walker(node, adaptVarnoWalker, (void *) context);
+}
+
+///*
+// *
+// */
+//
+//static void
+//setRelMapsVarno (List *relMaps, int newVarno, bool subMode)
+//{
+//	ListCell *lc, *innerLc, *attrLc;
+//	CopyMapRelEntry *rel;
+//	CopyMapEntry *attr;
+//	Var *var;
+//
+//	foreach(lc, relMaps)
+//	{
+//		rel = (CopyMapRelEntry *) lfirst(lc);
+//
+//		if (subMode)
+//			rel->rtindex = newVarno;
+//
+//		foreach(innerLc, rel->attrEntries)
+//		{
+//			attr = (CopyMapEntry *) lfirst(innerLc);
+//
+////			if (newVarno == 1 && !subMode)
+////				attr->outVars = NIL;
+////
+////			foreach(attrLc, attr->inVars)
+////			{
+////				var = (Var *) lfirst(attrLc);
+////
+////				var->varno = newVarno;
+////			}
+//		}
+//	}
+//}
 
 /*
  * Rewrites the range table entries of a set query.
@@ -361,87 +469,87 @@ rewriteSetRTEs (Query *newTop, List **subList)
 	}
 }
 
-/*
- * Introduces a new top query node for a non-propagating set-query. This is necessary because we cannot add dummy
- * provenance attributes to a set operation directly (Postgres requires a set-operation query node to have
- * the attributes of its first RTE as the targetlist).
- */
-
-static Query *
-rewriteDummyCopySet (Query *top)//CHECK necessary?
-{
-	Query *newTopQuery;
-	List *pList;
-
-	/* create a new top query node to add the dummy provenance attributes */
-	newTopQuery = makeQuery();
-
-	newTopQuery->targetList = copyObject(top->targetList);
-	addSubqueryToRT (newTopQuery, top, "OrigAgg");
-
-	Provinfo(newTopQuery)->copyInfo = copyObject(GET_COPY_MAP(top));
-	copyMapWalker(GET_COPY_MAP(newTopQuery)->entries, NULL, NULL, NULL, NULL,
-			setVarnoToOneMapWalker, NULL);
-
-
-	/* create Dummy provenance attributes */
-	pList = copyAddProvAttrForNonRewritten(newTopQuery);
-	pStack = lcons(pList, pStack);
-
-	return newTopQuery;
-}
-
-/*
- *
- */
-
-static bool
-setVarnoToOneMapWalker (CopyMapRelEntry *entry, CopyMapEntry *attr, void *context)
-{
-//	ListCell *lc;
-//	Var *var;
+///*
+// * Introduces a new top query node for a non-propagating set-query. This is necessary because we cannot add dummy
+// * provenance attributes to a set operation directly (Postgres requires a set-operation query node to have
+// * the attributes of its first RTE as the targetlist).
+// */
 //
-//	foreach(lc, attr->inVars)
-//	{
-//		var = (Var *) lfirst(lc);
+//static Query *
+//rewriteDummyCopySet (Query *top)//CHECK necessary?
+//{
+//	Query *newTopQuery;
+//	List *pList;
 //
-//		var->varno = 1;
-//	}
-
-	return false;
-}
-
-/*
- *
- */
-
-static bool
-addVarnoRelMapWalker (CopyMapRelEntry *entry, void *context)
-{
-	entry->rtindex += *((int *) context);
-
-	return false;
-}
-
-/*
- *
- */
-
-static bool
-addVarnoAttrMapWalker (CopyMapRelEntry *entry, CopyMapEntry *attr, void *context)
-{
-//	ListCell *lc;
-//	Var *var;
+//	/* create a new top query node to add the dummy provenance attributes */
+//	newTopQuery = makeQuery();
 //
-//	foreach(lc, attr->inVars)
-//	{
-//		var = (Var *) lfirst(lc);
+//	newTopQuery->targetList = copyObject(top->targetList);
+//	addSubqueryToRT (newTopQuery, top, "OrigAgg");
 //
-//		var->varno += *((int *) context);
-//	}
+//	Provinfo(newTopQuery)->copyInfo = copyObject(GET_COPY_MAP(top));
+//	copyMapWalker(GET_COPY_MAP(newTopQuery)->entries, NULL, NULL, NULL, NULL,
+//			setVarnoToOneMapWalker, NULL);
+//
+//
+//	/* create Dummy provenance attributes */
+//	pList = copyAddProvAttrForNonRewritten(newTopQuery);
+//	pStack = lcons(pList, pStack);
+//
+//	return newTopQuery;
+//}
 
-	return false;
-}
+///*
+// *
+// */
+//
+//static bool
+//setVarnoToOneMapWalker (CopyMapRelEntry *entry, CopyMapEntry *attr, void *context)
+//{
+////	ListCell *lc;
+////	Var *var;
+////
+////	foreach(lc, attr->inVars)
+////	{
+////		var = (Var *) lfirst(lc);
+////
+////		var->varno = 1;
+////	}
+//
+//	return false;
+//}
+//
+///*
+// *
+// */
+//
+//static bool
+//addVarnoRelMapWalker (CopyMapRelEntry *entry, void *context)
+//{
+//	entry->rtindex += *((int *) context);
+//
+//	return false;
+//}
+//
+///*
+// *
+// */
+//
+//static bool
+//addVarnoAttrMapWalker (CopyMapRelEntry *entry, CopyMapEntry *attr, void *context)
+//{
+////	ListCell *lc;
+////	Var *var;
+////
+////	foreach(lc, attr->inVars)
+////	{
+////		var = (Var *) lfirst(lc);
+////
+////		var->varno += *((int *) context);
+////	}
+//
+//	return false;
+//}
 
 
 /*
@@ -531,16 +639,17 @@ replaceSetOperationSubTrees (Query *top, Node *node, Node **parentPointer, SetOp
 }
 
 /*
- * Replaces a subtree in an set operation tree with a new subquery that represents the
- * set operations performed by the sub tree. Adapt Copy Map accordingly.
+ * Replaces a subtree in an set operation tree with a new subquery that
+ * represents the set operations performed by the sub tree. Adapt Copy Map
+ * accordingly.
  */
 
 static void
 replaceSetOperatorSubtree (Query *top, SetOperationStmt *setOp, Node **parent)
 {
-	ListCell *lc, *indexLc;
-	List *subTreeRTEs;
-	List *subTreeRTindex;
+	ListCell *lc, *indexLc, *origRelLc, *newRelLc;
+	List *subTreeRTEs = NIL;
+	List *subTreeRTindex = NIL;
 	List *subTreeRTrefs;
 	List *queryRTrefs;
 	List *newRtable;
@@ -548,12 +657,14 @@ replaceSetOperatorSubtree (Query *top, SetOperationStmt *setOp, Node **parent)
 	Query *newSub;
 	RangeTblEntry *rte;
 	RangeTblRef *rtRef;
-	int counter, rtIndex, i, newSubRTindex, newRtindex;
+	int rtIndex, i, newSubRTindex, newRtindex;
 	int *context;
 	CopyMap *newMap, *map;
+	CopyMapRelEntry *oldRel, *newRel;
+	List *origSubRelEntries;
+	List *newSubRelEntries;
+	List *individSubEntries = NIL;
 
-	subTreeRTEs = NIL;
-	subTreeRTindex = NIL;
 	map = GET_COPY_MAP(top);
 
 	/* find all range table entries referenced from the subtree under setOp */
@@ -566,29 +677,47 @@ replaceSetOperatorSubtree (Query *top, SetOperationStmt *setOp, Node **parent)
 	Provinfo(newSub)->copyInfo = (Node *) makeCopyMap ();
 	newMap = GET_COPY_MAP(newSub);
 
-	/* create range table entries for range table entries referenced from set operation in subtree */
+	/* create range table entries for range table entries referenced from set
+	 * operation in subtree */
 	forboth(lc, subTreeRTEs, indexLc, subTreeRTindex)
 	{
 		rte = (RangeTblEntry *) lfirst(lc);
 		rtIndex = lfirst_int(indexLc);
 
-		newSub->rtable = lappend(newSub->rtable, (RangeTblEntry *) copyObject(rte));
-		newMap->entries = list_concat(newMap->entries, copyObject(getAllEntriesForRTE(map, rtIndex)));
+		newSub->rtable = lappend(newSub->rtable, (RangeTblEntry *) rte);//TODO omit copy to simplify reconstruction of child links
+
+		origSubRelEntries = getAllEntriesForRTE(map, rtIndex);
+		newSubRelEntries = copyObject(origSubRelEntries);
+		individSubEntries = lappend(individSubEntries, newSubRelEntries);
+
+		/* Change the child links of the original sub rel entries and create
+		 * simple inclusion conditions for the new rel entries of top */
+		forboth(origRelLc, origSubRelEntries, newRelLc, newSubRelEntries)
+		{
+			oldRel = (CopyMapRelEntry *) lfirst(origRelLc);
+			newRel = (CopyMapRelEntry *) lfirst(newRelLc);
+
+			/* Link child of old rel entry as the child of the new entry
+			 * and set new entry as child of the old entry */
+			newRel->child = oldRel->child;
+			oldRel->child = newRel;
+
+			/* Create inclusion conditions */
+			addSimpleInclusionCond(oldRel, newRel, rtIndex);
+		}
+
+		newMap->entries = list_concat(newMap->entries, newSubRelEntries);
 	}
 
 	/* adapt RTErefs in sub tree */
 	subTreeRTrefs = getSetOpRTRefs((Node *) newSub->setOperations);
 
-	counter = 1;
 	forbothi(lc, indexLc, i, subTreeRTrefs, subTreeRTindex)
 	{
 		rtRef = (RangeTblRef *) lfirst(lc);
 		rtIndex = lfirst_int(indexLc);
 
-		rtRef->rtindex = counter;
-		setRelMapsVarno(getAllEntriesForRTE(newMap, rtIndex), counter, true);
-
-		counter++;
+		rtRef->rtindex = i + 1;
 	}
 
 	/* add new sub query to range table */
@@ -621,7 +750,9 @@ replaceSetOperatorSubtree (Query *top, SetOperationStmt *setOp, Node **parent)
 		rtRef->rtindex = rtIndex + 1;
 	}
 
-	/* walk through old range table and adapt CopyMap */
+	/* Walk through old range table and adapt copy map rel entries of top query
+	 * node by setting the varno's of attributes and inclusion conditions and
+	 * the rtindex of the child entry of each rel entry. */
 	for(rtIndex = 1; rtIndex < list_length(top->rtable); rtIndex++)
 	{
 		newRtindex = listPositionInt(newRTposMap, rtIndex) + 1;
@@ -634,7 +765,14 @@ replaceSetOperatorSubtree (Query *top, SetOperationStmt *setOp, Node **parent)
 
 	top->rtable = newRtable;
 
-	correctRelMapsVarno(map->entries);
+	/* Adapt copy map rel entries of new sub query */
+	foreachi(lc, newRtindex, subTreeRTindex)
+	{
+		rtIndex = lfirst_int(lc);
+
+		setRelMapsAttrno(getAllEntriesForRTE(newMap, rtIndex), newRtindex + 1);
+	}
+	newMap->rtindex = newSubRTindex;
 
 	/* increase sublevelsup of newSub if we are rewritting a sublink query */
 	context = (int *) palloc(sizeof(int));
@@ -645,6 +783,43 @@ replaceSetOperatorSubtree (Query *top, SetOperationStmt *setOp, Node **parent)
 	correctSubQueryAlias(top);
 
 	LOGNODE(top, "after replace of subtree");
+}
+
+/*
+ *
+ */
+
+static void
+addSimpleInclusionCond (CopyMapRelEntry *old, CopyMapRelEntry *new, int rtindex)
+{
+	CopyMapEntry *attr;
+	AttrInclusions *oldIncl, *newInnerIncl;
+	InclusionCond *newCond;
+	ListCell *lc, *attLc;
+	Var *var;
+
+	foreach(lc, old->attrEntries)
+	{
+		attr = (CopyMapEntry *) lfirst(lc);
+		//CHECK ok to add only one AttrIncl and not adapt old AttrIncls
+		foreach(attLc, attr->outAttrIncls)
+		{
+			oldIncl = (AttrInclusions *) lfirst(lc);
+
+			var = copyObject(oldIncl->attr);
+			var->varno = rtindex;
+
+			newInnerIncl = makeAttrInclusions();
+			newInnerIncl->attr = var;
+			newInnerIncl->isStatic = oldIncl->isStatic;
+
+			MAKE_EXISTS_INCL(newCond, newInnerIncl);
+			oldIncl->inclConds = list_make1(newCond);
+
+			MAKE_EXISTS_INCL(newCond, copyObject(var));
+			newInnerIncl->inclConds = list_make1(newCond);
+		}
+	}
 }
 
 ///*

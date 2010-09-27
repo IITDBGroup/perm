@@ -213,9 +213,10 @@ generateCopyMapAttributs (Query *query, int numQAttrs)
 
 		// generate copy provenance attribute info
 		attrInfo = makeNode(CopyProvAttrInfo);
-		attrInfo->bitSetComposition = generateVarBitConstruction(query, rel,
-				numQAttrs);
 		attrInfo->outAttrNum = numQAttrs;
+		if (!rel->noRewrite)
+			attrInfo->bitSetComposition = generateVarBitConstruction(query, rel,
+							numQAttrs);
 		if (!rel->noRewrite && !rel->isStatic)
 			attrInfo->provVar = makeVar(map->rtindex, ++copyAttrPos,
 					VARBITOID, -1, 0);

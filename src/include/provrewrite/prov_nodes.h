@@ -56,21 +56,7 @@ typedef struct CopyMap {
 } CopyMap;
 
 /*
- * CopyProvInfo
- */
-
-//typedef struct CopyProvInfo
-//{
-//	NodeTag type;
-//	CopyMap *inMap;
-//	CopyMap *outMap;
-////	List *outAttrs;
-//} CopyProvInfo;
-
-
-
-/*
- * An entry in a copy map.
+ * An entry in a copy map representing copy information for a base relation.
  */
 typedef struct CopyMapRelEntry CopyMapRelEntry;
 typedef struct CopyProvAttrInfo CopyProvAttrInfo;
@@ -102,7 +88,7 @@ typedef struct CopyMapEntry
 	Var *baseRelAttr;
 	char *provAttrName;
 	List *outAttrIncls;
-	bool isStaticTrue;	// this map contains at most one member independent of the data
+	bool isStaticTrue;	// this map contains at most one member independent of the instance data
 //	bool minOneStatic;	// is guaranteed to contain at least one member
 	bool isStaticFalse;	// this map is always empty
 } CopyMapEntry;
@@ -493,7 +479,6 @@ extern InequalityGraphNode *makeInequalityGraphNodeNIL (void);
 extern QueryPushdownInfo *makeQueryPushdownInfo (void);
 extern SelScope *makeSelScope (void);
 extern CopyMap *makeCopyMap (void);
-//extern CopyProvInfo *makeCopyProvInfo (void);
 extern CopyMapRelEntry *makeCopyMapRelEntry (void);
 extern CopyMapEntry *makeCopyMapEntry (void);
 extern AttrInclusions *makeAttrInclusions (void);
@@ -562,6 +547,7 @@ extern bool provNodesEquals(void *a, void *b);
 		out = makeCopyMapRelEntry(); \
 		out->relation = in->relation; \
 		out->refNum = in->refNum; \
+		out->provAttrInfo = copyObject(in->provAttrInfo); \
 		foreach(lc,in->attrEntries) \
 		{ \
 			attrEntry = (CopyMapEntry *) lfirst(lc); \
@@ -585,7 +571,7 @@ extern bool provNodesEquals(void *a, void *b);
 #define MAKE_EXISTS_INCL(result, incl) \
 	do { \
 		result = makeInclusionCond(); \
-		result->existsAttr = (incl); \
+		result->existsAttr = ((Node *) incl); \
 	} while (0)
 
 /* create an equality inclusion condition for a single var */
@@ -593,7 +579,7 @@ extern bool provNodesEquals(void *a, void *b);
 	do { \
 		result = makeInclusionCond(); \
 		result->inclType = INCL_EQUAL; \
-		result->existsAttr = left; \
+		result->existsAttr = ((Node *) left); \
 		result->eqVars = list_make1(right); \
 	} while (0)
 
@@ -602,7 +588,7 @@ extern bool provNodesEquals(void *a, void *b);
 	do { \
 		result = makeInclusionCond(); \
 		result->inclType = INCL_EQUAL; \
-		result->existsAttr = left; \
+		result->existsAttr = ((Node *) left); \
 		result->eqVars = right; \
 	} while (0)
 
@@ -612,7 +598,7 @@ extern bool provNodesEquals(void *a, void *b);
 	do { \
 		result = makeInclusionCond(); \
 		result->inclType = INCL_IF; \
-		result->existsAttr = incl; \
+		result->existsAttr = ((Node *) incl); \
 		result->cond = condition; \
 	} while (0)
 

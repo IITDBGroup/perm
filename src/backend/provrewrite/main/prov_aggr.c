@@ -174,10 +174,7 @@ rewriteAggrSubqueryForRewrite (Query *query, bool returnMapping)
 
 			te->resno = curResno;
 			if (te->resjunk)
-			{
-				te->resjunk = false;
 				te->resname = appendIdToString("skippedGroupBy", &curUniqueAttrNum);
-			}
 			te->resjunk = false;
 
 			newTargetList = lappend(newTargetList, te);

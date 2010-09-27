@@ -37,23 +37,13 @@ typedef struct VarEqualitiesContext {
 		result->conditions = NIL; \
 	} while (0)
 
-/* macro to create an empty CopyMap */
-#define CREATE_COPYMAP \
-	((CopyMap *) palloc(sizeof(CopyMap)))
-
 /* prototypes */
 extern void generateCopyMaps (Query *query);
-extern bool isPropagating (CopyMapRelEntry *entry);
 extern bool shouldRewriteQuery (Query *query);
 extern bool shouldRewriteRTEforMap (CopyMap *map, Index rtindex);
 extern List *getAllEntriesForRTE (CopyMap *map, Index rtindex);
 extern CopyMapRelEntry *getEntryForBaseRel (CopyMap *map, Index rtindex);
 
-extern void addCopyMapEntry (CopyMap *map, Oid relation);
-extern CopyMapEntry *getCopyMapEntry (CopyMap *map, Oid relation);
-extern void removeConditionsForAttrs (CopyMap *map, Oid relation);
-//extern List *getQueryOutAttrs (Query *query);
-extern CopyMap *addTransitiveClosure (CopyMap *mapIn, EqGraph *eqGraph);
 extern bool inclusionCondWalker (AttrInclusions *incl,
 		bool (*condWalker) (InclusionCond *cond, void *context),
 		void *context);

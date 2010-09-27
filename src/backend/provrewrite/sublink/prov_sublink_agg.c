@@ -89,9 +89,7 @@ hasNonHavingSublink (Query *query)
 	List *result;
 
 	if (!query->hasSubLinks)
-	{
 		return false;
-	}
 
 	result = findSublinkLocations(query, PROV_SUBLINK_SEARCH_WHERE
 			| PROV_SUBLINK_SEARCH_ORDER);
