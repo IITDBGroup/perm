@@ -99,7 +99,7 @@ static void handleJoins (Query *query);
 static void handleJoinTreeItem (Query *query, Node *joinItem,
 		List **equiGraph);
 static void analyzeConditionForCopy (Query *query, Node *condition,
-		List *relEntries, List **equiGraph);
+		List *relEntries, List **equiGraph, bool outerJoin);
 static void addEquiGraphEdge (List *eq, List **equiGraph);
 static bool hasEdge (EquiGraphNode *left, EquiGraphNode *right, bool onlyS);
 static void addCondForEquiGraph(List *equiGraph, List *rels);
@@ -607,7 +607,8 @@ handleJoins (Query *query)
 	}
 
 	if (IS_TRANSC(ContributionType(query)))
-		analyzeConditionForCopy(query, query->jointree->quals, map->entries, &equiGraph);
+		analyzeConditionForCopy(query, query->jointree->quals, map->entries,
+				&equiGraph, false);
 
 	addCondForEquiGraph(equiGraph, map->entries);
 }
@@ -634,7 +635,8 @@ handleJoinTreeItem (Query *query, Node *joinItem, List **equiGraph)
 
 		// The qual is only analyzed for static
 		if (IS_TRANSC(ContributionType(query)))
-			analyzeConditionForCopy(query, join->quals, rels, equiGraph);
+			analyzeConditionForCopy(query, join->quals, rels, equiGraph,
+					IS_OUTER_JOIN(join->jointype));
 	}
 	/* is a input rte reference. Initialize the AttrIncludes based on
 	 * the CopyMapRelEntry's of the RTE. */
@@ -695,7 +697,7 @@ handleJoinTreeItem (Query *query, Node *joinItem, List **equiGraph)
  */
 
 static void analyzeConditionForCopy(Query *query, Node *condition,
-		List *relEntries, List **equiGraph)
+		List *relEntries, List **equiGraph, bool outerJoin)
 {
 	Node *baseCondition;
 	List *eqConds = NIL;
@@ -710,7 +712,7 @@ static void analyzeConditionForCopy(Query *query, Node *condition,
 	context = (VarEqualitiesContext *) palloc(sizeof(VarEqualitiesContext));
 	context->result = &eqConds;
 	context->root = condition;
-	context->outerJoin = false; //TODO check
+	context->outerJoin = outerJoin; //TODO check
 
 	findVarEqualitiesWalker(baseCondition, context);
 
