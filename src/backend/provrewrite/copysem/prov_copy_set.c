@@ -32,8 +32,7 @@
 #include "provrewrite/prov_copy_util.h"
 #include "provrewrite/provrewrite.h"
 
-/* */
-//static Query *rewriteDummyCopySet (Query *top);
+/* prototypes */
 static void rewriteSetRTEs (Query *newTop, List **subList);
 static void createRangeTable (Query *top, Query *query);
 static void restructureSetOperationQueryNode (Query *top);
@@ -42,21 +41,12 @@ static SetOperation getSetOpType (SetOperationStmt *setOp);
 
 static void replaceSetOperationSubTrees (Query *top, Node *node, Node **parentPointer, SetOperation rootType);
 static void replaceSetOperatorSubtree (Query *top, SetOperationStmt *setOp, Node **parent);
-//static void correctRelMapsVarno (List *relMaps);
+static void correctChildMapRtindex(Query *query);
 static void correctNoRewriteRelEntry (CopyMapRelEntry *rel);
 
 static void setRelMapsAttrno (List *relMaps, int newVarno);
-//static void setRelMapsVarno (List *relMaps, int newVarno, bool subMode);
 static void adaptCondVarnos (InclusionCond *cond, int varno);
 static bool adaptVarnoWalker (Node *node, int *context);
-static void addSimpleInclusionCond (CopyMapRelEntry *old, CopyMapRelEntry *new, int rtindex);
-
-//static bool setVarnoToOneMapWalker (CopyMapRelEntry *entry, CopyMapEntry *attr, void *context);
-//static bool addVarnoAttrMapWalker (CopyMapRelEntry *entry, CopyMapEntry *attr, void *context);
-//static bool addVarnoRelMapWalker (CopyMapRelEntry *entry, void *context);
-
-//static RangeTblRef *getRtRefFromList (List *list, Index rtIndex);
-
 
 /*
  *
@@ -76,7 +66,7 @@ rewriteCopySetQuery (Query *query)
 	orig = copyObject(query);
 
 	/* Should the query be rewritten at all? If not fake provenance attributes. */
-	if (!shouldRewriteQuery(query))//CHECK can this happen at all, because we would never rewrite the set query node anyway?
+	if (!shouldRewriteQuery(query))//CHECK can this happen at all, because we would never rewrite the set query node anyway? Could happen after restructure??
 		return query;
 
 	/* remove RTEs produced by postgres rewriter */
@@ -96,13 +86,6 @@ rewriteCopySetQuery (Query *query)
 	/* add original query as first range table entry */
 	addSubqueryToRTWithParam (newTop, orig, "originalSet", false, ACL_NO_RIGHTS, false);
 
-//	/* adapt copy map accordingly */
-//	context = (int *) palloc(sizeof(int));//TODO adapt to new style copy map
-//	*context = 1;
-//	copyMapWalker(GET_COPY_MAP(newTop)->entries, context, context, NULL,
-//			addVarnoRelMapWalker, addVarnoAttrMapWalker, NULL);
-//	pfree(context);
-
 	/* rewrite the subqueries used in the set operation */
 	numSubs = list_length(query->rtable);
 	rewriteSetRTEs (newTop, &subList);
@@ -116,7 +99,7 @@ rewriteCopySetQuery (Query *query)
 	/* add provenance attributes from subqueries to target list */
 	copyAddProvAttrs(newTop, subList);
 
-	/* increase sublevelsup of vars in case we are rewritting in an sublink query */
+	/* increase sublevelsup of vars in case we are rewriting in an sublink query */
 	context = (int *) palloc(sizeof(int));
 	*context = -1;
 	increaseSublevelsUpMutator((Node *) orig, context);
@@ -125,15 +108,6 @@ rewriteCopySetQuery (Query *query)
 	return newTop;
 }
 
-/*
- *
- */
-
-static void
-adaptCopyMapForNewSetTop (Query *newTop, Query *sub)
-{
-
-}
 
 /*
  * Create the joins for a rewritten set operation node
@@ -240,12 +214,6 @@ createRangeTable (Query *top, Query *query)
 			rtIndexMapping = lappend_int(rtIndexMapping, i + 1);
 			curRte++;
 		}
-		/* should not be rewritten change copy map to */
-//		else
-//		{
-//			relMaps = getAllEntriesForRTE(map, i + 2);
-//			setRelMapsVarno(relMaps, 0, false);
-//		}
 	}
 
 	foreach(lc, map->entries)
@@ -253,14 +221,11 @@ createRangeTable (Query *top, Query *query)
 		relEntry = (CopyMapRelEntry *) lfirst(lc);
 		rtIndex = listPositionInt(rtIndexMapping, relEntry->child->rtindex) + 2;
 
-		if (rtIndex != -1)
+		if (rtIndex != 1)
 			setRelMapsAttrno(list_make1(relEntry), rtIndex);
 		else
 			correctNoRewriteRelEntry (relEntry);
 	}
-
-//	/* set the rtindex of the CopyMapRelEntries */
-//	correctRelMapsVarno(map->entries);
 }
 
 /*
@@ -273,37 +238,6 @@ correctNoRewriteRelEntry (CopyMapRelEntry *rel)
 	rel->rtindex = -1;
 	//CHECK necessary at all???
 }
-
-///*
-// *
-// */
-//
-//static void
-//correctRelMapsVarno (List *relMaps)
-//{
-//	ListCell *lc;
-//	CopyMapRelEntry *entry;
-//	CopyMapEntry *attr;
-//	Var *var;
-//
-//	foreach(lc, relMaps)
-//	{
-//		entry = (CopyMapRelEntry *) lfirst(lc);
-//
-//		attr = (CopyMapEntry *) linitial(entry->attrEntries);
-////
-////		if (attr->inVars)
-////		{
-////			var = (Var *) linitial(attr->inVars);
-////
-////			entry->rtindex = var->varno;
-////		}
-////		else
-////			entry->rtindex = 0;
-//
-//	}
-//
-//}
 
 /*
  *
@@ -407,41 +341,6 @@ adaptVarnoWalker (Node *node, int *context)
 	return expression_tree_walker(node, adaptVarnoWalker, (void *) context);
 }
 
-///*
-// *
-// */
-//
-//static void
-//setRelMapsVarno (List *relMaps, int newVarno, bool subMode)
-//{
-//	ListCell *lc, *innerLc, *attrLc;
-//	CopyMapRelEntry *rel;
-//	CopyMapEntry *attr;
-//	Var *var;
-//
-//	foreach(lc, relMaps)
-//	{
-//		rel = (CopyMapRelEntry *) lfirst(lc);
-//
-//		if (subMode)
-//			rel->rtindex = newVarno;
-//
-//		foreach(innerLc, rel->attrEntries)
-//		{
-//			attr = (CopyMapEntry *) lfirst(innerLc);
-//
-////			if (newVarno == 1 && !subMode)
-////				attr->outVars = NIL;
-////
-////			foreach(attrLc, attr->inVars)
-////			{
-////				var = (Var *) lfirst(attrLc);
-////
-////				var->varno = newVarno;
-////			}
-//		}
-//	}
-//}
 
 /*
  * Rewrites the range table entries of a set query.
@@ -469,87 +368,7 @@ rewriteSetRTEs (Query *newTop, List **subList)
 	}
 }
 
-///*
-// * Introduces a new top query node for a non-propagating set-query. This is necessary because we cannot add dummy
-// * provenance attributes to a set operation directly (Postgres requires a set-operation query node to have
-// * the attributes of its first RTE as the targetlist).
-// */
-//
-//static Query *
-//rewriteDummyCopySet (Query *top)//CHECK necessary?
-//{
-//	Query *newTopQuery;
-//	List *pList;
-//
-//	/* create a new top query node to add the dummy provenance attributes */
-//	newTopQuery = makeQuery();
-//
-//	newTopQuery->targetList = copyObject(top->targetList);
-//	addSubqueryToRT (newTopQuery, top, "OrigAgg");
-//
-//	Provinfo(newTopQuery)->copyInfo = copyObject(GET_COPY_MAP(top));
-//	copyMapWalker(GET_COPY_MAP(newTopQuery)->entries, NULL, NULL, NULL, NULL,
-//			setVarnoToOneMapWalker, NULL);
-//
-//
-//	/* create Dummy provenance attributes */
-//	pList = copyAddProvAttrForNonRewritten(newTopQuery);
-//	pStack = lcons(pList, pStack);
-//
-//	return newTopQuery;
-//}
 
-///*
-// *
-// */
-//
-//static bool
-//setVarnoToOneMapWalker (CopyMapRelEntry *entry, CopyMapEntry *attr, void *context)
-//{
-////	ListCell *lc;
-////	Var *var;
-////
-////	foreach(lc, attr->inVars)
-////	{
-////		var = (Var *) lfirst(lc);
-////
-////		var->varno = 1;
-////	}
-//
-//	return false;
-//}
-//
-///*
-// *
-// */
-//
-//static bool
-//addVarnoRelMapWalker (CopyMapRelEntry *entry, void *context)
-//{
-//	entry->rtindex += *((int *) context);
-//
-//	return false;
-//}
-//
-///*
-// *
-// */
-//
-//static bool
-//addVarnoAttrMapWalker (CopyMapRelEntry *entry, CopyMapEntry *attr, void *context)
-//{
-////	ListCell *lc;
-////	Var *var;
-////
-////	foreach(lc, attr->inVars)
-////	{
-////		var = (Var *) lfirst(lc);
-////
-////		var->varno += *((int *) context);
-////	}
-//
-//	return false;
-//}
 
 
 /*
@@ -577,13 +396,15 @@ restructureSetOperationQueryNode (Query *top)
 }
 
 /*
- * Walks through a set operation tree of a query. If only one type of operators (union or intersection) is found
- * nothing is done. If a different operator or a set difference operator is found, the whole subtree under this operator is extracted into
- * a new query node.
+ * Walks through a set operation tree of a query. If only one type of operators
+ * (union or intersection) is found nothing is done. If a different operator or
+ * a set difference operator is found, the whole subtree under this operator is
+ * extracted into a new query node.
  */
 
 static void
-replaceSetOperationSubTrees (Query *top, Node *node, Node **parentPointer, SetOperation rootType)
+replaceSetOperationSubTrees (Query *top, Node *node, Node **parentPointer,
+		SetOperation rootType)
 {
 	SetOperationStmt *setOp;
 
@@ -594,22 +415,26 @@ replaceSetOperationSubTrees (Query *top, Node *node, Node **parentPointer, SetOp
 	/* cast to set operation stmt */
 	setOp = (SetOperationStmt *) node;
 
-	/* if the user deactivated the optimized set operation rewrites we outsource each set operation into
-	 * a separate query.
-	 */
+	/* if the user deactivated the optimized set operation rewrites we
+	 * outsource each set operation into a separate query. */
 	if (!prov_use_set_optimization)
 	{
 		if (IsA(setOp->larg, SetOperationStmt))
-			replaceSetOperatorSubtree (top, (SetOperationStmt *) setOp->larg, &(setOp->larg));
+			replaceSetOperatorSubtree (top, (SetOperationStmt *) setOp->larg,
+					&(setOp->larg));
 
 		if (IsA(setOp->rarg, SetOperationStmt))
-			replaceSetOperatorSubtree (top, (SetOperationStmt *) setOp->rarg, &(setOp->rarg));
+			replaceSetOperatorSubtree (top, (SetOperationStmt *) setOp->rarg,
+					&(setOp->rarg));
 	}
 
 	/*
-	 *  Optimization is activated. Keep original set operation tree, if it just contains only union or only intersection operations.
-	 *  For a set difference operation both operands are outsourced into a separate query (If they are not simple range table references).
-	 *  For a mixed unions and intersections we have to outsource sub trees under set operations differend from the root set operation.
+	 *  Optimization is activated. Keep original set operation tree, if it just
+	 *  contains only union or only intersection operations. For a set
+	 *  difference operation both operands are outsourced into a separate query
+	 *  (If they are not simple range table references). For a mixed unions and
+	 *  intersections we have to outsource sub trees under set operations
+	 *  different from the root set operation.
 	 */
 
 	switch (setOp->op)
@@ -620,8 +445,10 @@ replaceSetOperationSubTrees (Query *top, Node *node, Node **parentPointer, SetOp
 			/* check if of the same type as parent */
 			if (setOp->op == rootType)
 			{
-				replaceSetOperationSubTrees (top, setOp->larg, &(setOp->larg), rootType);
-				replaceSetOperationSubTrees (top, setOp->rarg, &(setOp->rarg), rootType);
+				replaceSetOperationSubTrees (top, setOp->larg, &(setOp->larg),
+						rootType);
+				replaceSetOperationSubTrees (top, setOp->rarg, &(setOp->rarg),
+						rootType);
 			}
 			/* another type replace subtree */
 			else
@@ -629,8 +456,10 @@ replaceSetOperationSubTrees (Query *top, Node *node, Node **parentPointer, SetOp
 		break;
 		/* set difference, replace subtree with new query node */
 		case SETOP_EXCEPT:
-			/* if is root set operation ignore it because it only propagates provenance from its left subtree */
-			replaceSetOperationSubTrees (top, setOp->larg, &(setOp->larg), rootType);
+			/* if is root set operation ignore it because it only propagates
+			 * provenance from its left subtree */
+			replaceSetOperationSubTrees (top, setOp->larg, &(setOp->larg),
+					rootType);
 		break;
 		default:
 			//TODO error
@@ -664,6 +493,7 @@ replaceSetOperatorSubtree (Query *top, SetOperationStmt *setOp, Node **parent)
 	List *origSubRelEntries;
 	List *newSubRelEntries;
 	List *individSubEntries = NIL;
+	bool notSeen;
 
 	map = GET_COPY_MAP(top);
 
@@ -671,9 +501,8 @@ replaceSetOperatorSubtree (Query *top, SetOperationStmt *setOp, Node **parent)
 	findSetOpRTEs(top->rtable,(Node *) setOp, &subTreeRTEs, &subTreeRTindex);
 
 	/* create new query node for subquery */
-	newSub = (Query *) copyObject(top);
-	newSub->rtable = NIL;
-	newSub->setOperations = (Node *) copyObject(setOp); //CHECK necessary
+	newSub = flatCopyWithoutProvInfo (top);
+	newSub->setOperations = (Node *) copyObject(setOp);
 	Provinfo(newSub)->copyInfo = (Node *) makeCopyMap ();
 	newMap = GET_COPY_MAP(newSub);
 
@@ -684,7 +513,7 @@ replaceSetOperatorSubtree (Query *top, SetOperationStmt *setOp, Node **parent)
 		rte = (RangeTblEntry *) lfirst(lc);
 		rtIndex = lfirst_int(indexLc);
 
-		newSub->rtable = lappend(newSub->rtable, (RangeTblEntry *) rte);//TODO omit copy to simplify reconstruction of child links
+		newSub->rtable = lappend(newSub->rtable, (RangeTblEntry *) rte);
 
 		origSubRelEntries = getAllEntriesForRTE(map, rtIndex);
 		newSubRelEntries = copyObject(origSubRelEntries);
@@ -701,9 +530,7 @@ replaceSetOperatorSubtree (Query *top, SetOperationStmt *setOp, Node **parent)
 			 * and set new entry as child of the old entry */
 			newRel->child = oldRel->child;
 			oldRel->child = newRel;
-
-			/* Create inclusion conditions */
-			addSimpleInclusionCond(oldRel, newRel, rtIndex);
+			newRel->rtindex = newRel->child->rtindex;
 		}
 
 		newMap->entries = list_concat(newMap->entries, newSubRelEntries);
@@ -721,7 +548,8 @@ replaceSetOperatorSubtree (Query *top, SetOperationStmt *setOp, Node **parent)
 	}
 
 	/* add new sub query to range table */
-	addSubqueryToRTWithParam (top, newSub, "newSub", false, ACL_NO_RIGHTS, true);
+	addSubqueryToRTWithParam (top, newSub, "newSub", false, ACL_NO_RIGHTS,
+			true);
 
 	/* replace subtree with RTE reference */
 	newSubRTindex = list_length(top->rtable);
@@ -734,45 +562,54 @@ replaceSetOperatorSubtree (Query *top, SetOperationStmt *setOp, Node **parent)
 
 	newRTposMap = NIL;
 
-	/* create new range table and remember the mapping between old and new range
-	 * table items
-	 */
+	/* create new range table and remember the mapping between old and new
+	 * range table items */
+	notSeen = true;
 	foreachi(lc, rtIndex, queryRTrefs)
 	{
 		rtRef = (RangeTblRef *) lfirst(lc);
 		rte = rt_fetch(rtRef->rtindex, top->rtable);
 
-		if (rtRef->rtindex == newSubRTindex)
+		if (rtRef->rtindex == newSubRTindex && notSeen)
+		{
 			newSubRTindex = rtIndex + 1;
+			notSeen = false;
+		}
 
 		newRtable = lappend(newRtable, rte);
 		newRTposMap = lappend_int(newRTposMap, rtRef->rtindex);
 		rtRef->rtindex = rtIndex + 1;
 	}
 
-	/* Walk through old range table and adapt copy map rel entries of top query
-	 * node by setting the varno's of attributes and inclusion conditions and
-	 * the rtindex of the child entry of each rel entry. */
-	for(rtIndex = 1; rtIndex < list_length(top->rtable); rtIndex++)
-	{
-		newRtindex = listPositionInt(newRTposMap, rtIndex) + 1;
-
-		if (newRtindex == 0)
-			setRelMapsAttrno(getAllEntriesForRTE(map, rtIndex), newSubRTindex);
-		else
-			setRelMapsAttrno(getAllEntriesForRTE(map, rtIndex), newRtindex);
-	}
-
 	top->rtable = newRtable;
 
-	/* Adapt copy map rel entries of new sub query */
-	foreachi(lc, newRtindex, subTreeRTindex)
+	/* Walk through old copy map and adapt copy map rel entries of top query
+	 * node by setting the varno's of attributes and inclusion conditions and
+	 * the rtindex of the child entry of each rel entry. */
+	foreach(lc, map->entries)
 	{
-		rtIndex = lfirst_int(lc);
+		oldRel = (CopyMapRelEntry *) lfirst(lc);
 
-		setRelMapsAttrno(getAllEntriesForRTE(newMap, rtIndex), newRtindex + 1);
+		newRtindex = listPositionInt(newRTposMap, oldRel->child->rtindex) + 1;
+
+		if (newRtindex == 0)
+			setRelMapsAttrno(list_make1(oldRel), newSubRTindex);
+		else
+			setRelMapsAttrno(list_make1(oldRel), newRtindex);
 	}
-	newMap->rtindex = newSubRTindex;
+
+	/* Adapt copy map rel entries of new sub query */
+	foreach(lc, newMap->entries)
+	{
+		oldRel = (CopyMapRelEntry *) lfirst(lc);
+
+		newRtindex =
+				listPositionInt(subTreeRTindex, oldRel->child->rtindex) + 1;
+		setRelMapsAttrno(list_make1(oldRel), newRtindex);
+	}
+
+	correctChildMapRtindex(top);
+	correctChildMapRtindex(newSub);
 
 	/* increase sublevelsup of newSub if we are rewritting a sublink query */
 	context = (int *) palloc(sizeof(int));
@@ -786,60 +623,25 @@ replaceSetOperatorSubtree (Query *top, SetOperationStmt *setOp, Node **parent)
 }
 
 /*
- *
+ * Adapt the rtindex values of the child Query CopyMaps of a QueryNode.
  */
 
 static void
-addSimpleInclusionCond (CopyMapRelEntry *old, CopyMapRelEntry *new, int rtindex)
+correctChildMapRtindex(Query *query)
 {
-	CopyMapEntry *attr;
-	AttrInclusions *oldIncl, *newInnerIncl;
-	InclusionCond *newCond;
-	ListCell *lc, *attLc;
-	Var *var;
+	CopyMap *childMap;
+	RangeTblEntry *rte;
+	ListCell *lc;
+	int pos;
 
-	foreach(lc, old->attrEntries)
+	foreachi(lc, pos, query->rtable)
 	{
-		attr = (CopyMapEntry *) lfirst(lc);
-		//CHECK ok to add only one AttrIncl and not adapt old AttrIncls
-		foreach(attLc, attr->outAttrIncls)
+		rte = (RangeTblEntry *) lfirst(lc);
+
+		if (rte->rtekind == RTE_SUBQUERY)
 		{
-			oldIncl = (AttrInclusions *) lfirst(lc);
-
-			var = copyObject(oldIncl->attr);
-			var->varno = rtindex;
-
-			newInnerIncl = makeAttrInclusions();
-			newInnerIncl->attr = var;
-			newInnerIncl->isStatic = oldIncl->isStatic;
-
-			MAKE_EXISTS_INCL(newCond, newInnerIncl);
-			oldIncl->inclConds = list_make1(newCond);
-
-			MAKE_EXISTS_INCL(newCond, copyObject(var));
-			newInnerIncl->inclConds = list_make1(newCond);
+			childMap = GET_COPY_MAP(rte->subquery);
+			childMap->rtindex = pos + 1;
 		}
 	}
 }
-
-///*
-// *
-// */
-//
-//static RangeTblRef *
-//getRtRefFromList (List *list, Index rtIndex)
-//{
-//	ListCell *lc;
-//	RangeTblRef *rtRef;
-//
-//	foreach(lc, list)
-//	{
-//		rtRef = (RangeTblRef *) lfirst(lc);
-//
-//		if (rtRef->rtindex == rtIndex)
-//			return rtRef;
-//	}
-//
-//	return NULL;
-//}
-

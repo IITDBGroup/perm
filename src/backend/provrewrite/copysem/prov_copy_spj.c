@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * provrewrite.c
- *	  POSTGRES C Backend provenance extension
+ *	  PERM C - Backend provenance extension
  *
  * Portions Copyright (c) 2008 Boris Glavic
  *
@@ -38,10 +38,8 @@ static bool rteShouldRewrite (Query *query, Index rtindex);
 Query *
 rewriteSPJQueryCopy (Query *query)
 {
-	List *pList;
 	List *subList;
 
-	pList = NIL;
 	subList = NIL;
 
 	/* if the query has a limit clause we have to preserve the original
@@ -58,15 +56,8 @@ rewriteSPJQueryCopy (Query *query)
 	/* correct eref of subqueries */
 	correctSubQueryAlias (query);
 
-	/* correct join RTEs (add provenance attributes) */
-//	correctJoinRTEs (query, &subList);
-
 	/* add provenance attributes of sub queries to targetlist */
-	//pList = copyAddProvAttrs (query, subList, pList);
 	copyAddProvAttrs (query, subList);
-
-	/* push list of provenance attributes to pStack */
-	//push(&pStack, pList);
 
 	/* if a distinct clause is present include provenance attributes
 	 * otherwise we would incorrectly omit duplicate result tuples with
@@ -96,9 +87,8 @@ rewriteRTEsCopy (Query *query, List **subList, Index maxRtindex)
 
 	rtindex = 1;
 
-	/* Walk through range table and rewrite rte's if some new rte's were added during
-	 * sublink rewrite we ignore them.
-	 */
+	/* Walk through range table and rewrite rte's if some new rte's were added
+	 * during sublink rewrite we ignore them. */
 
 	for(lc = query->rtable->head, i = 0; lc != NULL && i < maxRtindex;
 			lc = lc->next, i++)
@@ -123,10 +113,6 @@ rewriteRTEsCopy (Query *query, List **subList, Index maxRtindex)
 				rewriteCopyBaseRel (rte, rtindex, GET_COPY_MAP(query));
 		}
 
-		/* add empty provenace attr list to stack */
-//		else if (rte->rtekind != RTE_JOIN)
-//			push(&pStack, NIL);
-
 		/* rte is not a join RTE so add it to subList*/
 		if (rte->rtekind != RTE_JOIN)
 			*subList = lappend_int(*subList, rtindex);
@@ -136,7 +122,7 @@ rewriteRTEsCopy (Query *query, List **subList, Index maxRtindex)
 }
 
 /*
- *
+ * Checks if a RTE should be rewritten.
  */
 static bool
 rteShouldRewrite (Query *query, Index rtindex)
@@ -167,8 +153,6 @@ rewriteCopyBaseRel (RangeTblEntry *rte, Index rtindex, CopyMap *map)
 	CopyMapRelEntry *entry;
 	CopyMapEntry *attr;
 
-//	pList = NIL;
-
 	/* get copy map entry for base relation */
 	entry = getEntryForBaseRel(map, rtindex);
 
@@ -186,14 +170,10 @@ rewriteCopyBaseRel (RangeTblEntry *rte, Index rtindex, CopyMap *map)
 		te->resorigcol = attr->baseRelAttr->varattno;
 
 		entry->provAttrs = lappend(entry->provAttrs, te);
-//		pList = lappend(pList, te);
 	}
 
-	/* push the provenance attrs on pStack */
-	//push(&pStack, pList);
-//	entry->provAttrs = pList;//CHECK
-
-	/* if the baseRelStack is activated push a RTE for this base relation on the baseRelStack */
+	/* if the baseRelStack is activated push a RTE for this base relation on
+	 * the baseRelStack */
 	if (baseRelStackActive)
 		push(&baseRelStack, copyObject(rte));
 }

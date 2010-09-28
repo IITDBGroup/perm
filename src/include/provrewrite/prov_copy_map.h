@@ -14,7 +14,6 @@
 #define PROV_COPY_MAP_H_
 
 #include "nodes/parsenodes.h"
-#include "provrewrite/prov_copy_equi.h"
 #include "provrewrite/prov_nodes.h"
 
 /* data structures */
@@ -44,16 +43,16 @@ extern bool shouldRewriteRTEforMap (CopyMap *map, Index rtindex);
 extern List *getAllEntriesForRTE (CopyMap *map, Index rtindex);
 extern CopyMapRelEntry *getEntryForBaseRel (CopyMap *map, Index rtindex);
 
-extern bool inclusionCondWalker (AttrInclusions *incl,
-		bool (*condWalker) (InclusionCond *cond, void *context),
-		void *context);
-extern void copyMapWalker (List *entries, void *context, void *attrContext,
-		void *inclContext,
-		bool (*relWalker) (CopyMapRelEntry *entry, void *context),
-		bool (*attrWalker) (CopyMapRelEntry *entry, CopyMapEntry *attr,
-				void *context),
-		bool (*inclWalker) (CopyMapRelEntry *entry, CopyMapEntry *attr,
-				AttrInclusions *incl, void *context));
-extern bool dummyAttrWalker (CopyMapRelEntry *entry, CopyMapEntry *attr,
-		void *context);
+//extern bool inclusionCondWalker (AttrInclusions *incl,
+//		bool (*condWalker) (InclusionCond *cond, void *context),
+//		void *context);
+//extern void copyMapWalker (List *entries, void *context, void *attrContext,
+//		void *inclContext,
+//		bool (*relWalker) (CopyMapRelEntry *entry, void *context),
+//		bool (*attrWalker) (CopyMapRelEntry *entry, CopyMapEntry *attr,
+//				void *context),
+//		bool (*inclWalker) (CopyMapRelEntry *entry, CopyMapEntry *attr,
+//				AttrInclusions *incl, void *context));
+//extern bool dummyAttrWalker (CopyMapRelEntry *entry, CopyMapEntry *attr,
+//		void *context);
 #endif /*PROV_COPY_MAP_H_*/

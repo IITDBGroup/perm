@@ -720,6 +720,38 @@ makeTransSubInfo (int id, SubOperationType opType)
 	return result;
 }
 
+
+Query *
+flatCopyWithoutProvInfo (Query *from)
+{
+	Query	   *newnode = makeNode(Query);
+
+	COPY_SCALAR_FIELD(commandType);
+	COPY_SCALAR_FIELD(querySource);
+	COPY_SCALAR_FIELD(canSetTag);
+	COPY_NODE_FIELD(utilityStmt);
+	COPY_SCALAR_FIELD(resultRelation);
+	COPY_NODE_FIELD(intoClause);
+	COPY_SCALAR_FIELD(hasAggs);
+	COPY_SCALAR_FIELD(hasSubLinks);
+	COPY_NODE_FIELD(jointree);
+	COPY_NODE_FIELD(targetList);
+	COPY_NODE_FIELD(returningList);
+	COPY_NODE_FIELD(groupClause);
+	COPY_NODE_FIELD(havingQual);
+	COPY_NODE_FIELD(distinctClause);
+	COPY_NODE_FIELD(sortClause);
+	COPY_NODE_FIELD(limitOffset);
+	COPY_NODE_FIELD(limitCount);
+	COPY_NODE_FIELD(rowMarks);
+	COPY_NODE_FIELD(setOperations);
+	newnode->provInfo = (Node *) makeProvInfo();
+	newnode->rtable = NIL;
+
+	return newnode;
+}
+
+
 /*
  * EQUAL functions
  */
@@ -765,14 +797,14 @@ provNodesEquals(void *a, void *b)
 	case T_CopyMap:
 		retval = _equalCopyMap(a,b);
 		break;
-//	case T_CopyProvInfo:
-//		retval = _equalCopyProvInfo(a,b);
-//		break;
 	case T_CopyMapRelEntry:
 		retval = _equalCopyMapRelEntry(a,b);
 		break;
 	case T_CopyMapEntry:
 		retval = _equalCopyMapEntry(a,b);
+		break;
+	case T_CopyProvAttrInfo:
+		retval = _equalCopyProvAttrInfo(a,b);
 		break;
 	case T_AttrInclusions:
 		retval = _equalAttrInclusions(a,b);

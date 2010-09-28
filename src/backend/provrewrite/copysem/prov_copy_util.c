@@ -33,12 +33,6 @@
 static List *getRTindicesForJoin (Node *joinTreeNode);
 static void addProvAttrsForRelEntry (Query *query, CopyMapRelEntry *rel,
 		CopyMapRelEntry *child);
-//static void addProvAttrFromStack (Query *query, Index rtindex, List **pList,
-//		List **subPstack);
-//static void addDummyProvenanceAttributesForRTE (Query *query, Index rtindex,
-//		List **pList);
-//static void addDummyProvenanceAttrsForBaseRel (CopyMapRelEntry *rel,
-//		Query *query, List **pList);
 
 
 /*
@@ -89,7 +83,8 @@ getRteVarsForJoin (Query *query, JoinExpr *join)
 }
 
 /*
- *
+ * Return a list of all CopyRelEntries that are accessed in the RTE with index
+ * "rtindex".
  */
 
 List *
@@ -110,7 +105,6 @@ getCopyRelsForRtindex (Query *query, Index rtindex)
 	{
 		List *rtIndices;
 		ListCell *innerLc;
-//		RangeTblEntry *baseRte;
 
 		rtIndices = getRTindicesForJoin(getJoinTreeNode(query, rtindex));
 
@@ -161,44 +155,6 @@ getRTindicesForJoin (Node *joinTreeNode)
 		return list_make1_int(rtRef->rtindex);
 	}
 }
-
-/*
- *
- */
-
-//List *
-//copyAddProvAttrsForSet (Query *query, List *subList, List *pList)//TODO add copy map attributes
-//{
-//	CopyMap *map;
-//	CopyMapRelEntry *rel;
-//	ListCell *lc;
-//	List *curPstack;
-//	Index rtIndex;
-//
-//	map = GET_COPY_MAP(query);
-//	curPstack = popListAndReverse (&pStack, list_length(subList));
-//
-//	foreach(lc, map->entries)
-//	{
-//		rel = (CopyMapRelEntry *) lfirst(lc);
-//
-//		/* is propagating? then we have to have an rte for it */
-//		if (!rel->noRewrite)
-//		{
-//			rtIndex = rel->rtindex;
-//
-//			while(lc->next && ((CopyMapRelEntry *)
-//					lc->next->data.ptr_value)->rtindex == rtIndex)
-//					lc = lc->next;
-//
-//			addProvAttrFromStack (query, rtIndex, &pList, &curPstack);
-//		}
-//		else
-//			addDummyProvenanceAttrsForBaseRel (rel, query, &pList);
-//	}
-//
-//	return pList;
-//}
 
 /*
  * Create fake provenance attributes for a not rewritten query.
@@ -282,7 +238,7 @@ copyAddProvAttrs (Query *query, List *subList)
 }
 
 /*
- *
+ * Add provenance attributes for one CopyMapRelEntry.
  */
 
 static void
@@ -313,105 +269,3 @@ addProvAttrsForRelEntry (Query *query, CopyMapRelEntry *rel,
 		rel->provAttrs = lappend(rel->provAttrs, newTe);
 	}
 }
-
-/*
- *
- */
-
-//static void
-//addProvAttrFromStack (Query *query, Index rtindex, List **pList,
-//		List **subPstack)
-//{
-//	RangeTblEntry *rte;
-//	ListCell *lc;
-//	List *curPlist;
-//	Index curResno;
-//	TargetEntry *newTe, *te;
-//	Expr *expr;
-//
-//	/* check if it is a base relation with empty copy map */
-//	rte = rt_fetch(rtindex, query->rtable);
-//	curPlist = (List *) pop(subPstack);
-//	curResno = list_length(query->targetList) + 1;
-//
-//	/* add each element of pSet to targetList and pList */
-//	foreach (lc, curPlist)
-//	{
-//		te = (TargetEntry *) lfirst(lc);
-//
-//		/* create new TE */
-//		expr = (Expr *) makeVar (rtindex,
-//					te->resno,
-//					exprType ((Node *) te->expr),
-//					exprTypmod ((Node *) te->expr),
-//					0);
-//		newTe = makeTargetEntry(expr, curResno, te->resname, false);
-//
-//		/* adapt varno und varattno if referenced rte is used in a join-RTE */
-//		getRTindexForProvTE (query, (Var *) expr);
-//
-//		/* append to targetList and pList */
-//		query->targetList = lappend (query->targetList, newTe);
-//		*pList = lappend (*pList, newTe);
-//
-//		/* increase current resno */
-//		curResno++;
-//	}
-//}
-
-/*
- * Create Dummy provenance attributes entries (null constants) for a range
- * table entry of a query.
- */
-
-//static void
-//addDummyProvenanceAttributesForRTE (Query *query, Index rtindex, List **pList)
-//{
-//	List *entries;
-//	ListCell *lc;
-//	CopyMapRelEntry *entry;
-//
-//	entries = getAllEntriesForRTE(GET_COPY_MAP(query), rtindex);
-//
-//	foreach(lc, entries)
-//	{
-//		entry = (CopyMapRelEntry *) lfirst(lc);
-//
-//		addDummyProvenanceAttrsForBaseRel (entry, query, pList);
-//	}
-//}
-
-/*
- * Add provenance attributes for one base rel copy map entry.
- */
-
-//static void
-//addDummyProvenanceAttrsForBaseRel (CopyMapRelEntry *rel, Query *query,
-//		List **pList)
-//{
-//	ListCell *lc;
-//	Expr *expr;
-//	TargetEntry *newTe;
-//	CopyMapEntry *attr;
-//	Index curResno;
-//
-//	curResno = list_length(query->targetList) + 1;
-//
-//	foreach(lc, rel->attrEntries)
-//	{
-//		attr = (CopyMapEntry *) lfirst(lc);
-//
-//		expr = (Expr *) makeNullConst(attr->baseRelAttr->vartype,
-//				attr->baseRelAttr->vartypmod);
-//
-//		newTe = makeTargetEntry(expr, curResno, strdup(attr->provAttrName),
-//				false);
-//
-//		query->targetList = lappend(query->targetList, newTe);
-//
-//		if (pList)
-//			*pList = lappend(*pList, newTe);
-//
-//		curResno++;
-//	}
-//}

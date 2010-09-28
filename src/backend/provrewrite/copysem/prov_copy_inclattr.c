@@ -1,7 +1,9 @@
 /*-------------------------------------------------------------------------
  *
  * prov_copy_inclattr.c
- *	  PERM C 
+ *	  PERM C - Creation of final copy-CS provenance inclusion functions
+ *	  		   (addTopCopyInclExpr) and generation of attributes used for
+ *	  		   incremental copy map computation (generateCopyMapAttributs).
  *
  * Portions Copyright (c) 2010 Boris Glavic
  *
@@ -39,7 +41,8 @@ static Node *createCompleteFinalInclConds (CopyMapRelEntry *rel,
 static Node *generateVarBitConstruction (Query *query, CopyMapRelEntry *rel,
 		int numAttrs);
 static Node *generateBitInclusionCond (Query *query, CopyMapRelEntry *rel,
-		CopyMapEntry *attr, InclusionCond *cond, int bitLength, int bitNum);
+		CopyMapEntry *attr, InclusionCond *cond, InclusionCond *outCond,
+		int bitLength, int bitNum);
 static Node *getInputBitset (Query *query, CopyMapRelEntry *rel,
 		CopyMapEntry *attr, int outAttr);
 
@@ -64,7 +67,7 @@ addTopCopyInclExpr (Query *query, int origAttrNum)
 	CopyMapEntry *attrEntry;
 
 	// remove the copymap attributes
-	newTarget = list_truncate(query->targetList, origAttrNum);//TODO
+	newTarget = list_truncate(query->targetList, origAttrNum);
 	tlPos = list_length(newTarget);
 
 	/* for each copy map rel entry add the conditional inclusion checks to the
@@ -89,11 +92,6 @@ addTopCopyInclExpr (Query *query, int origAttrNum)
 				provAttr = makeTargetEntry(attrExpr, ++tlPos,
 						attrEntry->provAttrName, false);
 				newTarget = lappend(newTarget, provAttr);
-//				provAttr = (TargetEntry *) list_nth(query->targetList,
-//						tlPos++);
-//				attrExpr = (Node *) provAttr->expr;
-//				provAttr->expr = (Expr *) makeNullConst(exprType(attrExpr),
-//						exprTypmod(attrExpr));
 			}
 		}
 		// is static: provenance attribute values are taken from the input
@@ -105,7 +103,6 @@ addTopCopyInclExpr (Query *query, int origAttrNum)
 				provAttr->resno = ++tlPos;
 				newTarget = lappend(newTarget, provAttr);
 			}
-//			tlPos += list_length(relEntry->attrEntries);
 		}
 		/* neither static nor always NULL. Need to add checks for inclusion
 		 * of provenance */
@@ -215,8 +212,8 @@ generateCopyMapAttributs (Query *query, int numQAttrs)
 		attrInfo = makeNode(CopyProvAttrInfo);
 		attrInfo->outAttrNum = numQAttrs;
 		if (!rel->noRewrite)
-			attrInfo->bitSetComposition = generateVarBitConstruction(query, rel,
-							numQAttrs);
+			attrInfo->bitSetComposition = generateVarBitConstruction(query,
+					rel, numQAttrs);
 		if (!rel->noRewrite && !rel->isStatic)
 			attrInfo->provVar = makeVar(map->rtindex, ++copyAttrPos,
 					VARBITOID, -1, 0);
@@ -291,11 +288,7 @@ generateVarBitConstruction (Query *query, CopyMapRelEntry *rel, int numAttrs)
 		}
 		// is static false generate 0 bitset
 		if (entry->isStaticFalse)
-		{
-			condition = (Node *) MAKE_VARBIT_CONST(generateVarbitSetElem(bitLength, 0));
-			exprs = lappend(exprs, condition);
 			continue;
-		}
 
 		foreach(outLc, entry->outAttrIncls)
 		{
@@ -319,8 +312,7 @@ generateVarBitConstruction (Query *query, CopyMapRelEntry *rel, int numAttrs)
 					InclusionCond *innerCond;
 
 					cond = (InclusionCond *) lfirst(condLc);
-					Assert(IsA(cond->existsAttr, AttrInclusions)
-							&& cond->inclType == INCL_EXISTS);
+					Assert(IsA(cond->existsAttr, AttrInclusions));
 
 					inAttrIncl = (AttrInclusions *) cond->existsAttr;
 
@@ -328,7 +320,7 @@ generateVarBitConstruction (Query *query, CopyMapRelEntry *rel, int numAttrs)
 					{
 						innerCond = (InclusionCond *) lfirst(inCondLc);
 						condition = generateBitInclusionCond (query, rel, entry,
-							innerCond, bitLength, bitSingleton);
+							innerCond, cond, bitLength, bitSingleton);
 					}
 
 					exprs = lappend(exprs, condition);
@@ -336,6 +328,9 @@ generateVarBitConstruction (Query *query, CopyMapRelEntry *rel, int numAttrs)
 			}
 		}
 	}
+
+	if (list_length(exprs) == 0)
+		return (Node *) MAKE_EMPTY_BITSET_CONST(bitLength);
 
 	// bit_or the individual computations
 	result = (Node *) linitial(exprs);
@@ -352,7 +347,8 @@ generateVarBitConstruction (Query *query, CopyMapRelEntry *rel, int numAttrs)
 
 static Node *
 generateBitInclusionCond (Query *query, CopyMapRelEntry *rel,
-		CopyMapEntry *attr, InclusionCond *cond, int bitLength, int bitNum)
+		CopyMapEntry *attr, InclusionCond *cond, InclusionCond *outCond,
+		int bitLength, int bitNum)
 {
 	Node *condition = NULL;
 	Datum bitSet;
@@ -381,12 +377,12 @@ generateBitInclusionCond (Query *query, CopyMapRelEntry *rel,
 		condition = (Node *) MAKE_SETCONT_FUNC(list_make2(inProvAttr,
 				inputBitset));
 	}
-	else if (cond->inclType == INCL_EXISTS)
+	else if (cond->inclType == INCL_EXISTS && outCond->inclType == INCL_EXISTS)
 		return cons;
 
-	switch(cond->inclType)
-	{
-	case INCL_EQUAL:
+	/* inner condition is an equal condition add the equality constraint to
+	 * "condition" */
+	if (cond->inclType == INCL_EQUAL)
 	{
 		Var *inclVar = (Var *) cond->existsAttr;
 		Var *eqVar;
@@ -408,16 +404,15 @@ generateBitInclusionCond (Query *query, CopyMapRelEntry *rel,
 			}
 		}
 	}
-		break;
-	case INCL_IF:
+	/* outer condition is an if-condition add the case expression to
+	 * "condition" */
+	if (outCond->inclType == INCL_IF)
+	{
 		if (condition)
 			condition = (Node *) makeBoolExpr(AND_EXPR,
-					list_make2(condition, cond->cond));
+					list_make2(condition, copyObject(outCond->cond)));
 		else
-			condition = cond->cond;
-		break;
-	default:
-		break;
+			condition = copyObject(outCond->cond);
 	}
 
 	ifPart = (CaseWhen *) makeNode(CaseWhen);

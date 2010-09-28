@@ -1077,7 +1077,7 @@ createEqualityCondition (List* leftAttrs, List* rightAttrs, Index leftIndex, Ind
 				0);
 
 		/* get equality operator for the var's type */
-		equal = (OpExpr *) createEqualityConditionForVars (leftOp, rightOp);
+		equal = (OpExpr *) createNotDistinctConditionForVars (leftOp, rightOp);
 
 		/* append current equality condition to equalConds List */
 		equalConds = lappend (equalConds, equal);

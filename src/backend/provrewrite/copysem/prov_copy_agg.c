@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * prov_copy_agg.c
- *	  PERM C - C-CS provenance rewrite for queries with aggregation.
+ *	  PERM C - C-CS provenance rewrites for queries with aggregation.
  *
  * Portions Copyright (c) 2008 Boris Glavic
  *
@@ -28,14 +28,15 @@
 #include "provrewrite/prov_sublink_agg.h"
 
 /* Prototypes */
-static void createWithoutAggCopyMap (Query *rewrite, List *attrMap, CopyMap *origMap);
+static void createWithoutAggCopyMap (Query *rewrite, List *attrMap,
+		CopyMap *origMap);
 
 /*
  * Rewrite an aggregation query using copy contribution semantics (C-CS).
  */
 
 Query *
-rewriteCopyAggregateQuery (Query *query) //TODO adapt rewritten non-agg copy map!
+rewriteCopyAggregateQuery (Query *query)
 {
 	List *pList;
 	List *subList;
@@ -154,7 +155,7 @@ createWithoutAggCopyMap (Query *rewrite, List *attrMap, CopyMap *origMap)
 	Var *aggSubVar, *topVar;
 
 	map = makeCopyMap();
-	map->rtindex = 2; //CHECK
+	map->rtindex = 2;
 
 	/* The new CopyMap is a layer between the origMap and the child of origMap.
 	 * Create the same CopyMapRelEntries as found in origMap and copy its basic
@@ -204,7 +205,6 @@ createWithoutAggCopyMap (Query *rewrite, List *attrMap, CopyMap *origMap)
 
 				newAttrIncl = makeAttrInclusions();
 				newAttrIncl->attr = topVar;
-				//TODO adapt varattno??
 				newAttrIncl->isStatic = attIncl->isStatic;
 				newAttrIncl->inclConds = list_make1(newCond);
 

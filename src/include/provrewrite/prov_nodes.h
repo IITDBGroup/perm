@@ -488,6 +488,7 @@ extern TransSubInfo *makeTransSubInfo (int id, SubOperationType opType);
 
 /* copy functions */
 extern void *copyProvNode (void *from);
+extern Query *flatCopyWithoutProvInfo (Query *from);
 
 /* read functions */
 extern Node *parseProvNodeString(char *token, int length);

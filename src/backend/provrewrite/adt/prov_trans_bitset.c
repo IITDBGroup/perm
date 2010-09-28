@@ -15,7 +15,7 @@
  *		transformation provenance and which parts do not. So we need several
  *		support functions that implement operations on bitsets (e.g., bit-wise or).
  *		Transformation provenance is presented to a user as either SQL text with
- *		<NOT> and </NOT> surround of the original query that do not belong to
+ *		<NOT> and </NOT> surrounding the part of the original query that does not belong to
  *		the transformation provenance or as XML. Both representations are constructed
  *		by a UDF (generateTransProcRep) that takes as input a bitset and returns the
  *		desired representation. To avoid repeated generation of the representation from
@@ -367,12 +367,12 @@ generateMapRep (VarBit *bitset, Index queryId)
 }
 
 /*
- * Given a bitset representing the transformation provenance, generate a string representation.
- * The global structure transProvQuerIndex is accessed that stores string representations
- * for the complete transformation provenance
- * and pointers to each part corresponding to bit in the bitset. Thus, this method only
- * traverses the bitset one bit at a time to determine if a certain part should be
- * copied from the global structure to the result or not.
+ * Given a bitset representing the transformation provenance, generate a string
+ * representation. The global structure transProvQuerIndex is accessed that
+ * stores string representations for the complete transformation provenance and
+ * pointers to each part corresponding to bit in the bitset. Thus, this method
+ * only traverses the bitset one bit at a time to determine if a certain part
+ * should be copied from the global structure to the result or not.
  */
 
 static char *
@@ -412,19 +412,18 @@ generateTransProvRep (VarBit *bitset, Index queryId)
 	/* compute length */
 	for(i = curRange = 0; i < numRanges; curRange = ++i)
 	{
-		/* If not contained in the provenance (bitset) then the
-		 * result string is prolonged to account for the <NOT>
-		 * and </NOT> parts that surround parts of the query
-		 * do not belong to the transformation provenance.
-		 * In this case all bit elements that represent parts of
-		 * the query contained in the current part are skipped, because
-		 * according to the definition of transformation provenance that
-		 * can not belong to the transformation provenance.
-		 */
+		/* If not contained in the provenance (bitset) then the result string
+		 * is prolonged to account for the <NOT> and </NOT> parts that surround
+		 * parts of the query do not belong to the transformation provenance.
+		 * In this case all bit elements that represent parts of the query
+		 * contained in the current part are skipped, because according to the
+		 * definition of transformation provenance that can not belong to the
+		 * transformation provenance. */
 		if (!bitsetContains(bitset, queryInfo->sets[i]))
 		{
 			resultLength += strlen(NOT_STRING) + strlen(CLOSE_NOT_STRING);
-			while(i < numRanges - 1 && queryInfo->ends[i + 1] <= queryInfo->ends[curRange])
+			while(i < numRanges - 1
+					&& queryInfo->ends[i + 1] <= queryInfo->ends[curRange])
 				i++;
 		}
 	}
@@ -467,23 +466,30 @@ generateTransProvRep (VarBit *bitset, Index queryId)
 
 			before = i;
 
-			while(i < numRanges - 1 && queryInfo->ends[i + 1] <= queryInfo->ends[curRange])
+			while(i < numRanges - 1
+					&& queryInfo->ends[i + 1] <= queryInfo->ends[curRange])
 				i++;
 
-			if (i < numRanges - 1 && queryInfo->ends[before] < queryInfo->begins[i + 1])
+			if (i < numRanges - 1
+					&& queryInfo->ends[before] < queryInfo->begins[i + 1])
 			{
-				partLength = queryInfo->begins[i + 1] - queryInfo->ends[before];
-				memcpy(partPointer, queryInfo->string + queryInfo->ends[before], partLength);
+				partLength =
+						queryInfo->begins[i + 1] - queryInfo->ends[before];
+				memcpy(partPointer,
+						queryInfo->string + queryInfo->ends[before],
+						partLength);
 				partPointer += partLength;
 			}
 		}
 	}
 
-	/* If last range does not end at the end of the string add last bit of the string. */
+	/* If last range does not end at the end of the string add last bit of the
+	 * string. */
 	if (partPointer - result < resultLength)
 	{
 		partLength = strlen(queryInfo->string) - queryInfo->ends[before];
-		memcpy(partPointer, queryInfo->string + queryInfo->ends[before], partLength);
+		memcpy(partPointer, queryInfo->string + queryInfo->ends[before],
+				partLength);
 		partPointer += partLength;
 	}
 
@@ -493,8 +499,8 @@ generateTransProvRep (VarBit *bitset, Index queryId)
 }
 
 /*
- * Drop TransRepQueryInfo structures that is not needed anymore, because the queries
- * represented by this structures have finshed execution.
+ * Drop TransRepQueryInfo structures that is not needed anymore, because the
+ * queries represented by this structures have finshed execution.
  */
 
 void
@@ -517,7 +523,9 @@ dropTransProvQueryIndex (void)
 	if (transProvQueryIndex == NULL)
 	{
 		queryId = 0;
-		transProvQueryIndex = (TransRepQueryIndex *) MemoryContextAlloc(funcPrivateContext, sizeof(TransRepQueryIndex));
+		transProvQueryIndex = (TransRepQueryIndex *)
+				MemoryContextAlloc(funcPrivateContext,
+						sizeof(TransRepQueryIndex));
 		transProvQueryIndex->queryInfos = NIL;
 	}
 
@@ -528,7 +536,8 @@ dropTransProvQueryIndex (void)
 
 		if (!queryInfo->hold)
 		{
-			listRemoveQueryInfoCell(&transProvQueryIndex->queryInfos, lc, before);
+			listRemoveQueryInfoCell(&transProvQueryIndex->queryInfos, lc,
+					before);
 			lc = before;
 
 			if (transProvQueryIndex->queryInfos == NIL)
@@ -539,8 +548,8 @@ dropTransProvQueryIndex (void)
 
 /*
  * The hold field of the TransRepQueryInfo structure indicates if it is safe to
- * free this structure. Set the hold field for all queryInfos to true, indicating
- * that they all can be purged.
+ * free this structure. Set the hold field for all queryInfos to true,
+ * indicating that they all can be purged.
  */
 
 void
@@ -561,7 +570,8 @@ releaseAllHolds (void)
 
 /*
  * Release the hold from a TransRepQueryInfo structure representing the query
- * for cursor named "cursorName". This indicates that we safely free the data structure.
+ * for cursor named "cursorName". This indicates that we safely free the data
+ * structure.
  */
 
 void
@@ -630,7 +640,8 @@ freeQueryRepInfo (TransRepQueryInfo *info)
 	pfree(info->string);
 	pfree(info->stringPointers); //OK because they point into string freed before.
 
-	for (i = 0, set = info->sets[0]; i < info->numRanges; i++, set = info->sets[i])
+	for (i = 0, set = info->sets[0]; i < info->numRanges;
+			i++, set = info->sets[i])
 		pfree(set);
 	pfree(info->sets);
 
@@ -638,11 +649,11 @@ freeQueryRepInfo (TransRepQueryInfo *info)
 }
 
 /*
- * Generate the auxilariy datastructures needed to generate the SQL transformation
- *  provenance representation of a query from a bitset. The datastructure is created
- *  once per query and then used for each call to the representation function
- * (generateTransProvRep). The index is auxiliary data structures are droped after
- * execution of the query.
+ * Generate the auxilariy datastructures needed to generate the SQL
+ * transformation provenance representation of a query from a bitset. The
+ * datastructure is created once per query and then used for each call to the
+ * representation function (generateTransProvRep). The index is auxiliary data
+ * structures are droped after execution of the query.
  */
 
 int
@@ -651,11 +662,13 @@ generateTransProvQueryIndex (Query *query, char *cursorName)
 	TransRepQueryInfo *newInfo;
 	MemoryContext oldCtx;
 
-	newInfo = (TransRepQueryInfo *) MemoryContextAlloc(funcPrivateContext, sizeof(TransRepQueryInfo));
+	newInfo = (TransRepQueryInfo *) MemoryContextAlloc(funcPrivateContext,
+			sizeof(TransRepQueryInfo));
 	newInfo->queryId = queryId++;
 	if (cursorName)
 	{
-		newInfo->cusorName = MemoryContextStrdup(funcPrivateContext, cursorName);
+		newInfo->cusorName =
+				MemoryContextStrdup(funcPrivateContext, cursorName);
 		newInfo->hold = true;
 	}
 	else
@@ -675,11 +688,11 @@ generateTransProvQueryIndex (Query *query, char *cursorName)
 }
 
 /*
- * Generate the auxilariy datastructures needed to generate the xml transformation
- *  provenance representation of a query from a bitset. The datastructure is created
- *  once per query and then used for each call to the representation function
- * (generateTransProvRep). The index is auxiliary data structures are droped after
- * execution of the query.
+ * Generate the auxilariy datastructures needed to generate the xml
+ * transformation provenance representation of a query from a bitset. The
+ * datastructure is created once per query and then used for each call to the
+ * representation function (generateTransProvRep). The index is auxiliary data
+ * structures are droped after execution of the query.
  */
 
 int
@@ -688,13 +701,15 @@ generateTransXmlQueryIndex (Query *query, char *cursorName)//TODO merge with SQL
 	TransRepQueryInfo *newInfo;
 	MemoryContext oldCtx;
 
-	newInfo = (TransRepQueryInfo *) MemoryContextAlloc(funcPrivateContext, sizeof(TransRepQueryInfo));
+	newInfo = (TransRepQueryInfo *) MemoryContextAlloc(funcPrivateContext,
+			sizeof(TransRepQueryInfo));
 	newInfo->queryId = queryId++;
 
 	/* Is the query used inside a cursor? */
 	if (cursorName)
 	{
-		newInfo->cusorName = MemoryContextStrdup(funcPrivateContext, cursorName);
+		newInfo->cusorName = MemoryContextStrdup(funcPrivateContext,
+				cursorName);
 		newInfo->hold = true;
 	}
 	else
@@ -703,10 +718,9 @@ generateTransXmlQueryIndex (Query *query, char *cursorName)//TODO merge with SQL
 		newInfo->hold = false;
 	}
 
-	/* generate the data structure inside the private memory
-	 * context of this module (It cannot be droped after execution
-	 * of a query, if we are fetching from a cursor).
-	 */
+	/* generate the data structure inside the private memory context of this
+	 * module (It cannot be droped after execution of a query, if we are
+	 * fetching from a cursor). */
 	oldCtx = MemoryContextSwitchTo(funcPrivateContext);
 	transProvQueryIndex->queryInfos =
 			lappend(transProvQueryIndex->queryInfos, newInfo);
@@ -719,11 +733,11 @@ generateTransXmlQueryIndex (Query *query, char *cursorName)//TODO merge with SQL
 }
 
 /*
- * Generate the auxilariy datastructures needed to generate the mapping provenance
- * representation of a query from a bitset. The datastructure is created once per
- * query and then used for each call to the representation function
- * (generateMapRep). The index is auxiliary data structures are droped after
- * execution of the query.
+ * Generate the auxilariy datastructures needed to generate the mapping
+ * provenance representation of a query from a bitset. The datastructure is
+ * created once per query and then used for each call to the representation
+ * function (generateMapRep). The index is auxiliary data structures are droped
+ * after execution of the query.
  */
 
 int
@@ -733,13 +747,15 @@ generateMapQueryIndex (Query *query, char *cursorName)
 	MemoryContext oldCtx;
 
 	/* generate a new TransRepQueryInfo */
-	newInfo = (TransRepQueryInfo *) MemoryContextAlloc(funcPrivateContext, sizeof(TransRepQueryInfo));
+	newInfo = (TransRepQueryInfo *) MemoryContextAlloc(funcPrivateContext,
+			sizeof(TransRepQueryInfo));
 	newInfo->queryId = queryId++;
 
 	/* Is the query used inside a cursor? */
 	if (cursorName)
 	{
-		newInfo->cusorName = MemoryContextStrdup(funcPrivateContext, cursorName);
+		newInfo->cusorName = MemoryContextStrdup(funcPrivateContext,
+				cursorName);
 		newInfo->hold = true;
 	}
 	else
@@ -785,13 +801,14 @@ bitsetContains (VarBit *left, VarBit *right)
 	if (bitlen1 != bitlen2)
 		ereport(ERROR,
 				(errcode(ERRCODE_STRING_DATA_LENGTH_MISMATCH),
-				 errmsg("cannot test bit strings of different sizes for containment")));
+				 errmsg("cannot test bit strings of different "
+						 "sizes for containment")));
 
 	p1 = VARBITS(left);
 	p2 = VARBITS(right);
 
-	/* AND each byte of both bitsets. If the result equals the second bitset then the
-	 * first set contains the second. E.g.
+	/* AND each byte of both bitsets. If the result equals the second bitset
+	 * then the first set contains the second. E.g.
 	 *		left =  		1100011,1000000
 	 *		right = 		0000011,1000000
 	 *		left & right = 	0000011,1000000
@@ -807,7 +824,8 @@ bitsetContains (VarBit *left, VarBit *right)
 }
 
 /*
- * Returns true if two bitsets have the same length and contain the same elements.
+ * Returns true if two bitsets have the same length and contain the same
+ * elements.
  */
 
 static bool
@@ -824,7 +842,8 @@ bitsetEqual (VarBit *left, VarBit* right)
 	if (bitlen1 != bitlen2)
 		ereport(ERROR,
 				(errcode(ERRCODE_STRING_DATA_LENGTH_MISMATCH),
-				 errmsg("cannot test bit strings of different sizes for equality")));
+				 errmsg("cannot test bit strings of "
+						 "different sizes for equality")));
 
 	p1 = VARBITS(left);
 	p2 = VARBITS(right);
@@ -839,9 +858,9 @@ bitsetEqual (VarBit *left, VarBit* right)
 }
 
 /*
- * Generates a Varbit datum that represents a bitset of length n (maximal number of
- * elements) with only the corresponding bit for value set to 1. In other words
- * the singleton bitset containing only value.
+ * Generates a Varbit datum that represents a bitset of length n (maximal
+ * number of elements) with only the corresponding bit for value set to 1. In
+ * other words the singleton bitset containing only value.
  */
 
 Datum
@@ -878,8 +897,8 @@ generateVarbitSetElem (int n, int value)
 }
 
 /*
- * Generates an empty bitset (Varbit datum) of length n (the maximal number of elements
- * representable by this bitset).
+ * Generates an empty bitset (Varbit datum) of length n (the maximal number of
+ * elements representable by this bitset).
  */
 
 VarBit *
