@@ -188,10 +188,8 @@ rewriteCopyDistinctClause (Query *query)
 {
 	CopyMap *map = GET_COPY_MAP(query);
 	List *pList = NIL;
-	List *realPList = NIL;
 	ListCell *lc;
-	CopyMapRelEntry *rel, *child;
-	TargetEntry *te, *realTe;
+	CopyMapRelEntry *rel;
 
 	foreach(lc, map->entries)
 	{
