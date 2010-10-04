@@ -712,7 +712,7 @@ static void analyzeConditionForCopy(Query *query, Node *condition,
 	context = (VarEqualitiesContext *) palloc(sizeof(VarEqualitiesContext));
 	context->result = &eqConds;
 	context->root = condition;
-	context->outerJoin = outerJoin; //TODO check
+	context->outerJoin = outerJoin;
 
 	findVarEqualitiesWalker(baseCondition, context);
 

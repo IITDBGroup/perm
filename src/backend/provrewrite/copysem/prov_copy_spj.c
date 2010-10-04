@@ -30,6 +30,7 @@
 
 static void rewriteCopyBaseRel (RangeTblEntry *rte, Index rtindex, CopyMap *map);
 static bool rteShouldRewrite (Query *query, Index rtindex);
+static void rewriteCopyDistinctClause (Query *query);
 
 /*
  * Rewrite a SPJ query node using copy contribution semantics (C-CS).
@@ -65,7 +66,7 @@ rewriteSPJQueryCopy (Query *query)
 	 */
 
 	if (query->distinctClause != NIL)
-		rewriteDistinctClause (query);
+		rewriteCopyDistinctClause (query);
 
 	return query;
 }
@@ -176,4 +177,30 @@ rewriteCopyBaseRel (RangeTblEntry *rte, Index rtindex, CopyMap *map)
 	 * the baseRelStack */
 	if (baseRelStackActive)
 		push(&baseRelStack, copyObject(rte));
+}
+
+/*
+ *
+ */
+
+static void
+rewriteCopyDistinctClause (Query *query)
+{
+	CopyMap *map = GET_COPY_MAP(query);
+	List *pList = NIL;
+	List *realPList = NIL;
+	ListCell *lc;
+	CopyMapRelEntry *rel, *child;
+	TargetEntry *te, *realTe;
+
+	foreach(lc, map->entries)
+	{
+		rel = (CopyMapRelEntry *) lfirst(lc);
+
+		pList = list_concat(pList, rel->provAttrs);
+	}
+
+	push(&pStack, pList);
+	rewriteDistinctClause (query);
+	pop(&pStack);
 }
