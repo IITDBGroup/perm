@@ -228,7 +228,7 @@ DATA(insert ( 2901 xmlconcat2	  -					0	142		_null_ ));
 
 /* provenance support aggregates */
 DATA(insert ( 3777 bitor_with_null		  -					0	1562	_null_ ));
-
+DATA(insert ( 3785 textarray_unique_concat -				0	1009	"{}" ));
 /*
  * prototypes for functions in pg_aggregate.c
  */

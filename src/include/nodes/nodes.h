@@ -379,14 +379,16 @@ typedef enum NodeTag
 	T_CopyMap,
 	T_CopyMapRelEntry,
 	T_CopyMapEntry,
-//	T_CopyProvInfo,
 	T_TransProvInfo,
 	T_TransSubInfo,
 	T_XsltFuncExpr,
 	T_ThisExpr,
 	T_AttrInclusions,
 	T_InclusionCond,
-	T_CopyProvAttrInfo
+	T_CopyProvAttrInfo,
+	T_WhereProvInfo,
+	T_WhereAttrInfo,
+	T_BaseVarInfo
 } NodeTag;
 
 /*

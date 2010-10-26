@@ -4431,6 +4431,10 @@ DATA(insert OID = 3781 (  bitset_contains	PGNSP PGUID 12 1  0 f f f f i 2 16 "15
 DESCR("Checks for two varbit parameters if the bitset represented by the right parameter is contained in the bitset represented by the left parameter");
 DATA(insert OID = 3782 (  bitset_nonzero_repeat	PGNSP PGUID 12 1  0 f f f f i 2 16 "1562 23" _null_ _null_ _null_ bitset_nonzero_repeat - _null_ _null_ ));
 DESCR("Checks for a varbit parameter if each consecutive group of bits contains has at least one bit set to 1. The length of the groups is given as the second parameter");
+DATA(insert OID = 3784 (  textarray_unique_concat	PGNSP PGUID 12 1  0 f f f f i 2 1009 "1009 25" _null_ _null_ _null_ textarray_unique_concat - _null_ _null_ ));
+DESCR("Add a text parameter to an text array if it is not already included in the array");
+DATA(insert OID = 3785 (  tarr_conc	PGNSP PGUID 12 1  0 t f f f i 1 1009 "25" _null_ _null_ _null_ aggregate_dummy - _null_ _null_ ));
+DESCR("Aggregate function that creates an text array out of text input (no duplicates).");
 
 
 /*

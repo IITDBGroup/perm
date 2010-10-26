@@ -58,6 +58,8 @@
 #include "provrewrite/prov_copy_inclattr.h"
 #include "provrewrite/prov_trans_main.h"
 #include "provrewrite/prov_trans_bitset.h"
+#include "provrewrite/prov_where_main.h"
+#include "provrewrite/prov_how_main.h"
 
 /*
  * Global variables.
@@ -209,6 +211,15 @@ traverseQueryTree (RangeTblEntry *rteQuery, Query *query, char *cursorName)
 			case CONTR_TRANS_XML_SIMPLE:
 			case CONTR_MAP:
 				query = rewriteQueryTransProv (query, cursorName);
+			break;
+			case CONTR_WHERE:
+				query = rewriteQueryWhere (query);
+			break;
+			case CONTR_WHERE_INSEN:
+				query = rewriteQueryWhereInSen (query);
+			break;
+			case CONTR_HOW:
+				query = rewriteQueryHow (query);
 			break;
 			default:
 				elog(ERROR,

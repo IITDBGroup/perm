@@ -134,7 +134,7 @@ static void get_from_clause_coldeflist(List *names, List *types, List *typmods,
 static Node *processIndirection(Node *node, TransParseContext *context,
 				   bool printit);
 static void printSubscripts(ArrayRef *aref, TransParseContext *context);
-static void parseAnnotations (Query *query, bool start, StringInfo buf);
+static void parseAnnotations (List *annots, bool start, StringInfo buf);
 
 
 /*
@@ -400,7 +400,7 @@ get_select_query_def(Query *query, TupleDesc resultDesc, TRANSPARSE_ARGS)
 		push(context->infoStack, curSub);
 	}
 
-	parseAnnotations(query, true, str);
+	parseAnnotations(((List *) Provinfo(query)->annotations), true, str);
 
 	/*
 	 * If the Query node has a setOperations tree, then it's the top level of
@@ -507,7 +507,7 @@ get_select_query_def(Query *query, TupleDesc resultDesc, TRANSPARSE_ARGS)
 			appendStringInfo(str, " NOWAIT");
 	}
 
-	parseAnnotations(query, false, str);
+	parseAnnotations(((List *) Provinfo(query)->annotations), false, str);
 
 	/* close range */
 	if(!inStatic)
@@ -2890,6 +2890,8 @@ get_from_clause_item(Node *jtnode, Query *query, TRANSPARSE_ARGS, bool isRoot)
 		RangeTblEntry *rte = rt_fetch(varno, query->rtable);
 		bool		gavealias = false;
 
+		parseAnnotations(rte->annotations, true, str);
+
 		switch (rte->rtekind)
 		{
 			case RTE_RELATION:
@@ -2917,6 +2919,8 @@ get_from_clause_item(Node *jtnode, Query *query, TRANSPARSE_ARGS, bool isRoot)
 				elog(ERROR, "unrecognized RTE kind: %d", (int) rte->rtekind);
 				break;
 		}
+
+		parseAnnotations(rte->annotations, false, str);
 
 		if (rte->alias != NULL)
 		{
@@ -3296,12 +3300,12 @@ printSubscripts(ArrayRef *aref, TransParseContext *context)
  */
 
 static void
-parseAnnotations (Query *query, bool start, StringInfo buf)
+parseAnnotations (List *annots, bool start, StringInfo buf)
 {
 	ListCell *lc;
 	Value *val;
 
-	foreach(lc, ((List *) Provinfo(query)->annotations))
+	foreach(lc, annots)
 	{
 		val = (Value *) lfirst(lc);
 
@@ -3314,5 +3318,5 @@ parseAnnotations (Query *query, bool start, StringInfo buf)
 
 		appendStringInfoString (buf, ">");
 	}
-
 }
+

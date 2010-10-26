@@ -278,6 +278,9 @@ static CopyMapRelEntry *_copyCopyMapRelEntry(CopyMapRelEntry *from);
 static CopyMapEntry *_copyCopyMapEntry(CopyMapEntry *from);
 static CopyProvAttrInfo *_copyCopyProvAttrInfo(CopyProvAttrInfo *from);
 static AttrInclusions *_copyAttrInclusions(AttrInclusions *from);
+static WhereProvInfo *_copyWhereProvInfo(WhereProvInfo *from);
+static WhereAttrInfo *_copyWhereAttrInfo(WhereAttrInfo *from);
+static BaseVarInfo *_copyBaseVarInfo(BaseVarInfo *from);
 static InclusionCond *_copyInclusionCond(InclusionCond *from);
 static TransProvInfo *_copyTransProvInfo(TransProvInfo *from);
 static TransSubInfo *_copyTransSubInfo(TransSubInfo *from);
@@ -2229,6 +2232,32 @@ _copyAttrInclusions(AttrInclusions *from)
 	COPY_NODE_FIELD(attr);
 	COPY_NODE_FIELD(inclConds);
 	COPY_SCALAR_FIELD(isStatic);
+
+	return newnode;
+}
+
+static WhereProvInfo *
+_copyWhereProvInfo(WhereProvInfo *from)
+{
+	WhereProvInfo *newnode = makeNode(WhereProvInfo);
+
+	COPY_SCALAR_FIELD(isInSen);
+
+	return newnode;
+}
+
+static WhereAttrInfo *
+_copyWhereAttrInfo(WhereAttrInfo *from)
+{
+	WhereAttrInfo *newnode = makeNode(WhereAttrInfo);
+
+	return newnode;
+}
+
+static BaseVarInfo *
+_copyBaseVarInfo(BaseVarInfo *from)
+{
+	BaseVarInfo *newnode = makeNode(BaseVarInfo);
 
 	return newnode;
 }

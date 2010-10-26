@@ -41,7 +41,10 @@ typedef enum ContributionType
 	CONTR_TRANS_SQL,
 	CONTR_TRANS_XML,
 	CONTR_TRANS_XML_SIMPLE,
-	CONTR_MAP
+	CONTR_MAP,
+	CONTR_WHERE,
+	CONTR_WHERE_INSEN,
+	CONTR_HOW
 } ContributionType;
 
 
@@ -132,7 +135,7 @@ typedef struct InclusionCond {
 	NodeTag type;
 	InclCondType inclType;
 	Node *existsAttr;	// used in all condition types
-	List *eqVars;			// for INCL_EQUAL the Y attribut
+	List *eqVars;		// for INCL_EQUAL the Y attribut
 	Node *cond;			// for INCL_EQUAL
 } InclusionCond;
 
@@ -147,6 +150,32 @@ struct CopyProvAttrInfo
 	Node *bitSetComposition;
 	int outAttrNum;
 };
+
+/*
+ * Datastructures for Where-CS provenance computation.
+ */
+
+typedef struct WhereProvInfo
+{
+	NodeTag type;
+	bool isInSen;
+	List *attrInfos;
+} WhereProvInfo;
+
+typedef struct WhereAttrInfo {
+	NodeTag type;
+	Var *outVar;
+	List *inVars;
+	List *transVars;
+} WhereAttrInfo;
+
+typedef struct BaseVarInfo {
+	NodeTag type;
+	Var *var;
+	Oid relation;
+	char *relName;
+	char *attrName;
+} BaseVarInfo;
 
 /*
  * Datastructure that stores information for a query node that is needed for
