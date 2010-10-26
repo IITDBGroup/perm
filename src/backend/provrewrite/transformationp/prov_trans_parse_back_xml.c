@@ -226,7 +226,9 @@ typedef struct ParseXMLContext
 /* functions */
 static void parseBackXMLQueryNode(Query *query, char* alias, OUTPARAMS);
 static void parseBackSetOp(Node *setOp, Query *query, OUTPARAMS);
-static int openCloseAnnotations(Query *query, ParseXMLContext *context,
+static int openCloseAnnotationsQNode (Query *query, ParseXMLContext *context,
+		bool open, int depth);
+static int openCloseAnnotations(List *annotation, ParseXMLContext *context,
 		bool open, int depth);
 static void parseBackSelect(Query *query, TransProjType projType, OUTPARAMS);
 static void parseBackHaving(Query *query, OUTPARAMS);
@@ -369,7 +371,7 @@ parseBackXMLQueryNode(Query *query, char* alias, OUTPARAMS)
 	}
 
 	/* is a normal query node */
-	depth = openCloseAnnotations(query, &newContext, true, depth);
+	depth = openCloseAnnotationsQNode(query, &newContext, true, depth);
 
 	// write alias if any is used
 	if (alias)
@@ -420,7 +422,7 @@ parseBackXMLQueryNode(Query *query, char* alias, OUTPARAMS)
 	//TODO order by clause
 
 	WRITE_END("Query");
-	openCloseAnnotations(query, &newContext, false, depth);
+	openCloseAnnotationsQNode(query, &newContext, false, depth);
 
 	if (newContext.transProv && !inStatic && !inDummy)
 		range->end = str->len;
@@ -508,7 +510,18 @@ parseBackSetOp(Node *setOp, Query *query, OUTPARAMS)
  */
 
 static int
-openCloseAnnotations(Query *query, ParseXMLContext *context, bool open,
+openCloseAnnotationsQNode (Query *query, ParseXMLContext *context, bool open,
+		int depth)
+{
+	if (!query->provInfo)
+		return depth;
+
+	return openCloseAnnotations ((List *) Provinfo(query)->annotations,
+			context, open, depth);
+}
+
+static int
+openCloseAnnotations (List *annotations, ParseXMLContext *context, bool open,
 		int depth)
 {
 	ListCell *lc;
@@ -518,10 +531,7 @@ openCloseAnnotations(Query *query, ParseXMLContext *context, bool open,
 
 	str = context->buf;
 
-	if (!query->provInfo)
-		return depth;
-
-	foreach(lc, ((List *) Provinfo(query)->annotations))
+	foreach(lc, annotations)
 	{
 		val = (Value *) lfirst(lc);
 
@@ -537,6 +547,7 @@ openCloseAnnotations(Query *query, ParseXMLContext *context, bool open,
 
 	return depth;
 }
+
 
 static void
 parseBackHaving(Query *query, OUTPARAMS)
@@ -823,6 +834,9 @@ parseBackFromItem(Node *fromItem, Query *query, OUTPARAMS)
 		if (rte->alias)
 			aliasName = rte->alias->aliasname;
 
+		if (rte->annotations)
+			openCloseAnnotations(rte->annotations, context, true, depth++);
+
 		switch (rte->rtekind)
 		{
 		case RTE_RELATION:
@@ -850,6 +864,12 @@ parseBackFromItem(Node *fromItem, Query *query, OUTPARAMS)
 		default:
 			//TODO
 			break;
+		}
+
+		if (rte->annotations)
+		{
+			openCloseAnnotations(rte->annotations, context, false, ++depth);
+			depth--;
 		}
 	}
 

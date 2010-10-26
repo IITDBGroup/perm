@@ -16,6 +16,7 @@
 #include "nodes/parsenodes.h"
 #include "provrewrite/prov_trans_bitset.h"
 
-extern void generateMapString (Query *query, TransRepQueryInfo *repInfo);
+extern void generateMapString (Query *query, TransRepQueryInfo *repInfo,
+		MemoryContext funcPrivateCntx);
 
 #endif /* PROV_TRANS_MAP_H_ */

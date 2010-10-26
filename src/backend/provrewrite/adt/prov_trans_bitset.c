@@ -637,8 +637,19 @@ freeQueryRepInfo (TransRepQueryInfo *info)
 	if (info->cusorName)
 		pfree(info->cusorName);
 
-	pfree(info->string);
-	pfree(info->stringPointers); //OK because they point into string freed before.
+	/* check if rep info was used for map prov or trans prov because
+	 * data structure is used differently for these cases. */
+	if (!(info->string))
+	{
+		for (i = 0; i < info->numRanges; i++)
+			pfree(info->stringPointers[i]);
+	}
+	else
+	{
+		pfree(info->string);
+		//OK because they point into string freed before.
+		pfree(info->stringPointers);
+	}
 
 	for (i = 0, set = info->sets[0]; i < info->numRanges;
 			i++, set = info->sets[i])
@@ -777,7 +788,7 @@ generateMapQueryIndex (Query *query, char *cursorName)
 	 * with pointers into that string used by the representation
 	 * generation function.
 	 */
-	generateMapString(query, newInfo);
+	generateMapString(query, newInfo, funcPrivateContext);
 
 	return newInfo->queryId;
 }

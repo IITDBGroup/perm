@@ -2171,6 +2171,7 @@ _outRangeTblEntry(StringInfo str, RangeTblEntry *node, int depth)
 	WRITE_OID_ELEM(checkAsUser);
 	WRITE_BOOL_ELEM(isProvBase);
 	WRITE_NODE_ELEM(provAttrs);
+	WRITE_NODE_ELEM(annotations);
 
 	WRITE_NODE_END("RTE");
 }

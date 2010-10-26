@@ -39,7 +39,8 @@ static void unionBitsets (TransSubInfo *info, List *bitsets, List *annotations);
  */
 
 void
-generateMapString (Query *query, TransRepQueryInfo *repInfo)
+generateMapString (Query *query, TransRepQueryInfo *repInfo,
+		MemoryContext funcPrivateCntx)
 {
 	List *bitSets;
 	List *annotations;
@@ -47,11 +48,15 @@ generateMapString (Query *query, TransRepQueryInfo *repInfo)
 	ListCell *llc, *rlc;
 	Value *annot;
 	VarBit *set;
+	MemoryContext oldCtx;
 
 	bitSets = NIL;
 	annotations = NIL;
 	generateMappingBitsets(query, &bitSets, &annotations);
 	numMappings = list_length(bitSets);
+
+	/* switch to mapprov function private memory context */
+	oldCtx = MemoryContextSwitchTo(funcPrivateCntx);
 
 	repInfo->numRanges = numMappings;
 	repInfo->begins = (int *) palloc(sizeof(int) * numMappings);
@@ -70,6 +75,8 @@ generateMapString (Query *query, TransRepQueryInfo *repInfo)
 		repInfo->ends[i] = strlen(repInfo->stringPointers[i]);
 		repInfo->sets[i] = DatumGetVarBitP(datumCopy(VarBitPGetDatum(set), false, -1));
 	}
+
+	MemoryContextSwitchTo(oldCtx);
 
 	list_free_deep(bitSets);	//CHECK is safe
 }
@@ -122,7 +129,8 @@ unionBitsets (TransSubInfo *info, List *bitsets, List *annotations)
 		if (listPos != -1)
 		{
 			bitSet = (VarBit *) list_nth(bitsets, listPos);
-			//VARBITP_OR(bitSet, info->setForNode);
+			bitSet = DatumGetVarBitP(varBitOr(VarBitPGetDatum(bitSet),
+					info->setForNode));
 		}
 	}
 
@@ -181,7 +189,7 @@ gatherAnnotations (Query *query, Node *info, TransProvInfo *curInfo)
 		foreach(lc, sub->children)
 		{
 			child = (Node *) lfirst(lc);
-			annots = list_concat_unique(annots, gatherAnnotations(newQuery, child, curInfo));
+			annots = list_concat_unique(annots, gatherAnnotations(query, child, curInfo));
 		}
 		//TODO change if RTE annotations are allowed
 		sub->annot = copyObject(annots);

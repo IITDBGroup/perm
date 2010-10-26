@@ -1,13 +1,13 @@
 /*-------------------------------------------------------------------------
  *
- * provrewrite.c
+ * prov_copy_spj.c
  *	  PERM C - Backend provenance extension
  *
  * Portions Copyright (c) 2008 Boris Glavic
  *
  *
  * IDENTIFICATION
- *	  $PostgreSQL: pgsql/src/backend/provrewrite/provrewrite.c,v 1.542 2008/01/26 19:55:08 bglav Exp $
+ *	  $PostgreSQL: pgsql/src/backend/provrewrite/copysem/prov_copy_spj.c,v 1.542 2008/01/26 19:55:08 bglav Exp $
  *
  * NOTES
  *
@@ -72,7 +72,7 @@ rewriteSPJQueryCopy (Query *query)
 }
 
 /*
- *
+ * Rewrite the range table entries of a query for C-CS.
  */
 
 void
@@ -139,14 +139,15 @@ rteShouldRewrite (Query *query, Index rtindex)
 }
 
 /*
- *
+ * Rewrite a base relation for C-CS. Creates a CopyMapRelEntry for this base
+ * relation and creates the provenance attributes and stores them in the
+ * CopyMapRelEntry.
  */
 
 static void
 rewriteCopyBaseRel (RangeTblEntry *rte, Index rtindex, CopyMap *map)
 {
 	ListCell *lc;
-//	List *pList;
 	TargetEntry *te;
 	Expr *expr;
 	char *namestr;
@@ -180,7 +181,8 @@ rewriteCopyBaseRel (RangeTblEntry *rte, Index rtindex, CopyMap *map)
 }
 
 /*
- *
+ * Adapts the DISTINCT clause of a rewritten C-CS SPJ query by adding the
+ * provenance attributes to the DISTINCT clause.
  */
 
 static void
