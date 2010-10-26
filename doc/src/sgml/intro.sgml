@@ -2,16 +2,17 @@
 
 <preface id="preface">
  <title>Preface</title>
-
- <para>
-  This book is the official documentation of
-  <productname>PostgreSQL</productname>.  It is being written by the
-  <productname>PostgreSQL</productname> developers and other
-  volunteers in parallel to the development of the
-  <productname>PostgreSQL</productname> software.  It describes all
-  the functionality that the current version of
-  <productname>PostgreSQL</productname> officially supports.
- </para>
+ 
+<para>
+ This documentation is the official documentation
+ of <productname>Perm</productname>, an extension
+ of <productname>PostgreSQL 8.3</productname>, that
+ adds support for provenance computation to the system. Except
+ for <xref linkend="permextensions"> which describes the
+ scientific background, SQL language extensions, and implementation
+ of <productname>Perm</productname>, this document is derived from the
+ official documentation of <productname>PostgreSQL</productname>.
+</para>
 
  <para>
   To make the large amount of information about
@@ -152,6 +153,25 @@
    private, commercial, or academic.
   </para>
  </sect1>
+
+ <sect1 id="intro-whatisperm">
+  <title> What is <productname>Perm</productname>?</title>
+
+  <para>
+   <productname>Perm</productname> is an extension of <productname>Postgres</productname>
+   that extends the system with provenance support. Provenance
+   information describes the dependencies between the outputs and
+   inputs of an SQL statement. This is, given an SQL
+   query <productname>Perm</productname> computes which output tuples
+   of the query depend on which input tuples. The user can requested
+   the provenance of a query by using the SQL extension
+   of <productname>Perm</productname>. For more information see
+   <xref linkend="permextensions"> where we give a short
+   introduction to provenance, introduce the provenance SQL extension
+   of <productname>Perm</productname> and discuss its implementation.
+  </para>
+ </sect1>
+
 
  &history;
  &notation;

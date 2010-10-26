@@ -1,7 +1,7 @@
 <!-- $PostgreSQL: pgsql/doc/src/sgml/installation.sgml,v 1.300 2008/01/31 20:29:30 tgl Exp $ -->
 
 <chapter id="installation">
- <title><![%standalone-include[<productname>PostgreSQL</>]]>
+ <title><![%standalone-include[<productname>Perm</>]]>
   Installation Instructions</title>
 
  <indexterm zone="installation">
@@ -11,20 +11,33 @@
  <para>
   This <![%standalone-include;[document]]>
   <![%standalone-ignore;[chapter]]> describes the installation of
-  <productname>PostgreSQL</productname> from the source code
-  distribution.  (If you are installing a pre-packaged distribution,
-  such as an RPM or Debian package, ignore this
-  <![%standalone-include;[document]]>
-  <![%standalone-ignore;[chapter]]>
-  and read the packager's instructions instead.)
+  <productname>Perm</productname> from the source code
+  distribution.  Since Perm is based on PostgreSQL the installation
+   process and this document largely overlap with the PostgreSQL version.
  </para>
+
+ <sect1 id="install-req-packages">
+  <title>Required Packages Overview</title>
+
+<para>
+<synopsis>
+Flex 2.5.4 or later
+Bison 1.875 or later
+libxslt
+libxml
+libz
+ISO/ANSI C Compiler preferably gcc
+GNU make
+</synopsis>
+</para>
+</sect1>
 
  <sect1 id="install-short">
   <title>Short Version</title>
 
   <para>
 <synopsis>
-./configure
+./configure --with-libxml --with-libxslt
 gmake
 su
 gmake install
@@ -36,6 +49,8 @@ su - postgres
 /usr/local/pgsql/bin/postgres -D /usr/local/pgsql/data &gt;logfile 2&gt;&amp;1 &amp;
 /usr/local/pgsql/bin/createdb test
 /usr/local/pgsql/bin/psql test
+test=# CREATE LANGUAGE plpgsql;
+test=# \i /pathToPermCode/contrib/xml2/pgxml.sql
 </synopsis>
    The long version is the rest of this
    <![%standalone-include;[document.]]>
@@ -965,6 +980,11 @@ su - postgres
          <option>--with-includes</option> and
          <option>--with-libraries</option>.
         </para>
+
+	<para>
+	  NOTE: Perm requires this option for transformation provenance
+          and meta querying. 
+	  </para>
        </listitem>
       </varlistentry>
 
@@ -976,6 +996,11 @@ su - postgres
          <filename>contrib/xml2</> relies on this library to perform
          XSL transformations of XML.
         </para>
+
+	<para>
+	  NOTE: Perm requires this option for transformation provenance
+          and meta querying. 
+	  </para>
        </listitem>
       </varlistentry>
 
@@ -1740,6 +1765,24 @@ kill `cat /usr/local/pgsql/data/postmaster.pid`
      commands and start experimenting.
     </para>
    </step>
+
+<step>
+<para>
+Install XML UDF functions. Perm uses these functions for XSLT 
+function support and some of the meta-querying facilities. Start 
+ the server and connect to a database using psql. E.g.:
+<screen>
+<userinput>postmaster -D mycluster &</>
+<userinput>psql test</>
+</screen>
+Use the input command (<command>\i</command>) of psql to execute the sql script
+in the <filename>contrib/xml2</filename> directory of the Perm source code directory.
+For example:
+<screen>
+testdb=#<userinput>\i permCode/contrib/xml2/pgxml.sql</>
+</para>
+</step>
+
   </procedure>
  </sect1>
 

@@ -1,23 +1,29 @@
-<!-- $PostgreSQL: pgsql/doc/src/sgml/perm.sgml,v 1.62 2007/06/07 14:49:56 tgl Exp $ -->
+<!-- $Perm: pgsql/doc/src/sgml/perm.sgml,v 1.62 2007/06/07 14:49:56 tgl Exp $ -->
 
-<sect1 id="perm">
- <title>Perm Extension to Postgres</title>
+<chapter id="permextensions">
+ <title><![%standalone-include[<productname>Perm</>]]>
+   Extensions</title>
 
- <indexterm>
+ <indexterm zone="permextensions">
   <primary>perm</primary>
  </indexterm>
+
+
+<sect1 id="provoverview">
+ <title>A Short Introduction to Provenance</title>
 
  <para>
   <productname>Perm</productname> enhances <productname>PostgreSQL</productname> with Provenance features. In this section we introduce the
   new language constructs introduced by <productname>Perm</productname>
  </para>
+</sect1>
 
- <sect2>
-  <title>SQL-PLE (Perm language Extension)</title>
+ <sect1 id="sqlple">
+  <title>SQL-PLE (Provenance Language Extension)</title>
 
  <para>
  sdfsd hsdfjkhj
  </para>
-  </sect2>
+  </sect1>
 
-</sect1>
+</chapter>

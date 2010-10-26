@@ -5,7 +5,9 @@
 
   <para>
    Selected references and readings for <acronym>SQL</acronym>
-   and <productname>PostgreSQL</productname>.
+   and <productname>PostgreSQL</productname>. In addition we added
+   some references to scientific publications on provenance with a
+   focus on <productname>Perm</productname>
   </para>
 
   <para>
@@ -15,6 +17,132 @@
    Department <ulink url="http://s2k-ftp.CS.Berkeley.EDU:8000/postgres/papers/">
    web site</ulink>.
   </para>
+
+<bibliodiv>
+   <title>Perm and Provenance Articles</title>
+
+   <biblioentry id="GA10">
+   <biblioset relation="article">
+    <title><ulink url="http://www.cs.toronto.edu/~glavic/pdfs/GA10.pdf">
+    TRAMP: Understanding the Behavior of Schema Mappings through Provenance
+    </ulink></title>
+    <titleabbrev>GAMH, VLDB 2010</titleabbrev>
+    <authorgroup>
+     <author>
+      <firstname>B.</firstname>
+      <surname>Glavic</surname>
+     </author>
+     <author>
+      <firstname>G.</firstname>
+      <surname>Alonso</surname>
+     </author>
+     <author>
+      <firstname>R.</firstname>
+      <surname>Miller</surname>
+     </author>
+     <author>
+      <firstname>L.</firstname>
+      <surname>Haas</surname>
+     </author>
+    </authorgroup>
+   </biblioset>
+    <confgroup>
+     <conftitle>VLDB '10: Proceedings of the 36th International Conference on Very Large Data Bases</conftitle>
+     <confdates>2010</confdates>
+    </confgroup>
+   </biblioentry>
+
+   <biblioentry id="G10">
+   <biblioset relation="thesis">
+    <title><ulink url="http://www.cs.toronto.edu/~glavic/pdfs/G10.pdf">
+    Perm: Efficient Provenance Support for Relational Databases
+    </ulink></title>
+    <titleabbrev>G, Thesis</titleabbrev>
+    <authorgroup>
+     <author>
+      <firstname>B.</firstname>
+      <surname>Glavic</surname>
+     </author>
+    </authorgroup>
+    <pubdate>November 29, 1998</pubdate>
+    <publisher>
+     <publishername>Department of Informatics, University of Zurich</publishername>
+     <address>Zurich, Switzerland</address>
+    </publisher>
+   </biblioset>
+   </biblioentry>
+
+   <biblioentry id="GA09b">
+   <biblioset relation="article">
+    <title><ulink url="http://www.cs.toronto.edu/~glavic/pdfs/GA09b.pdf">
+    The Perm Provenance Management System in Action
+    </ulink></title>
+    <titleabbrev>GA, SIGMOD demo 2009</titleabbrev>
+    <authorgroup>
+     <author>
+      <firstname>B.</firstname>
+      <surname>Glavic</surname>
+     </author>
+     <author>
+      <firstname>G.</firstname>
+      <surname>Alonso</surname>
+     </author>
+    </authorgroup>
+   </biblioset>
+    <confgroup>
+     <conftitle>SIGMOD '09: Proceedings of the 35th SIGMOD International Conference on Management of Data (demonstration)</conftitle>
+     <confdates>2009</confdates>
+    </confgroup>
+   </biblioentry>
+
+
+   <biblioentry id="GA09a">
+   <biblioset relation="article">
+    <title><ulink url="http://www.cs.toronto.edu/~glavic/pdfs/GA09a.pdf">
+    Provenance for Nested Subqueries
+    </ulink></title>
+    <titleabbrev>GA, EDBT 2009</titleabbrev>
+    <authorgroup>
+     <author>
+      <firstname>B.</firstname>
+      <surname>Glavic</surname>
+     </author>
+     <author>
+      <firstname>G.</firstname>
+      <surname>Alonso</surname>
+     </author>
+    </authorgroup>
+   </biblioset>
+    <confgroup>
+     <conftitle>EDBT '09: Proceedings of the 12th International Conference on Extending Database Technology</conftitle>
+     <confdates>2009</confdates>
+    </confgroup>
+   </biblioentry>
+
+   <biblioentry id="GA09">
+   <biblioset relation="article">
+    <title><ulink url="http://www.cs.toronto.edu/~glavic/pdfs/GA09.pdf">
+    Perm: Processing Provenance and Data on the same Data Model through Query Rewriting
+    </ulink></title>
+    <titleabbrev>GA, ICDE 2009</titleabbrev>
+    <authorgroup>
+     <author>
+      <firstname>B.</firstname>
+      <surname>Glavic</surname>
+     </author>
+     <author>
+      <firstname>G.</firstname>
+      <surname>Alonso</surname>
+     </author>
+    </authorgroup>
+   </biblioset>
+    <confgroup>
+     <conftitle>ICDE '09: Proceedings of the 25th International Conference on Data Engineering</conftitle>
+     <confdates>2009</confdates>
+    </confgroup>
+   </biblioentry>
+   
+</bibliodiv>
 
   <bibliodiv>
    <title><acronym>SQL</acronym> Reference Books</title>
