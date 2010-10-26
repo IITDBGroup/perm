@@ -1780,6 +1780,7 @@ in the <filename>contrib/xml2</filename> directory of the Perm source code direc
 For example:
 <screen>
 testdb=#<userinput>\i permCode/contrib/xml2/pgxml.sql</>
+</screen>
 </para>
 </step>
 

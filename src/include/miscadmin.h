@@ -26,7 +26,7 @@
 #include <time.h>				/* for time_t */
 
 
-#define PG_VERSIONSTR "postgres (PostgreSQL) " PG_VERSION "\n"
+#define PG_VERSIONSTR "perm (Perm) " PG_VERSION "\n"
 
 
 /*****************************************************************************

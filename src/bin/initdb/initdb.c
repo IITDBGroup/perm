@@ -68,7 +68,7 @@ int			optreset;
 
 
 /* version string we expect back from postgres */
-#define PG_VERSIONSTR "postgres (PostgreSQL) " PG_VERSION "\n"
+#define PG_VERSIONSTR "perm (Perm) " PG_VERSION "\n"
 
 /*
  * these values are passed in by makefile defines
@@ -1327,7 +1327,7 @@ bootstrap_template1(char *short_version)
 
 	/* Check that bki file appears to be of the right version */
 
-	snprintf(headerline, sizeof(headerline), "# PostgreSQL %s\n",
+	snprintf(headerline, sizeof(headerline), "# Perm %s\n",
 			 short_version);
 
 	if (strcmp(headerline, *bki_lines) != 0)

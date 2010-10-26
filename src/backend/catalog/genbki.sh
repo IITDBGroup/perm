@@ -400,7 +400,7 @@ END {
 }
 ' "descriptionfile=${OUTPUT_PREFIX}.description.$$" "shdescriptionfile=${OUTPUT_PREFIX}.shdescription.$$" > $TMPFILE || exit
 
-echo "# PostgreSQL $major_version" >${OUTPUT_PREFIX}.bki.$$
+echo "# Perm $major_version" >${OUTPUT_PREFIX}.bki.$$
 
 sed -e '/^[ 	]*$/d' \
     -e 's/[ 	][ 	]*/ /g' $TMPFILE >>${OUTPUT_PREFIX}.bki.$$ || exit

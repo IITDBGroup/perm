@@ -315,11 +315,11 @@ main(int argc, char *argv[])
 					server_version = server_ver_str;
 				}
 
-				printf(_("Welcome to %s %s (server %s), the PostgreSQL interactive terminal.\n\n"),
+				printf(_("Welcome to %s %s (server %s), the Perm interactive terminal.\n\n"),
 					   pset.progname, PG_VERSION, server_version);
 			}
 			else
-				printf(_("Welcome to %s %s, the PostgreSQL interactive terminal.\n\n"),
+				printf(_("Welcome to %s %s, the Perm interactive terminal.\n\n"),
 					   pset.progname, PG_VERSION);
 
 			printf(_("Type:  \\copyright for distribution terms\n"
