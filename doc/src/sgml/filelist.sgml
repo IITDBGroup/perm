@@ -12,6 +12,8 @@
 <!entity query      SYSTEM "query.sgml">
 <!entity start      SYSTEM "start.sgml">
 
+<!entity perm SYSTEM "perm.sgml">
+
 <!-- currently unused, but contains some interesting information -->
 <!entity sql        SYSTEM "sql.sgml">
 

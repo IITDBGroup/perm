@@ -12,10 +12,10 @@
 ]>
 
 <book id="postgres">
- <title>PostgreSQL &version; Documentation</title>
+ <title>Perm Documentation</title>
 
  <bookinfo>
-  <corpauthor>The PostgreSQL Global Development Group</corpauthor>
+  <corpauthor>Boris Glavic</corpauthor>
   &legal;
  </bookinfo>
 
@@ -54,6 +54,22 @@
 
  </part>
 
+ <part id="perm">
+  <title>Perm Background and Extensions To Postgres</title>
+  <partintro>
+    <para>
+      This part discusses how <productname>Perm</productname> extends
+       <productname>PostgreSQL</productname> with provenance
+       support. First, we give a short overview of provenance. Second, we
+       present the provenance SQL language of Perm. Afterwards, we
+       present the architectural and implementation choices made.
+      </para>
+</partintro>
+
+&perm;
+
+</part>
+ 
  <part id="sql">
   <title>The SQL Language</title>
 
