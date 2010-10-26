@@ -6,9 +6,20 @@
 
      __________________________________________________________________
 
+                        Required Packages Overview
+Flex 2.5.4 or later
+Bison 1.875 or later
+libxslt
+libxml
+libz
+ISO/ANSI C Compiler preferably gcc
+GNU make
+
+     __________________________________________________________________
+
                                 Short Version
 
-./configure
+./configure --with-libxml --with-libxslt
 gmake
 su
 gmake install
@@ -20,6 +31,8 @@ su - postgres
 /usr/local/pgsql/bin/postgres -D /usr/local/pgsql/data >logfile 2>&1 &
 /usr/local/pgsql/bin/createdb test
 /usr/local/pgsql/bin/psql test
+     CREATE LANGUAGE plpgsql;
+     \i /pathToPermCode/contrib/xml2/pgxml.sql
 
    The long version is the rest of this document.
      __________________________________________________________________
@@ -383,11 +396,17 @@ gmake --version
                 to the "xml2-config" program belonging to the
                 installation, or use the options "--with-includes" and
                 "--with-libraries".
+                
+                NOTE: Perm requires this option for transformation provenance
+                and meta querying. 
 
         --with-libxslt
                 Use libxslt when building "contrib/xml2". "contrib/xml2"
                 relies on this library to perform XSL transformations of
                 XML.
+                
+                NOTE: Perm requires this option for transformation provenance
+                and meta querying.
 
         --enable-integer-datetimes
                 Use 64-bit integer storage for datetimes and intervals,
@@ -621,6 +640,7 @@ gmake -C src/interfaces install
 gmake -C doc install
        "src/bin" has a few binaries for server-only use, but they are
        small.
+            
 
    Registering eventlog on Windows: To register a Windows eventlog library
    with the operating system, issue this command after installation:
@@ -774,6 +794,16 @@ createdb testdb
 psql testdb
        to connect to that database. At the prompt you can enter SQL
        commands and start experimenting.
+    6. Install XML UDF functions. Perm uses these functions for XSLT 
+       function support and some of the meta-querying facilities. Start 
+       the server and connect to a database using psql. E.g.:
+postmaster -D mycluster &
+psql test
+	   Use the input command (\i) of psql to execute the sql script
+	   in the contrib/xml2 directory of the Perm source code directory.
+	   For example:
+\i permCode/contrib/xml2/pgxml.sql
+         
      __________________________________________________________________
 
                                   What Now?
