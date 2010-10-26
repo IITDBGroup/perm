@@ -28,7 +28,7 @@ all:
 # started to update the file.
 .DELETE_ON_ERROR:
 
-# PostgreSQL version number
+# Perm version number
 VERSION = @PACKAGE_VERSION@
 
 # Support for VPATH builds
