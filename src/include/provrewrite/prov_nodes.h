@@ -44,6 +44,7 @@ typedef enum ContributionType
 	CONTR_MAP,
 	CONTR_WHERE,
 	CONTR_WHERE_INSEN,
+	CONTR_WHERE_INSEN_NOUNION,
 	CONTR_HOW
 } ContributionType;
 
@@ -166,6 +167,7 @@ typedef struct WhereAttrInfo {
 	NodeTag type;
 	Var *outVar;
 	List *inVars;
+	List *annotVars;
 	List *transVars;
 } WhereAttrInfo;
 
@@ -631,6 +633,14 @@ extern bool provNodesEquals(void *a, void *b);
 		result->existsAttr = ((Node *) incl); \
 		result->cond = condition; \
 	} while (0)
+
+/* return the where-cs provenance info for the query */
+#define GET_WHERE_PROVINFO(query) \
+	((WhereProvInfo *) ((ProvInfo *) (((Query *) query)->provInfo))->copyInfo)
+
+/* return the list of where-cs attribute infos for the query */
+#define GET_WHERE_ATTRINFOS(query) \
+	((WhereProvInfo *) ((ProvInfo *) (((Query *) query)->provInfo))->copyInfo)->attrInfos
 
 /* true if the sublinks of a query have been rewritten */
 #define IsSublinkRewritten(query) \

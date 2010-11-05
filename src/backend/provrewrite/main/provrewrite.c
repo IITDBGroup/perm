@@ -218,6 +218,9 @@ traverseQueryTree (RangeTblEntry *rteQuery, Query *query, char *cursorName)
 			case CONTR_WHERE_INSEN:
 				query = rewriteQueryWhereInSen (query);
 			break;
+			case CONTR_WHERE_INSEN_NOUNION:
+				query = rewriteQueryWhereInSenNoUnion (query);
+			break;
 			case CONTR_HOW:
 				query = rewriteQueryHow (query);
 			break;

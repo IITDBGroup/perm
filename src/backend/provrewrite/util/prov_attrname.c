@@ -22,6 +22,7 @@
 
 /* prefix for provenance attributes */
 const char ProvPraefix[] = "prov_";
+const char AnnotPraefix[] = "annot_";
 const char TransProvName[] = "trans_prov";
 
 /* list of counters for references to relations */
@@ -66,6 +67,31 @@ createProvAttrName (RangeTblEntry *rte, char *name)
 	attrName = strcat(attrName, escapedName);
 
 	pfree(provRelName);
+	pfree(escapedName);
+
+	return attrName;
+}
+
+/*
+ * Generate a name for a annotation attribute used by WHERE-CS.
+ */
+
+char *
+getWhereAnnotName (char *name)
+{
+	char *escapedName;
+	char *attrName;
+	int newLength;
+
+	escapedName = escapeAttrName (name);
+
+	newLength = strlen(AnnotPraefix) + strlen(escapedName) + 1;
+
+	attrName = (char *) palloc(newLength);
+
+	attrName = strcpy(attrName, AnnotPraefix);
+	attrName = strcat(attrName, escapedName);
+
 	pfree(escapedName);
 
 	return attrName;
