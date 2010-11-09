@@ -39,16 +39,15 @@
 #include "provrewrite/prov_sublink_util_mutate.h"
 #include "provrewrite/prov_where_util.h"
 
-/* datastructures */
-static List *normalRelRTEs = NIL;
 
 /* prototypes */
 static List *makeAuxWithUnion (Query *rep);
-static List *makeAuxQueriesWithUnion (Query *rep, WhereAttrInfo *attr, Var *inVar);
+static List *makeAuxQueriesWithUnion (Query *rep, WhereAttrInfo *attr,
+		Var *inVar, List *rels);
 static List *getAllNormalRels (void);
 static List *makeAuxNoUnion (Query *rep);
-static Query *makeNoUnionAuxQuery (Query *rep, WhereAttrInfo *attr, Var *inVar);
-
+static Query *makeNoUnionAuxQuery (Query *rep, WhereAttrInfo *attr,
+		Var *inVar);
 static Query *addBaseRelationAnnotationAttrs (RangeTblEntry *rte, List *attrs);
 static Node *getAnnotValueExpr (Oid reloid, char *attrName);
 
@@ -100,6 +99,9 @@ makeAuxWithUnion (Query *rep)
 	WhereAttrInfo *attr;
 	List *newAux;
 	Var *inVar;
+	List *rels;
+
+	rels = getAllNormalRels ();
 
 	/* generate annotation propagation for representatice and add
 	 * representative to aux queries */
@@ -114,11 +116,10 @@ makeAuxWithUnion (Query *rep)
 		foreach(innerLc, attr->inVars)
 		{
 			inVar = (Var *) lfirst(innerLc);
-			newAux = makeAuxQueriesWithUnion(rep, attr, inVar);
+			newAux = makeAuxQueriesWithUnion(rep, attr, inVar, rels);
 			result = list_concat(result, newAux);
 		}
 	}
-
 
 	return result;
 }
@@ -128,10 +129,9 @@ makeAuxWithUnion (Query *rep)
  */
 
 static List *
-makeAuxQueriesWithUnion (Query *rep, WhereAttrInfo *attr, Var *inVar)
+makeAuxQueriesWithUnion (Query *rep, WhereAttrInfo *attr, Var *inVar, List *rels)
 {
 	List *result = NIL;
-	List *rels;
 	ListCell *lc, *innerLc;
 	RangeTblEntry *rte, *newRte;
 	List *relVars;
@@ -141,8 +141,6 @@ makeAuxQueriesWithUnion (Query *rep, WhereAttrInfo *attr, Var *inVar)
 	RangeTblRef *rtRef;
 	Node *eqCond;
 	int repCurIndex = list_length(rep->rtable) + 1;
-
-	rels = getAllNormalRels ();
 
 	/* for each relation in the database */
 	foreach(lc, rels)
@@ -219,7 +217,7 @@ getAllNormalRels (void)
 {
 	List *result = NIL;
 	RangeTblEntry *rte;
-	List *okNamespaces;
+	List *okNamespaces = NIL;
 	Relation catRel;
 	HeapTuple sysTuple;
 	HeapScanDesc scandesc;
@@ -227,9 +225,6 @@ getAllNormalRels (void)
 	Form_pg_class relation;
 	ScanKeyData key;
 	int relNum = 0;
-
-	if (normalRelRTEs != NIL)
-		return normalRelRTEs;
 
 	/* scan for schemas (namespace) without pg_ - prefix and that are not
 	 * information_schema */
@@ -250,7 +245,8 @@ getAllNormalRels (void)
 		namespc = (Form_pg_namespace) GETSTRUCT(sysTuple);
 
 		name = pstrdup(NameStr(namespc->nspname));
-		if (strncmp(name, "pg_", 3) != 0)
+		if (strncmp(name, "pg_", 3) != 0
+				&& strncmp(name, "information_schema", 18) != 0)
 			okNamespaces = lappend_oid(okNamespaces, HeapTupleGetOid(sysTuple));
 	}
 
@@ -303,8 +299,6 @@ getAllNormalRels (void)
 
 	heap_endscan(scandesc);
 	heap_close(catRel, AccessShareLock);
-
-	normalRelRTEs = result; //TODO use longer lived memory context
 
 	return result;
 }

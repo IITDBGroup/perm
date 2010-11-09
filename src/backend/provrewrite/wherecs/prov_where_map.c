@@ -39,6 +39,7 @@ static List *getInVars (Var *outVar, List *eqClasses);
 static List *findEqClasses (Query *query);
 static void findEqInJoinTreeItem (Node *item, EqualWalkerContext *context);
 static bool getEqualitiesWalker (Node *node, EqualWalkerContext *context);
+static void addSingleToClasses (Var *var, EqualWalkerContext *context);
 static void addEqualitiesToClasses (Var *left, Var *right,
 		EqualWalkerContext *context);
 
@@ -118,10 +119,23 @@ findEqClasses (Query *query)
 	ListCell *lc;
 	Node *item;
 	EqualWalkerContext *context;
+	TargetEntry *te;
+	Var *var;
 
 	context = (EqualWalkerContext *) palloc(sizeof(EqualWalkerContext));
 	context->query = query;
 	context->eqClasses = &classes;
+
+	foreach(lc, query->targetList)
+	{
+		te = (TargetEntry *) lfirst(lc);
+		var = getVarFromTeIfSimple((Node *) te->expr);
+		if (var)
+		{
+			var = resolveToRteVar(var, query);
+			addSingleToClasses(var, context);
+		}
+	}
 
 	foreach(lc, query->jointree->fromlist)
 	{
@@ -189,6 +203,27 @@ getEqualitiesWalker (Node *node, EqualWalkerContext *context)
 	return expression_tree_walker(node, getEqualitiesWalker, (void *) context);
 }
 
+/*
+ *
+ */
+
+static void
+addSingleToClasses (Var *var, EqualWalkerContext *context)
+{
+	ListCell *lc;
+	List *cur;
+
+	foreach(lc, *(context->eqClasses))
+	{
+		cur = (List *) lfirst(lc);
+
+		if (list_member(cur, var))
+			return;
+	}
+
+	cur = list_make1(var);
+	*(context->eqClasses) = lappend(*(context->eqClasses), cur);
+}
 
 /*
  *

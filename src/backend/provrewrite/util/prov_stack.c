@@ -239,17 +239,9 @@ getListAndReverse (List *stack, int numElem)
 
 	Assert(list_length(stack) >= numElem);
 
-	LOGDEBUG("gLaR    -- START");
-
 	result = NIL;
 	for (i = 0; i < numElem; i++)
-	{
 		result = lcons(list_nth(stack,i),result);
-	}
-
-	logPList(result);
-
-	logDebug("gLaR    -- FINISHED");
 
 	return result;
 }

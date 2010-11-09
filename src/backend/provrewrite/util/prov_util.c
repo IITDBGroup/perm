@@ -18,6 +18,7 @@
 #include "postgres.h"
 #include "access/heapam.h"
 #include "catalog/pg_operator.h"		// pg_operator system table for operator lookup
+#include "catalog/pg_type.h"
 #include "nodes/makefuncs.h"
 #include "parser/parsetree.h"			// rt_fetch
 #include "parser/parse_expr.h"
@@ -747,84 +748,90 @@ createComparison (Node *left, Node *right, ComparisonType type)
 	leftType = exprType(left);
 	rightType = exprType(right);
 
-        switch(type)
-        {
-        case COMP_SMALLER:
-          opName = list_make1(makeString("<"));
-            break;
-        case COMP_SMALLEREQ:
-          opName = list_make1(makeString("<="));
-          break;
-        case COMP_BIGGER:
-          opName = list_make1(makeString(">"));
-          break;
-        case COMP_BIGGEREQ:
-          opName = list_make1(makeString(">="));
-          break;
-        case COMP_EQUAL:
-          opName = list_make1(makeString("="));
-          break;
-        default:
-          //TODO error
-            break;
-        }
-
-        // both types are the same use simple approach
-	if (leftType == rightType)
-        {
-          switch(type)
-          {
-          case COMP_SMALLER:
-            operTuple = ordering_oper (leftType, false);
-              break;
-          case COMP_BIGGER:
-            operTuple = reverse_ordering_oper (leftType, false);
-            break;
-          case COMP_EQUAL:
-            operTuple = equality_oper (leftType, false);
-            break;
-          case COMP_SMALLEREQ:
-          case COMP_BIGGEREQ:
-            operTuple = compatible_oper(NULL, opName, leftType, rightType,
-            		false, -1);
-            break;
-          default:
-              break;
-          }
-
-          operator = (Form_pg_operator) GETSTRUCT(operTuple);
-        }
-        // different types, try first to get an oper if they are binary
-        // otherwise the nodes have be coerced first.
-	else
+	switch(type)
 	{
-	  operTuple = compatible_oper(NULL, opName, leftType, rightType, true, -1);
-
-	  // try to find operator that would work with type coercion
-	  if (operTuple == NULL)
-	  {
-		  operTuple = oper(NULL, opName, leftType, rightType, true, -1);
-
-		  // did not work out
-		  if (operTuple == NULL)
-              elog(ERROR,
-                  "Could not find an operator %s for types %d, %d",
-                  strVal(((Value *) linitial(opName))),
-                  leftType,
-                  rightType);
-	  }
-
-	  // add cast if necessary
-	  operator = (Form_pg_operator) GETSTRUCT(operTuple);
-	  left = coerce_to_target_type(NULL, left, leftType, operator->oprleft,
-			  -1, COERCION_EXPLICIT, COERCE_DONTCARE);
-	  right = coerce_to_target_type(NULL, right, rightType, operator->oprright,
-			  -1, COERCION_EXPLICIT, COERCE_DONTCARE);
+	case COMP_SMALLER:
+	  opName = list_make1(makeString("<"));
+		break;
+	case COMP_SMALLEREQ:
+	  opName = list_make1(makeString("<="));
+	  break;
+	case COMP_BIGGER:
+	  opName = list_make1(makeString(">"));
+	  break;
+	case COMP_BIGGEREQ:
+	  opName = list_make1(makeString(">="));
+	  break;
+	case COMP_EQUAL:
+	  opName = list_make1(makeString("="));
+	  break;
+	default:
+		ereport(ERROR,
+				(errcode(ERRCODE_INTERNAL_ERROR),
+		 				 errmsg("Can only create <,<=,>=,> and = operators "
+		 						 "and not %s", opName)));
+		break;
 	}
 
+	// both types are the same use simple approach
+	if (leftType == rightType)
+	{
+		switch(type)
+		{
+			case COMP_SMALLER:
+				operTuple = ordering_oper (leftType, false);
+			break;
+			case COMP_BIGGER:
+				operTuple = reverse_ordering_oper (leftType, false);
+			break;
+			case COMP_EQUAL:
+				operTuple = equality_oper (leftType, false);
+			break;
+			case COMP_SMALLEREQ:
+			case COMP_BIGGEREQ:
+				operTuple = compatible_oper(NULL, opName, leftType, rightType,
+						false, -1);
+			break;
+			default:
+			break;
+		}
+
+		operator = (Form_pg_operator) GETSTRUCT(operTuple);
+	}
+	// different types, try first to get an oper if they are binary
+	// otherwise the nodes have be coerced first.
+	else
+	{
+		operTuple = compatible_oper(NULL, opName, leftType, rightType, true, -1);
+
+		// try to find operator that would work with type coercion
+		if (operTuple == NULL)
+		{
+			operTuple = oper(NULL, opName, leftType, rightType, true, -1);
+
+			// did not work out, use brutal force coerceviaio to text
+			if (operTuple == NULL)
+			  operTuple = oper(NULL, opName, TEXTOID, TEXTOID, true, -1);
+
+			// add cast if necessary
+			operator = (Form_pg_operator) GETSTRUCT(operTuple);
+			left = coerce_to_target_type(NULL, left, leftType,
+				  operator->oprleft, -1, COERCION_EXPLICIT,
+				  COERCE_EXPLICIT_CAST);
+			right = coerce_to_target_type(NULL, right, rightType,
+				  operator->oprright, -1, COERCION_EXPLICIT,
+				  COERCE_EXPLICIT_CAST);
+		}
+		else
+			operator = (Form_pg_operator) GETSTRUCT(operTuple);
+	}
+
+	if (operTuple == NULL)
+		ereport(ERROR,
+			(errcode(ERRCODE_INTERNAL_ERROR),
+			errmsg("Did not find %s operator for types %s and %s",
+							 opName, leftType, rightType)));
 	// create a node for the operator
-
-
 	equal = makeNode (OpExpr);
 	equal->args = list_make2(left, right);
 	equal->opfuncid = operator->oprcode;
@@ -1767,7 +1774,7 @@ isVarOrConstWithCast (Node *node)
 }
 
 /*
- * if expr is a VAr or Const surrounded by casts return the Var or Const.
+ * if expr is a Var or Const surrounded by casts return the Var or Const.
  * Return NULL else.
  */
 
@@ -1785,7 +1792,7 @@ getCastedVarOrConst (Node *node)
 	if (IsA(node, Const))
 		return node;
 
-	else if (IsA(node, FuncExpr))
+	if (IsA(node, FuncExpr))
 	{
 		funcExpr = (FuncExpr *) node;
 
@@ -1804,6 +1811,18 @@ getCastedVarOrConst (Node *node)
 
 		return newNode;
 	}
+
+	if (IsA(node, CoerceViaIO))
+	{
+		CoerceViaIO *coerce = (CoerceViaIO *) node;
+
+		arg = (Node *) coerce->arg;
+
+		newNode = getCastedVarOrConst(arg);
+
+		return newNode;
+	}
+
 	return NULL;
 }
 
@@ -1992,7 +2011,8 @@ getVarFromTeIfSimple (Node *node)
 
 		return var;
 	}
-	else if (IsA(node, FuncExpr))
+
+	if (IsA(node, FuncExpr))
 	{
 		funcExpr = (FuncExpr *) node;
 
@@ -2009,6 +2029,16 @@ getVarFromTeIfSimple (Node *node)
 			return getVarFromTeIfSimple(arg);
 		}
 	}
+
+	if (IsA(node, CoerceViaIO))
+	{
+		CoerceViaIO *coerce = (CoerceViaIO *) node;
+
+		arg = (Node *) coerce->arg;
+
+		return getVarFromTeIfSimple(arg);
+	}
+
 	return NULL;
 }
 
