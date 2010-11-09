@@ -30,6 +30,7 @@
 #include "provrewrite/prov_util.h"
 #include "provrewrite/provstack.h"
 #include "provrewrite/prov_sublink_util_analyze.h"
+#include "provrewrite/prov_where_map.h"
 #include "provrewrite/prov_where_spj.h"
 #include "provrewrite/prov_where_set.h"
 #include "provrewrite/prov_where_util.h"
@@ -37,7 +38,7 @@
 
 
 /* prototypes */
-static Query *generateAnnotationSetWrapper (Query *query);
+static Query *generateAnnotationSetWrapper (Query *query, List *origAttrs);
 static Node *getAnnotAgg (TargetEntry *te);
 static Query *unionQueryList (List *queries, Query *outer);
 static List *translatePsqlIntoDirectPropagators (List *queries);
@@ -60,7 +61,9 @@ rewriteQueryWhere (Query *query)
 {
 	List *psqlQs;
 	Query *unions;
+	List *origAttrs;
 
+	origAttrs = copyObject(query->targetList);
 	query = checkAndNormalizeQuery(query, false);
 
 	if (query->setOperations)
@@ -75,7 +78,7 @@ rewriteQueryWhere (Query *query)
 	else
 		unions = (Query *) linitial(psqlQs);
 
-	query = generateAnnotationSetWrapper (unions);
+	query = generateAnnotationSetWrapper (unions, origAttrs);
 
 	return query;
 }
@@ -87,12 +90,28 @@ rewriteQueryWhere (Query *query)
 Query *
 rewriteQueryWhereInSen (Query *query)
 {
+	List *origAttrs;
+	List *psqlQs;
+	Query *unions;
+
+	origAttrs = copyObject(query->targetList);
 	query = checkAndNormalizeQuery(query, false);
 
-	if (query->setOperations)
-		query = rewriteWhereInSetQuery(query);
+	makeRepresentativeQuery (query);
 
-	query = generateAnnotationSetWrapper (query);
+	if (query->setOperations)
+		psqlQs = rewriteWhereInSetQuery(query);
+	else
+		psqlQs = generateAuxQueries (list_make1(query), true);
+
+	psqlQs = translatePsqlIntoDirectPropagators (psqlQs);
+
+	if (list_length(psqlQs) > 1)
+		unions = unionQueryList(psqlQs, NULL);
+	else
+		unions = (Query *) linitial(psqlQs);
+
+	query = generateAnnotationSetWrapper (unions, origAttrs);
 
 	return query;
 }
@@ -104,9 +123,24 @@ rewriteQueryWhereInSen (Query *query)
 Query *
 rewriteQueryWhereInSenNoUnion (Query *query)
 {
+	List *psqlQs;
+	Query *unions;
+	List *origAttrs;
+
+	origAttrs = copyObject(query->targetList);
 	query = checkAndNormalizeQuery(query, true);
 
-	query = generateAnnotationSetWrapper (query);
+	makeRepresentativeQuery (query);
+
+	psqlQs = generateAuxQueries (list_make1(query), false);
+	psqlQs = translatePsqlIntoDirectPropagators (psqlQs);
+
+	if (list_length(psqlQs) > 1)
+		unions = unionQueryList(psqlQs, NULL);
+	else
+		unions = (Query *) linitial(psqlQs);
+
+	query = generateAnnotationSetWrapper (unions, origAttrs);
 
 	return query;
 }
@@ -143,7 +177,7 @@ checkAndNormalizeQuery (Query *query, bool belowSetOp)
  */
 
 static Query *
-generateAnnotationSetWrapper (Query *query)
+generateAnnotationSetWrapper (Query *query, List *origAttrs)
 {
 	List *pList;
 	ListCell *lc, *annLc;
@@ -166,7 +200,7 @@ generateAnnotationSetWrapper (Query *query)
 
 	/* create target list */
 	curResno = curGroupRef = 1;
-	forboth(lc, query->targetList, annLc, pList)
+	forboth(lc, origAttrs, annLc, pList)
 	{
 		origTe = (TargetEntry *) lfirst(lc);
 		attrname = origTe->resname;

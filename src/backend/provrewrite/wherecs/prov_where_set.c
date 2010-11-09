@@ -20,12 +20,12 @@
 
 #include "provrewrite/prov_nodes.h"
 #include "provrewrite/prov_util.h"
+#include "provrewrite/prov_where_map.h"
 #include "provrewrite/prov_where_spj.h"
+#include "provrewrite/prov_where_util.h"
 #include "provrewrite/prov_where_set.h"
 
-/* prototypes */
-static Query *generateRepresentative (Query *query);
-static List *generateAuxQueries(List *reps);
+/* function declarations */
 
 /*
  *
@@ -61,7 +61,7 @@ rewriteSetWhere (Query *query)
  *
  */
 
-Query *
+List *
 rewriteWhereInSetQuery (Query *query)
 {
 	List *subqueries = NIL;
@@ -69,49 +69,22 @@ rewriteWhereInSetQuery (Query *query)
 	List *auxQueries = NIL;
 	ListCell *lc;
 	Query *sub;
-	Query *represen;
-
-	RangeTblEntry *rte;
-
-	/* gather subqueries */
-	foreach(lc, query->rtable)
-	{
-		rte = (RangeTblEntry *) lfirst(lc);
-
-		if (rte->rtekind == RTE_RELATION)
-			subqueries = lappend(subqueries, generateQueryFromBaseRelation(rte));
-		else if (rte->rtekind == RTE_SUBQUERY)
-			subqueries = lappend(subqueries, rte->subquery);
-		else
-			;//TODO ERROR
-	}
 
 	/* generate query representative for each subquery */
 	foreach(lc, subqueries)
 	{
 		sub = (Query *) lfirst(lc);
-		represen = generateRepresentative (sub);
+		makeRepresentativeQuery (sub);
 
-		representatives = lappend(representatives, represen);
+		representatives = lappend(representatives, sub);
 	}
 
 	/* generate auxiliary queries for each representative */
-	auxQueries = generateAuxQueries(representatives);
+	auxQueries = generateAuxQueries(representatives, true);
 
 	/* generate union between all auxiliary queries */
-	return query;
-	//TODO return unionAuxQueries (query, auxQueries);
+	return auxQueries;
 }
 
 
-static Query *
-generateRepresentative (Query *query)
-{
 
-}
-
-static List *
-generateAuxQueries(List *reps)
-{
-
-}

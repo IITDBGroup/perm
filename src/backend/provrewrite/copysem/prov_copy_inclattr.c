@@ -57,11 +57,7 @@ addTopCopyInclExpr (Query *query, int origAttrNum)
 	CopyMap *map = GET_COPY_MAP(query);
 	TargetEntry *provAttr;
 	ListCell *lc, *innerLc;
-//	int numProvAttr = list_length(((List *) linitial(pStack)));
-//	int origAttrNum = list_length(query->targetList) - numProvAttr
-//			- list_length(map->entries);
 	int tlPos;
-//	int baseAttrPos;
 	Node *condition;
 	List *newTarget;
 	CopyMapEntry *attrEntry;

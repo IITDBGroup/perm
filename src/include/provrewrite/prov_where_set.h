@@ -16,6 +16,6 @@
 #include "nodes/parsenodes.h"
 
 extern List *rewriteSetWhere (Query *query);
-extern Query *rewriteWhereInSetQuery (Query *query);
+extern List *rewriteWhereInSetQuery (Query *query);
 
 #endif /* PROV_WHERE_SET_H_ */

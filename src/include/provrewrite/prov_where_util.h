@@ -23,6 +23,8 @@ typedef struct FetchVarsContext
 } FetchVarsContext;
 
 /* function declarations */
+extern List *generateAuxQueries(List *reps, bool withUnion);
+extern void generateAnnotBaseQueries (Query *query);
 extern Query *pullUpSubqueries (Query *query);
 
 #endif /* PROV_WHERE_UTIL_H_ */

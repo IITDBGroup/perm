@@ -17,15 +17,42 @@
 
 #include "postgres.h"
 
-#include "optimizer/clauses.h"
+#include "access/genam.h"
+#include "access/heapam.h"
+#include "access/htup.h"
+#include "catalog/indexing.h"
+#include "catalog/pg_class.h"
+#include "catalog/pg_namespace.h"
+#include "catalog/pg_type.h"
+#include "fmgr.h"
 #include "nodes/makefuncs.h"
+#include "optimizer/clauses.h"
+#include "parser/parse_coerce.h"
+#include "parser/parse_relation.h"
+#include "parser/parsetree.h"
+#include "utils/builtins.h"
+#include "utils/fmgroids.h"
 
+#include "provrewrite/provattrname.h"
 #include "provrewrite/provstack.h"
 #include "provrewrite/prov_util.h"
 #include "provrewrite/prov_sublink_util_mutate.h"
 #include "provrewrite/prov_where_util.h"
 
+/* datastructures */
+static List *normalRelRTEs = NIL;
+
 /* prototypes */
+static List *makeAuxWithUnion (Query *rep);
+static List *makeAuxQueriesWithUnion (Query *rep, WhereAttrInfo *attr, Var *inVar);
+static List *getAllNormalRels (void);
+static List *makeAuxNoUnion (Query *rep);
+static Query *makeNoUnionAuxQuery (Query *rep, WhereAttrInfo *attr, Var *inVar);
+
+static Query *addBaseRelationAnnotationAttrs (RangeTblEntry *rte, List *attrs);
+static Node *getAnnotValueExpr (Oid reloid, char *attrName);
+
+static void makeTeNamesUnique (Query *query);
 static void addSubqueriesAsBase(Query *root, Query *sub, int subIndex,
 		List *vars, List **subFroms);
 static List *fetchAllRTEVars (Query *query, List **vars, int rtIndex);
@@ -35,6 +62,524 @@ static void adaptJoinTreeWithSubTrees (Query *query, List *subIndex,
 		List *rtindexMap, List *subFroms);
 static void adaptFromItem (Node **fromItem, List *subIndex, List *rtindexMap,
 		List *subFroms);
+
+/*
+ *
+ */
+
+List *
+generateAuxQueries(List *reps, bool withUnion)
+{
+	ListCell *lc;
+	Query *curRep;
+	List *result = NIL;
+	List *curAux;
+
+	foreach(lc, reps)
+	{
+		curRep = (Query *) lfirst(lc);
+
+		curAux = withUnion ? makeAuxWithUnion(curRep) : makeAuxNoUnion(curRep);
+
+		result = list_concat(result, curAux);
+	}
+
+	return result;
+}
+
+
+/*
+ *
+ */
+
+static List *
+makeAuxWithUnion (Query *rep)
+{
+	ListCell *lc, *innerLc;
+	List *result = NIL;
+	WhereAttrInfo *attr;
+	List *newAux;
+	Var *inVar;
+
+	/* generate annotation propagation for representatice and add
+	 * representative to aux queries */
+	generateAnnotBaseQueries(rep);
+	result = lappend(result, rep);
+
+	/* */
+	foreach(lc, GET_WHERE_ATTRINFOS(rep))
+	{
+		attr = (WhereAttrInfo *) lfirst(lc);
+
+		foreach(innerLc, attr->inVars)
+		{
+			inVar = (Var *) lfirst(innerLc);
+			newAux = makeAuxQueriesWithUnion(rep, attr, inVar);
+			result = list_concat(result, newAux);
+		}
+	}
+
+
+	return result;
+}
+
+/*
+ *
+ */
+
+static List *
+makeAuxQueriesWithUnion (Query *rep, WhereAttrInfo *attr, Var *inVar)
+{
+	List *result = NIL;
+	List *rels;
+	ListCell *lc, *innerLc;
+	RangeTblEntry *rte, *newRte;
+	List *relVars;
+	Query *newQuery, *annotQuery;
+	Var *relVar, *newVar;
+	WhereAttrInfo *newattr;
+	RangeTblRef *rtRef;
+	Node *eqCond;
+	int repCurIndex = list_length(rep->rtable) + 1;
+
+	rels = getAllNormalRels ();
+
+	/* for each relation in the database */
+	foreach(lc, rels)
+	{
+		rte = (RangeTblEntry *) lfirst(lc);
+		relVars = NIL;
+
+		expandRTE(rte, repCurIndex, 0, false, NULL, &relVars);
+
+		/* foreach attribute of a relation generate a auxiliary query */
+		foreach(innerLc, relVars)
+		{
+			relVar = (Var *) lfirst(innerLc);
+
+			newQuery = copyObject(rep);
+			newattr = list_nth(GET_WHERE_ATTRINFOS(newQuery),
+					attr->outVar->varattno - 1);
+
+			newRte = copyObject(rte);
+			annotQuery = addBaseRelationAnnotationAttrs(newRte,
+					list_make1_int(relVar->varattno));
+			addSubqueryToRT(newQuery, annotQuery, "auxjoinpartner");
+
+			MAKE_RTREF(rtRef, list_length(newQuery->rtable));
+			newQuery->jointree->fromlist = lappend(newQuery->jointree->fromlist, rtRef);
+
+			newRte = (RangeTblEntry *) llast(newQuery->rtable);
+			correctRTEAlias(newRte);
+
+			/* add join condition to query qual */
+			eqCond = createEqualityConditionForVars(copyObject(relVar),
+					copyObject(inVar));
+
+			if (newQuery->jointree->quals)
+				newQuery->jointree->quals = (Node *) makeBoolExpr(AND_EXPR,
+						list_make2(newQuery->jointree->quals, eqCond));
+			else
+				newQuery->jointree->quals = eqCond;
+
+			/* correct WhereAttrInfo */
+			newattr->inVars = lappend(newattr->inVars, copyObject(relVar));
+			newVar = makeVar(list_length(newQuery->rtable),
+					list_length(newRte->eref->colnames), TEXTOID, -1, 0);
+			newattr->annotVars = lappend(newattr->annotVars, newVar);
+
+			/* add to result list */
+			result = lappend(result, newQuery);
+		}
+	}
+
+	return result;
+}
+
+/*
+ *
+ */
+
+static const int namesp_key[4] = {
+		ObjectIdAttributeNumber,
+		0,
+		0,
+		0
+};
+
+static const int class_key[4] = {
+	Anum_pg_class_relname,
+	Anum_pg_class_relnamespace,
+	0,
+	0
+};
+
+static List *
+getAllNormalRels (void)
+{
+	List *result = NIL;
+	RangeTblEntry *rte;
+	List *okNamespaces;
+	Relation catRel;
+	HeapTuple sysTuple;
+	HeapScanDesc scandesc;
+	Form_pg_namespace namespc;
+	Form_pg_class relation;
+	ScanKeyData key;
+	int relNum = 0;
+
+	if (normalRelRTEs != NIL)
+		return normalRelRTEs;
+
+	/* scan for schemas (namespace) without pg_ - prefix and that are not
+	 * information_schema */
+	catRel = heap_open(NamespaceRelationId, AccessShareLock);
+
+	ScanKeyInit(&key,
+				Anum_pg_namespace_nspowner,
+				BTGreaterStrategyNumber, F_OIDGT,
+				ObjectIdGetDatum(InvalidOid));
+
+	scandesc = heap_beginscan(catRel, SnapshotNow, 1, &key);
+
+	while (HeapTupleIsValid(sysTuple =
+			heap_getnext(scandesc, ForwardScanDirection)))
+	{
+		char *name;
+
+		namespc = (Form_pg_namespace) GETSTRUCT(sysTuple);
+
+		name = pstrdup(NameStr(namespc->nspname));
+		if (strncmp(name, "pg_", 3) != 0)
+			okNamespaces = lappend_oid(okNamespaces, HeapTupleGetOid(sysTuple));
+	}
+
+	heap_endscan(scandesc);
+	heap_close(catRel, AccessShareLock);
+
+
+	/* scan relations and create RTEs for the ones that are not in one of the
+	 * system namespaces.
+	 */
+	ScanKeyInit(&key,
+				Anum_pg_class_relkind,
+				BTEqualStrategyNumber, F_CHAREQ,
+				CharGetDatum(RELKIND_RELATION));
+
+	catRel = heap_open(RelationRelationId, AccessShareLock);
+	scandesc = heap_beginscan(catRel, SnapshotNow, 1, &key);
+
+	while(HeapTupleIsValid(sysTuple
+			= heap_getnext(scandesc, ForwardScanDirection)))
+	{
+		Oid schema;
+		Oid rel;
+
+		relation = (Form_pg_class) GETSTRUCT(sysTuple);
+
+		if (relation->relkind == 'r')
+		{
+			schema = relation->relnamespace;
+
+			/* only relations from non-system schemas */
+			if (list_member_oid(okNamespaces, schema))
+			{
+				Relation heapRel;
+
+				relNum++;
+				rel = HeapTupleGetOid(sysTuple);
+				heapRel = heap_open(rel, AccessShareLock);
+
+				rte = addRangeTableEntryForRelation(NULL, heapRel,
+						makeAlias(appendIdToString("auxrel", &relNum), NIL), false,
+						true);
+
+				heap_close(heapRel, NoLock);
+
+				result = lappend(result, rte);
+			}
+		}
+	}
+
+	heap_endscan(scandesc);
+	heap_close(catRel, AccessShareLock);
+
+	normalRelRTEs = result; //TODO use longer lived memory context
+
+	return result;
+}
+
+/*
+ *
+ */
+
+static List *
+makeAuxNoUnion (Query *rep)
+{
+	List *result = NIL;
+	WhereAttrInfo *attr;
+	WhereProvInfo *info = GET_WHERE_PROVINFO(rep);
+	ListCell *lc, *innerLc;
+	Query *newAux;
+	Var *inVar;
+
+	/* generate annotation propagation for representatice and add
+	 * representative to aux queries */
+	generateAnnotBaseQueries(rep);
+	result = lappend(result, rep);
+
+	/* foreach out attribute A and each input attribute S.B that is in the list of
+	 * input attribute that contribute to A, add a query with an additional join
+	 * with S on S.B = S'.B and propagation of annotations from S'.B to A.
+	 */
+	foreach(lc, info->attrInfos)
+	{
+		attr = (WhereAttrInfo *) lfirst(lc);
+
+		foreach(innerLc, attr->inVars)
+		{
+			inVar = (Var *) lfirst(innerLc);
+			newAux = makeNoUnionAuxQuery(rep, attr, inVar);
+			result = lappend(result, newAux);
+		}
+	}
+
+	return result;
+}
+
+/*
+ *
+ */
+
+static Query *
+makeNoUnionAuxQuery (Query *rep, WhereAttrInfo *attr, Var *inVar)
+{
+	Query *result = copyObject(rep);
+	Query *baseAnnotQuery, *newAnnotQuery;
+	RangeTblEntry *rte, *newRte;
+	RangeTblRef *rtRef;
+	Var *newVar;
+	WhereAttrInfo *newattr;
+	Node *eqCond;
+
+	newattr = list_nth(GET_WHERE_ATTRINFOS(result),
+			attr->outVar->varattno - 1);
+
+	/* get the base relation we want to join with in the
+	 * auxiliary query and generate an annotation propagation
+	 * query for it.*/
+	rte = rt_fetch(inVar->varno, result->rtable);
+	baseAnnotQuery = rte->subquery;
+	rte = rt_fetch(1, baseAnnotQuery->rtable);
+
+	newAnnotQuery = addBaseRelationAnnotationAttrs(rte,
+			list_make1_int(inVar->varattno));
+	addSubqueryToRT(result, newAnnotQuery, "auxjoinpartner");
+	MAKE_RTREF(rtRef, list_length(result->rtable));
+	result->jointree->fromlist = lappend(result->jointree->fromlist, rtRef);
+
+	newRte = (RangeTblEntry *) llast(result->rtable);
+	correctRTEAlias(newRte);
+
+	/* add join condition to query qual */
+	newVar = makeVar(list_length(result->rtable), inVar->varattno,
+			inVar->vartype, inVar->vartypmod, 0);
+	eqCond = createEqualityConditionForVars(newVar, copyObject(inVar));
+
+	if (result->jointree->quals)
+		result->jointree->quals = (Node *) makeBoolExpr(AND_EXPR,
+				list_make2(result->jointree->quals, eqCond));
+	else
+		result->jointree->quals = eqCond;
+
+	/* correct WhereAttrInfo */
+	newattr->inVars = lappend(newattr->inVars, copyObject(newVar));
+	newVar = makeVar(list_length(result->rtable),
+			list_length(newRte->eref->colnames), TEXTOID, -1, 0);
+	newattr->annotVars = lappend(newattr->annotVars, newVar);
+
+	return result;
+}
+
+/*
+ * Based on the WhereAttrInfos of the query exchange base relation accesses
+ * into queries that propagate WHERE-CS annotations for all the base
+ * relation attributes mentioned in the inVars of the WhereAttrInfos.
+ */
+
+#define GET_REL_ATTNUM(rtindex) \
+	list_length(((RangeTblEntry *) rt_fetch(rtindex, query->rtable))->eref->colnames)
+
+void
+generateAnnotBaseQueries (Query *query)
+{
+	List **baseVars;
+	List *baseRtIndexMap = NIL;
+	int i, numBaseRels, rtepos, attrpos;
+	ListCell *lc, *innerLc;
+	WhereAttrInfo *attr;
+	RangeTblEntry *rte;
+	Var *inVar, *annotVar;
+
+	/* get base relation rtes and store their rt indices */
+	numBaseRels = 0;
+	foreachi(lc, i, query->rtable)
+	{
+		rte = (RangeTblEntry *) lfirst(lc);
+
+		if (rte->rtekind == RTE_RELATION)
+		{
+			numBaseRels++;
+			baseRtIndexMap = lappend_int(baseRtIndexMap, i + 1);
+		}
+	}
+
+	/* generate data structure to store for which attributes of each of the
+	 * base relations we have to propagate annotations. */
+	baseVars = (List **) palloc(sizeof(List *) * numBaseRels);
+	for(i = 0; i < numBaseRels; i++)
+		baseVars[i] = NIL;
+
+	/* loop through the WhereAttrInfos and gather inVars */
+	foreach(lc, GET_WHERE_ATTRINFOS(query))
+	{
+		attr = (WhereAttrInfo *) lfirst(lc);
+
+		foreach(innerLc, attr->inVars)
+		{
+			inVar = (Var *) lfirst(innerLc);
+			rtepos = listPositionInt(baseRtIndexMap, inVar->varno);
+			baseVars[rtepos] = list_append_unique_int(baseVars[rtepos], inVar->varattno);
+		}
+	}
+
+	for(i = 0; i < numBaseRels; i++)
+		baseVars[rtepos] = sortList(&baseVars[rtepos], compareVars, true);
+
+	/* adapt the WhereAttrInfo->annotVars */
+	foreach(lc, GET_WHERE_ATTRINFOS(query))
+	{
+		attr = (WhereAttrInfo *) lfirst(lc);
+		attr->annotVars = NIL;
+
+		foreach(innerLc, attr->inVars)
+		{
+			inVar = (Var *) lfirst(innerLc);
+
+			rtepos = listPositionInt(baseRtIndexMap, inVar->varno);
+			attrpos = listPositionInt(baseVars[rtepos], inVar->varattno)
+					+ GET_REL_ATTNUM(inVar->varno) + 1;
+			annotVar = makeVar(inVar->varno, attrpos, TEXTOID, -1 ,0);
+			attr->annotVars = lappend(attr->annotVars, annotVar);
+		}
+	}
+
+	/* generate the annotation propagating base queries */
+	for(i = 0; i < numBaseRels; i++)
+		addBaseRelationAnnotationAttrs(rt_fetch(list_nth_int(baseRtIndexMap,i), query->rtable),
+				baseVars[i]);
+
+	/* clean up */
+	for(i = 0; i < numBaseRels; i++)
+		list_free(baseVars[i]);
+	pfree(baseVars);
+}
+
+/*
+ *
+ */
+
+static Query *
+addBaseRelationAnnotationAttrs (RangeTblEntry *rte, List *attrs)
+{
+	Query *result;
+	List *newTes = NIL;
+	TargetEntry *origAttr;
+	TargetEntry *annotAttr;
+	ListCell *lc;
+	Expr *annotExpr;
+	int curResno, i;
+	char *annotName;
+
+	/* transform into a trivial query */
+	result = generateQueryFromBaseRelation(copyObject(rte));
+	curResno = list_length(result->targetList);
+
+	/* for each attribute generate an annotation attribute */
+	foreachi(lc, i, result->targetList)
+	{
+		origAttr = (TargetEntry *) lfirst(lc);
+
+		if (listPositionInt(attrs, i + 1) != -1)
+		{
+			annotName = getWhereAnnotName(origAttr->resname);
+			annotExpr = (Expr *) getAnnotValueExpr(rte->relid,
+					origAttr->resname);
+			annotAttr = makeTargetEntry ((Expr *) annotExpr, ++curResno,
+					annotName, false);
+			newTes = lappend(newTes, annotAttr);
+		}
+	}
+
+	result->targetList = list_concat(result->targetList, newTes);
+
+	/* change rte type to subquery */
+	rte->rtekind = RTE_SUBQUERY;
+	rte->subquery = result;
+	correctRTEAlias(rte);
+
+	return result;
+}
+
+/*
+ * Create the expression that computes the value of an WHERE-CS annotation
+ * attribute. This expression concatenates the constant prefix string
+ * with the oid attribute value of a tuple. For instance, for the annotation
+ * attribute for relation R and its attribute A the following prefix is
+ * generated:
+ * 		"R#A#"
+ */
+
+static Node *
+getAnnotValueExpr (Oid reloid, char *attrName)
+{
+	Const *annotConst;
+	Node *result;
+	Var *oidVar;
+	Node *oidCast;
+	char *annotValue;
+	char *relName;
+	int constLength;
+
+	/* create a var for the oid column */
+	oidVar = makeVar(1, -2, OIDOID ,-1, 0);
+	oidCast = coerce_to_target_type(NULL, (Node *) oidVar, OIDOID, TEXTOID, -1,
+			COERCION_EXPLICIT, COERCE_EXPLICIT_CAST);
+
+	/* create a constant for the annotation prefix
+	 * ("Relname#Attrname#" ) */
+	relName = getRelationNameUnqualified(reloid);
+	constLength = strlen(relName) + strlen(attrName) + 3;
+	annotValue = (char *) palloc(constLength);
+
+	annotValue = strcpy(annotValue, relName);
+	annotValue = strcat(annotValue, "#");
+	annotValue = strcat(annotValue, attrName);
+	annotValue = strcat(annotValue, "#");
+
+	pfree(relName);
+
+	annotConst = makeConst(TEXTOID, -1, -1,
+			DirectFunctionCall1(textin,CStringGetDatum(annotValue)),
+			false, false);
+
+	/* apply text concat to both values */
+	result = (Node *) makeFuncExpr(F_TEXTCAT, TEXTOID,
+			list_make2(annotConst, oidCast), COERCE_IMPLICIT_CAST);
+
+	return result;
+}
+
 
 /*
  *
@@ -54,6 +599,8 @@ pullUpSubqueries (Query *query)
 	RangeTblEntry *rte;
 	Var *var;
 	int i;
+
+	makeTeNamesUnique(query);
 
 	/* check for a simple wrapper query around a union */
 	if (list_length(query->rtable) == 1 && !query->setOperations)
@@ -144,6 +691,26 @@ pullUpSubqueries (Query *query)
 	recreateJoinRTEs(query);
 
 	return query;
+}
+
+/*
+ *
+ */
+
+static void
+makeTeNamesUnique (Query *query)
+{
+	ListCell *lc;
+	TargetEntry *te;
+	int i = 1;
+
+	foreach(lc, query->targetList)
+	{
+		te = (TargetEntry *) lfirst(lc);
+
+		te->resname = appendIdToString("orig_attr_", &i);
+		i++;
+	}
 }
 
 /*

@@ -6434,7 +6434,8 @@ contribution_type:
 				}
 			| INFLUENCE								{ $$ = CONTR_INFLUENCE; }
 			| WHERE									{ $$ = CONTR_WHERE; }
-			| INWHERE								{ $$ = CONTR_WHERE_INSEN; }
+			| INWHERE								{ $$ = CONTR_WHERE_INSEN_NOUNION; } 
+			| INWHERE WITH UNION					{ $$ = CONTR_WHERE_INSEN; }
 			| HOW									{ $$ = CONTR_HOW; }
 
 opt_copy_contribution_mod:

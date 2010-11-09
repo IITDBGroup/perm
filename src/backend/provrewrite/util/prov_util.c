@@ -2029,7 +2029,10 @@ getAlias (RangeTblEntry *rte)
 }
 
 /*
- *
+ * For a Var "var" used in a query return the var itself if it references a
+ * range table entry that is a query or base relation. If "var" is from a
+ * join RTE trace it back to the query or relation RTE it transitively
+ * references.
  */
 
 Var *

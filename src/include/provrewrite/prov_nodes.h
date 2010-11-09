@@ -159,7 +159,6 @@ struct CopyProvAttrInfo
 typedef struct WhereProvInfo
 {
 	NodeTag type;
-	bool isInSen;
 	List *attrInfos;
 } WhereProvInfo;
 
@@ -168,16 +167,15 @@ typedef struct WhereAttrInfo {
 	Var *outVar;
 	List *inVars;
 	List *annotVars;
-	List *transVars;
 } WhereAttrInfo;
 
-typedef struct BaseVarInfo {
-	NodeTag type;
-	Var *var;
-	Oid relation;
-	char *relName;
-	char *attrName;
-} BaseVarInfo;
+//typedef struct BaseVarInfo {
+//	NodeTag type;
+//	Var *var;
+//	Oid relation;
+//	char *relName;
+//	char *attrName;
+//} BaseVarInfo;
 
 /*
  * Datastructure that stores information for a query node that is needed for

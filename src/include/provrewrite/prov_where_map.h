@@ -13,6 +13,8 @@
 #ifndef PROV_WHERE_MAP_H_
 #define PROV_WHERE_MAP_H_
 
+#include "nodes/parsenodes.h"
 
+extern void makeRepresentativeQuery (Query *query);
 
 #endif /* PROV_WHERE_MAP_H_ */
