@@ -58,9 +58,9 @@ static List *fetchAllRTEVars (Query *query, List **vars, int rtIndex);
 static bool fetchAllRTEVarsWalker (Node *node, FetchVarsContext *context);
 static bool addToVarnoWalker (Node *node, int *context);
 static void adaptJoinTreeWithSubTrees (Query *query, List *subIndex,
-		List *rtindexMap, List *subFroms);
+		List *rtindexMap, List *joinIndex, List *subFroms);
 static void adaptFromItem (Node **fromItem, List *subIndex, List *rtindexMap,
-		List *subFroms);
+		List *joinIndex, List *subFroms, int joinOffset);
 
 /*
  *
@@ -181,10 +181,10 @@ makeAuxQueriesWithUnion (Query *rep, WhereAttrInfo *attr, Var *inVar, List *rels
 				newQuery->jointree->quals = eqCond;
 
 			/* correct WhereAttrInfo */
-			newattr->inVars = lappend(newattr->inVars, copyObject(relVar));
+			newattr->inVars = list_make1(copyObject(relVar));
 			newVar = makeVar(list_length(newQuery->rtable),
 					list_length(newRte->eref->colnames), TEXTOID, -1, 0);
-			newattr->annotVars = lappend(newattr->annotVars, newVar);
+			newattr->annotVars = list_make1(newVar);
 
 			/* add to result list */
 			result = lappend(result, newQuery);
@@ -387,10 +387,10 @@ makeNoUnionAuxQuery (Query *rep, WhereAttrInfo *attr, Var *inVar)
 		result->jointree->quals = eqCond;
 
 	/* correct WhereAttrInfo */
-	newattr->inVars = lappend(newattr->inVars, copyObject(newVar));
+	newattr->inVars = list_make1(copyObject(newVar));
 	newVar = makeVar(list_length(result->rtable),
 			list_length(newRte->eref->colnames), TEXTOID, -1, 0);
-	newattr->annotVars = lappend(newattr->annotVars, newVar);
+	newattr->annotVars = list_make1(newVar);
 
 	return result;
 }
@@ -448,7 +448,7 @@ generateAnnotBaseQueries (Query *query)
 	}
 
 	for(i = 0; i < numBaseRels; i++)
-		baseVars[rtepos] = sortList(&baseVars[rtepos], compareVars, true);
+		baseVars[rtepos] = sortIntList(&baseVars[rtepos], true);
 
 	/* adapt the WhereAttrInfo->annotVars */
 	foreach(lc, GET_WHERE_ATTRINFOS(query))
@@ -586,6 +586,8 @@ pullUpSubqueries (Query *query)
 	List *subIndex = NIL;
 	List *subqueries = NIL;
 	List *relAccess = NIL;
+	List *joinAccess = NIL;
+	List *joinIndex = NIL;
 	List *subFroms = NIL;
 	List **subqueryVars;
 	ListCell *lc, *innerLc;
@@ -638,10 +640,15 @@ pullUpSubqueries (Query *query)
 			subqueries = lappend(subqueries, rte->subquery);
 			subIndex = lappend_int(subIndex, i + 1);
 		}
-		else
+		else if (rte->rtekind == RTE_RELATION)
 		{
 			relAccess = lappend(relAccess, rte);
 			rtindexMap = lappend_int(rtindexMap, i + 1);
+		}
+		else
+		{
+			joinAccess = lappend(joinAccess, rte);
+			joinIndex = lappend_int(joinIndex, i + 1);
 		}
 	}
 
@@ -660,6 +667,8 @@ pullUpSubqueries (Query *query)
 		foreach(innerLc, subqueryVars[lfirst_int(lc) - 1])
 		{
 			var = (Var *) lfirst(innerLc);
+
+			var->varnoold = i + 1;
 			var->varno = i + 1;
 		}
 	}
@@ -678,8 +687,22 @@ pullUpSubqueries (Query *query)
 				subqueryVars[lfirst_int(innerLc) - 1], &subFroms);
 	}
 
+	/* map the rtindex for joins to new order */
+	foreachi(lc, i, joinIndex)
+	{
+		foreach(innerLc, subqueryVars[lfirst_int(lc) - 1])
+		{
+			var = (Var *) lfirst(innerLc);
+			var->varno = i + 1 + list_length(query->rtable);
+			var->varnoold = var->varno;//TODO check
+		}
+	}
+
+	/* add join rtes again */
+	query->rtable = list_concat(query->rtable, joinAccess);
+
 	/* adapt join tree */
-	adaptJoinTreeWithSubTrees (query, subIndex, rtindexMap, subFroms);
+	adaptJoinTreeWithSubTrees (query, subIndex, rtindexMap, joinIndex, subFroms);
 
 	/* recreate join RT entries */
 	recreateJoinRTEs(query);
@@ -734,6 +757,7 @@ addSubqueriesAsBase(Query *root, Query *sub, int subIndex, List *vars, List **su
 		Assert(innerVar != NULL);
 
 		var->varno = curRtindex + innerVar->varno;
+		var->varnoold = var->varno;
 		var->varattno = innerVar->varoattno;
 		var->vartype = innerVar->vartype;
 		var->vartypmod = innerVar->vartypmod;
@@ -800,15 +824,6 @@ addToVarnoWalker (Node *node, int *context)
 	if (node == NULL)
 		return false;
 
-//	if (IsA(node, Var))
-//	{
-//		Var *var = (Var *) node;
-//
-//		var->varno += *context;
-//
-//		return false;
-//	}
-
 	if (IsA(node, JoinExpr))
 	{
 		JoinExpr *join = (JoinExpr *) node;
@@ -832,11 +847,13 @@ addToVarnoWalker (Node *node, int *context)
  */
 
 static void
-adaptJoinTreeWithSubTrees (Query *query, List *subIndex, List *rtindexMap, List *subFroms)
+adaptJoinTreeWithSubTrees (Query *query, List *subIndex, List *rtindexMap,
+		List *joinIndex, List *subFroms)
 {
 	ListCell *lc;
 	FromExpr *subFrom;
 	Node **fromItem;
+	int joinOffset = list_length(query->rtable) - list_length(joinIndex) + 1;
 
 	foreach(lc, subFroms)
 	{
@@ -855,7 +872,8 @@ adaptJoinTreeWithSubTrees (Query *query, List *subIndex, List *rtindexMap, List 
 	foreach(lc, query->jointree->fromlist)
 	{
 		fromItem = (Node **) &(lc->data.ptr_value);
-		adaptFromItem(fromItem, subIndex, rtindexMap, subFroms);
+		adaptFromItem(fromItem, subIndex, rtindexMap, joinIndex, subFroms,
+				joinOffset);
 	}
 }
 
@@ -864,7 +882,8 @@ adaptJoinTreeWithSubTrees (Query *query, List *subIndex, List *rtindexMap, List 
  */
 
 static void
-adaptFromItem (Node **fromItem, List *subIndex, List *rtindexMap, List *subFroms)
+adaptFromItem (Node **fromItem, List *subIndex, List *rtindexMap,
+		List *joinIndex, List *subFroms, int joinOffset)
 {
 	int pos;
 	FromExpr *subFrom;
@@ -873,11 +892,13 @@ adaptFromItem (Node **fromItem, List *subIndex, List *rtindexMap, List *subFroms
 	{
 		JoinExpr *join = (JoinExpr *) *fromItem;
 
-		pos = listPositionInt(rtindexMap, join->rtindex);
-		join->rtindex = pos + 1;
+		pos = listPositionInt(joinIndex, join->rtindex);
+		join->rtindex = pos + joinOffset;
 
-		adaptFromItem(&(join->larg), subIndex, rtindexMap, subFroms);
-		adaptFromItem(&(join->rarg), subIndex, rtindexMap, subFroms);
+		adaptFromItem(&(join->larg), subIndex, rtindexMap, joinIndex, subFroms,
+				joinOffset);
+		adaptFromItem(&(join->rarg), subIndex, rtindexMap, joinIndex, subFroms,
+				joinOffset);
 	}
 	else
 	{

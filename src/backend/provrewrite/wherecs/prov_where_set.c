@@ -64,16 +64,22 @@ rewriteSetWhere (Query *query)
 List *
 rewriteWhereInSetQuery (Query *query)
 {
-	List *subqueries = NIL;
 	List *representatives = NIL;
 	List *auxQueries = NIL;
 	ListCell *lc;
 	Query *sub;
+	RangeTblEntry *rte;
+	WhereProvInfo *provInfo;
 
 	/* generate query representative for each subquery */
-	foreach(lc, subqueries)
+	foreach(lc, query->rtable)
 	{
-		sub = (Query *) lfirst(lc);
+		rte = (RangeTblEntry *) lfirst(lc);
+		sub = rte->subquery;
+		provInfo = (WhereProvInfo *) makeNode(WhereProvInfo);
+		provInfo->attrInfos = NIL;
+		Provinfo(sub)->copyInfo = (Node *) provInfo;
+
 		makeRepresentativeQuery (sub);
 
 		representatives = lappend(representatives, sub);

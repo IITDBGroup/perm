@@ -243,7 +243,7 @@ addEqualitiesToClasses (Var *left, Var *right, EqualWalkerContext *context)
 
 		if (list_member(cur, left) || list_member(cur,right))
 		{
-			if (hit)
+			if (!hit)
 				hit = (List **) &(lc->data.ptr_value);
 			else
 				secondhit = (List **) &(lc->data.ptr_value);
@@ -266,10 +266,14 @@ addEqualitiesToClasses (Var *left, Var *right, EqualWalkerContext *context)
 	 * classes. */
 	else
 	{
-		list_delete_ptr(*(context->eqClasses), *hit);
-		list_delete_ptr(*(context->eqClasses), *secondhit);
+		List *firstL = *hit;
+		List *secondL = *secondhit;
 
-		cur = list_union(*hit, *secondhit);
+		cur = list_union(firstL, secondL);
+
+		*(context->eqClasses) = list_delete_ptr(*(context->eqClasses), *hit);
+		*(context->eqClasses) = list_delete_ptr(*(context->eqClasses), *secondhit);
+
 		*(context->eqClasses) = lappend(*(context->eqClasses), cur);
 	}
 }
