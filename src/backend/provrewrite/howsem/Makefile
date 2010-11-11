@@ -12,7 +12,7 @@ subdir = src/backend/provrewrite/howsem
 top_builddir = ../../../..
 include $(top_builddir)/src/Makefile.global
 
-OBJS = prov_how_main.o
+OBJS = prov_how_main.o prov_how_adt.o
 
 all: SUBSYS.o
 

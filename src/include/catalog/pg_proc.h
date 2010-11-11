@@ -4435,7 +4435,12 @@ DATA(insert OID = 3784 (  textarray_unique_concat	PGNSP PGUID 12 1  0 f f f f i 
 DESCR("Add a text parameter to an text array if it is not already included in the array");
 DATA(insert OID = 3785 (  tarr_conc	PGNSP PGUID 12 1  0 t f f f i 1 1009 "25" _null_ _null_ _null_ aggregate_dummy - _null_ _null_ ));
 DESCR("Aggregate function that creates an text array out of text input (no duplicates).");
-
+DATA(insert OID = 3787 (  howprov_in PGNSP PGUID 12 1 0 f f t f i 3 3786 "2275 26 23" _null_ _null_ _null_ howprov_in - _null_ _null_ ));
+DESCR("I/O");
+DATA(insert OID = 3788 (  howprov_out PGNSP PGUID 12 1 0 f f t f i 1 2275 "3786" _null_ _null_ _null_ howprov_out - _null_ _null_ ));
+DESCR("I/O");
+DATA(insert OID = 3789 (  how_to_human PGNSP PGUID 12 1 0 f f t f i 1 25 "3786" _null_ _null_ _null_ howprov_out_human - _null_ _null_ ));
+DESCR("I/O");
 
 /*
  * Symbolic values for provolatile column: these indicate whether the result

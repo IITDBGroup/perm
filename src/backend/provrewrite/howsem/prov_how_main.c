@@ -18,6 +18,8 @@
 #include "postgres.h"
 #include "nodes/parsenodes.h"
 
+#include "provrewrite/prov_how_main.h"
+
 Query *
 rewriteQueryHow (Query *query)
 {

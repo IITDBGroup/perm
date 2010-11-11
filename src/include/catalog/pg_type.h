@@ -614,6 +614,8 @@ DATA(insert OID = 2776 ( anynonarray	PGNSP PGUID  4 t p t \054 0 0 0 anynonarray
 #define ANYNONARRAYOID	2776
 DATA(insert OID = 3500 ( anyenum		PGNSP PGUID  4 t p t \054 0 0 0 anyenum_in anyenum_out - - - - - i p f 0 -1 0 _null_ _null_ ));
 #define ANYENUMOID		3500
+DATA(insert OID = 3786 ( howprov		PGNSP PGUID  -1 f b t \054 0 0 0 howprov_in howprov_out - - - - - i x f 0 -1 0 _null_ _null_ ));
+#define HOWPROVOID		3786
 
 
 /*
