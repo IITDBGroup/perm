@@ -22,7 +22,7 @@
 #define PROV_SUBLINK_SEARCH_SELECT      0x01
 #define PROV_SUBLINK_SEARCH_WHERE       0x02
 #define PROV_SUBLINK_SEARCH_HAVING      0x04
-#define PROV_SUBLINK_SEARCH_GROUPBY 0x08
+#define PROV_SUBLINK_SEARCH_GROUPBY 	0x08
 #define PROV_SUBLINK_SEARCH_ORDER       0x10
 #define PROV_SUBLINK_SEARCH_ALL         0x1F            /* search in all locations */
 #define PROV_SUBLINK_SEARCH_AGG         0x0D            /* used for aggregation. Search in SELECT, GROUP BY, HAVING */
@@ -77,7 +77,9 @@ extern List *findSublinksUnnested (List *infos, int flags);
 extern void findVarsSublevelsUp (Query *query, SublinkInfo *info);
 extern List *findExprVars (Node *node);
 extern List *findSublinksForExpr (Node *expr);
-extern SublinkInfo *extractSublinks (Node *node, Node *exprRoot, Node **parentRef, Node **grandParentRef, SubLink* sublink, Node *parent);
+extern SublinkInfo *extractSublinks (Node *node, Node *exprRoot,
+		Node **parentRef, Node **grandParentRef, SubLink* sublink,
+		Node *parent);
 extern void findRefRTEinCondition (SublinkInfo *info);
 extern bool findRTRefInFromExpr (Node *fromItem, Index rtIndex);
 extern List *findAccessedBaseRelations (Query *query);

@@ -36,10 +36,8 @@
 #include "provrewrite/prov_sublink_keepcor.h"
 
 /* prototypes */
-//static void joinQueryRTEs(Query *query);
 static Index addJoinWithBaseRelations (Query *query, List *baseRels);
 static void addConditionForBaseRelJoin (Query *query, SublinkInfo *info);
-//static JoinExpr *createJoinExpr (Query *query);
 static Query *rewriteGenSublinkQuery (Query *query);
 static Query *createBaseRelUnionNull (RangeTblEntry *rte, Query *query, List *provAttrs);
 static Query *generateNullQuery (RangeTblEntry *rte);
@@ -71,7 +69,7 @@ static void createPlistForBaseRelJoin (Query *query, Index rtIndex, Index curRes
 
 void
 rewriteSublinkWithCorrelationToBase (Query *query, SublinkInfo *info,
-		Index subPos[])
+		Index *subPos)
 {
 	Query *rewrittenSub;
 	List *accessedBaseRels;
@@ -185,6 +183,7 @@ addJoinWithBaseRelations (Query *query, List *baseRels)
 	Index curResno;
 	Query *baseRel;
 	List *subJoins;
+	Node *fromItem;
 
 	/*
 	 *	get number of attributes before we add base relations. This might be
@@ -196,16 +195,32 @@ addJoinWithBaseRelations (Query *query, List *baseRels)
 	{
 		curResno = list_length(query->targetList);
 	}
-	else if(list_length(query->rtable) > 1)
-	{
-		rtIndex = ((JoinExpr *) linitial(query->jointree->fromlist))->rtindex;
-		rte = rt_fetch(rtIndex, query->rtable);
-		curResno = list_length(rte->joinaliasvars);
-	}
 	else {
-		rtIndex = ((RangeTblRef *) linitial(query->jointree->fromlist))->rtindex;
-		rte = rt_fetch(rtIndex, query->rtable);
-		curResno = list_length(rte->eref->colnames);
+		fromItem = linitial(query->jointree->fromlist);
+
+		if (IsA(fromItem, JoinExpr))
+		{
+			rtIndex = ((JoinExpr *) fromItem)->rtindex;
+			rte = rt_fetch(rtIndex, query->rtable);
+			curResno = list_length(rte->joinaliasvars);
+		}
+		else
+		{
+			rtIndex = ((RangeTblRef *) fromItem)->rtindex;
+			rte = rt_fetch(rtIndex, query->rtable);
+			curResno = list_length(rte->eref->colnames);
+		}
+//		if(list_length(query->rtable) > 1)
+//		{
+//			rtIndex = ((JoinExpr *) linitial(query->jointree->fromlist))->rtindex;
+//			rte = rt_fetch(rtIndex, query->rtable);
+//			curResno = list_length(rte->joinaliasvars);
+//		}
+//		else {
+//			rtIndex = ((RangeTblRef *) linitial(query->jointree->fromlist))->rtindex;
+//			rte = rt_fetch(rtIndex, query->rtable);
+//			curResno = list_length(rte->eref->colnames);
+//		}
 	}
 
 	/* initialize variables */

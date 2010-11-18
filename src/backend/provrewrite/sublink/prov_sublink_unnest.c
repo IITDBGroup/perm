@@ -45,12 +45,12 @@ static bool checkCorrVarsInOpWhere (SublinkInfo *info);
 static bool existsOrNotExistsInAnd (SublinkInfo *info);
 
 static RangeTblRef *rewriteAggregateSublinkQuery (Query *query,
-		SublinkInfo *info, Index subList[], List **corrPos);
+		SublinkInfo *info, Index *subList, List **corrPos);
 static RangeTblRef *rewriteExistsSublinkQuery (Query *query, SublinkInfo *info,
-		Index subList[]);
+		Index *subList);
 static Query *rewriteExistsWithoutInject (Query *query, SublinkInfo *info);
 static RangeTblRef *rewriteNotToLeftJoin (Query *query, SublinkInfo *info,
-		Index subList[], bool exists);
+		Index *subList, bool exists);
 static Node *createCorrelationPredicates (SublinkInfo *info, List *corrVarPos,
 		Index rangeTblPos);
 static Query *rewriteWithInject (Query *query, SublinkInfo *info,
@@ -273,7 +273,7 @@ checkCorrVarsInOpWhere(SublinkInfo *info)
  */
 
 Query *
-rewriteJAstrategy(Query *query, SublinkInfo *info, Index subList[])
+rewriteJAstrategy(Query *query, SublinkInfo *info, Index *subList)
 {
 	RangeTblRef *rtRef;
 	List *corrPos;
@@ -305,7 +305,7 @@ rewriteJAstrategy(Query *query, SublinkInfo *info, Index subList[])
  */
 
 Query *
-rewriteEXISTSstrategy(Query *query, SublinkInfo *info, Index subList[])
+rewriteEXISTSstrategy(Query *query, SublinkInfo *info, Index *subList)
 {
 	Query *sublink;
 	RangeTblRef *rtRef;
@@ -337,7 +337,7 @@ rewriteEXISTSstrategy(Query *query, SublinkInfo *info, Index subList[])
  */
 
 static RangeTblRef *
-rewriteNotToLeftJoin(Query *query, SublinkInfo *info, Index subList[],
+rewriteNotToLeftJoin(Query *query, SublinkInfo *info, Index *subList,
 		bool exists)
 {
 	RangeTblRef *rtRef;
@@ -413,7 +413,7 @@ rewriteNotToLeftJoin(Query *query, SublinkInfo *info, Index subList[],
  */
 
 static RangeTblRef *
-rewriteAggregateSublinkQuery(Query *query, SublinkInfo *info, Index subList[],
+rewriteAggregateSublinkQuery(Query *query, SublinkInfo *info, Index *subList,
 		List **corrPos)
 {
 	RangeTblRef *rtRef;
@@ -447,7 +447,7 @@ rewriteAggregateSublinkQuery(Query *query, SublinkInfo *info, Index subList[],
  */
 
 static RangeTblRef *
-rewriteExistsSublinkQuery(Query *query, SublinkInfo *info, Index subList[])
+rewriteExistsSublinkQuery(Query *query, SublinkInfo *info, Index *subList)
 {
 	RangeTblRef *rtRef;
 	Index sublinkIndex;

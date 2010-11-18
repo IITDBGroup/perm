@@ -23,8 +23,7 @@
 #include "provrewrite/prov_how_adt.h"
 
 /* function declarations */
-static HowProv *addHowProv(HowProv *left, HowProv *right);
-static HowProv *multiplyHowProv(HowProv *left, HowProv *right);
+static HowProv *concatHowProv(HowProv *left, HowProv *right, char op);
 static Oid parseOid (char *input);
 
 /*
@@ -131,7 +130,7 @@ howprov_in (PG_FUNCTION_ARGS)
 	dataPtr = HOWDATA(result);
 	bitPos = HIGHBIT;
 
-	//TODO check that the tokes sequence is a valid polish notation of how prov
+	//TODO check that the token sequence is a valid polish notation of how prov
 
 	foreach(lc, tokens)
 	{
@@ -254,7 +253,7 @@ howprov_out (PG_FUNCTION_ARGS)
 	PG_RETURN_CSTRING(result);
 }
 
-#define GETBITAT(result,ptr,at) \
+#define GETBITAT(result,ptr,mask,at) \
 		do { \
 			bits8 *hByte = ptr + (at / BITS_PER_BYTE); \
 			mask = HIGHBIT; \
@@ -301,7 +300,7 @@ howprov_out_human (PG_FUNCTION_ARGS)
 
 	for(i = 0; i < HOWNUMELEMS(input); i++)
 	{
-		GETBITAT(bitVal, headPtr, i);
+		GETBITAT(bitVal, headPtr, mask, i);
 		/* a number -> output it */
 		if (bitVal)
 		{
@@ -374,20 +373,11 @@ howprov_add (PG_FUNCTION_ARGS)
 	left = PG_GETARG_HOWPROV_P(0);
 	right = PG_GETARG_HOWPROV_P(1);
 
-	result = addHowProv(left, right);
+	result = concatHowProv(left, right, '+');
 
 	PG_RETURN_HOWPROV_P(result);
 }
 
-/*
- *
- */
-
-static HowProv *
-addHowProv(HowProv *left, HowProv *right)
-{
-	return left;
-}
 
 /*
  * Multiply two how provenance values
@@ -410,7 +400,7 @@ howprov_multiply (PG_FUNCTION_ARGS)
 	left = PG_GETARG_HOWPROV_P(0);
 	right = PG_GETARG_HOWPROV_P(1);
 
-	result = multiplyHowProv(left, right);
+	result = concatHowProv(left, right, '*');
 
 	PG_RETURN_HOWPROV_P(result);
 }
@@ -420,7 +410,66 @@ howprov_multiply (PG_FUNCTION_ARGS)
  */
 
 static HowProv *
-multiplyHowProv(HowProv *left, HowProv *right)
+concatHowProv(HowProv *left, HowProv *right, char op)
 {
-	return left;
+	HowProv *result;
+	int dataLength;
+	int headerLength;
+	char *dataPtr;
+	bits8 *headPtr, *oldHeadPtr;
+	bits8 mask, oldMask;
+	int i;
+	bool bitValue;
+
+	/* compute sizes and allocate data structure for result */
+	headerLength = left->header_size + right->header_size + 1;
+	dataLength = left->data_size + right->data_size + 1;
+
+	result = (HowProv *) palloc0(VARHDRSZ + HOWHDRSIZE + dataLength
+			+ BITSTOBYTELENGTH(headerLength));
+	result->header_size = headerLength;
+	result->data_size = dataLength;
+	SET_VARSIZE(result, HOWTOTALSIZE(result));
+
+	dataPtr = HOWDATA(result);
+	headPtr = HOWHEADER(result);
+	*(dataPtr++) = op;
+	mask = HIGHBIT;
+	SETBITPOS(headPtr, mask, 0);
+
+	/* copy elements and bits from left input */
+	memcpy(dataPtr, HOWDATA(left), left->data_size);
+	dataPtr += left->data_size;
+	oldHeadPtr = HOWHEADER(left);
+	for(i = 0; i < left->header_size; i++)
+	{
+		GETBITAT(bitValue, oldHeadPtr, oldMask, i);
+		if (bitValue)
+		{
+			SETBITPOS(headPtr, mask, 1);
+		}
+		else
+		{
+			SETBITPOS(headPtr, mask, 0);
+		}
+
+	}
+
+	/* copy elements and bits from right input */
+	memcpy(dataPtr, HOWDATA(right), right->data_size);
+	oldHeadPtr = HOWHEADER(right);
+	for(i = 0; i < right->header_size; i++)
+	{
+		GETBITAT(bitValue, oldHeadPtr, oldMask, i);
+		if (bitValue)
+		{
+			SETBITPOS(headPtr, mask, 1);
+		}
+		else
+		{
+			SETBITPOS(headPtr, mask, 0);
+		}
+	}
+
+	return result;
 }

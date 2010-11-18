@@ -64,6 +64,8 @@ typedef struct AdaptTestExpressionMutatorContext
 
 
 /* functions */
-extern Query *rewriteSublinkQueryWithMoveToTarget (Query *query, List *sublinks, List *uncorrelated,  Index subList[], List **rewritePos);
+extern Query *rewriteSublinkQueryWithMoveToTarget (Query *query,
+		List *sublinks, List *uncorrelated,  Index *subList,
+		List **rewritePos);
 
 #endif /*PROV_SUBLINK_TOTARGET_H_*/

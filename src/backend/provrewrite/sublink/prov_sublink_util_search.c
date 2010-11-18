@@ -317,6 +317,8 @@ findSublevelsUpVarWalker(Node *node, GetCorrelatedVarsWalkerContext *context)
 	newContext->location = context->location;
 	newContext->parent = node;
 	newContext->realLevelsUp = list_copy(context->realLevelsUp);
+	newContext->belowAgg = context->belowAgg;
+	newContext->belowSet = context->belowSet;
 
 	// check for var nodes with sublevelsup
 	if (IsA(node, Var))

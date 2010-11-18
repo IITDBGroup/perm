@@ -109,7 +109,7 @@ static void addEqualityForNonStaticPaths (EquiGraphNode *start,
 static int getNodePos (List *graph, Var *var);
 static void searchStaticPath (EquiGraphNode *root, EquiGraphNode *node,
 		bool *hasStatic, int numNodes);
-static int compareEquiNode (void *left, void *right);
+static int compareEquiNode (const void *left, const void *right);
 static bool findVarEqualitiesWalker (Node *node, VarEqualitiesContext *context);
 
 static void setCopyMapRTindices (CopyMap *map, Index rtindex);
@@ -1051,10 +1051,10 @@ searchStaticPath (EquiGraphNode *root, EquiGraphNode *node, bool *hasStatic,
  */
 
 static int
-compareEquiNode (void *left, void *right)
+compareEquiNode (const void *left, const void *right)
 {
-	EquiGraphNode *l = (EquiGraphNode *) left;
-	EquiGraphNode *r = (EquiGraphNode *) right;
+	EquiGraphNode *l = *((EquiGraphNode **) left);
+	EquiGraphNode *r = *((EquiGraphNode **) right);
 
 	if (l->nodeVar->varno < r->nodeVar->varno)
 		return 1;

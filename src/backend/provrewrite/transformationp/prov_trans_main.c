@@ -64,6 +64,12 @@ rewriteQueryTransProv (Query *query, char *cursorName)
 	 */
 	analyseStaticTransProv(query);
 
+	/*TODO static bitsets should computed afterwards for Mapprov otherwise
+	 * annotations are not correctly propagated. In praxis this is no problem,
+	 * because the static parts of a transformation will always correspond to
+	 * a fixed set of mappings, but it would be a problem if the annotations do
+	 * not represent schema mappings.
+	 */
 	if(type == CONTR_TRANS_SQL)
 		queryId = generateTransProvQueryIndex(query, cursorName);
 	if(type == CONTR_TRANS_XML || type == CONTR_TRANS_XML_SIMPLE)

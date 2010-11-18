@@ -164,7 +164,7 @@ ExplainOneQuery(Query *query, ExplainStmt *stmt, const char *queryString,
 	if (stmt->graph)
 	{
 		ExplainQueryGraph(query, stmt, queryString, params, tstate);
-		//TODO
+		return;
 	}
 	/* planner will not cope with utility statements */
 	if (query->commandType == CMD_UTILITY)
@@ -255,6 +255,40 @@ ExplainOnePlanProv (Query *query, PlannedStmt *plannedstmt, ParamListInfo params
 	StringInfoData buf;
 	int			eflags;
 
+	/* if the user requested to get the SQL text of the query generate
+	 * it and append it to explain text */
+	if (stmt->generateSQL)
+	{
+		StringInfo buf2;
+
+		buf2 = parseBackSafe(query);
+
+		do_text_output_multiline(tstate, buf2->data);
+
+		pfree(buf2->data);
+		pfree(buf2);
+
+		return;
+	}
+
+	/* if the user requested to get the SQL text of the query as DB2 SQL
+	 * dialect generate it and append it to explain text */
+	if (stmt->generateDB2SQL)
+	{
+		StringInfo buf2;
+
+		buf2 = parseBackDB2(query, true);
+
+		do_text_output_multiline(tstate, buf2->data);
+
+		pfree(buf2->data);
+		pfree(buf2);
+
+		return;
+	}
+
+	initStringInfo(&buf);
+
 		/*
 		 * Update snapshot command ID to ensure this query sees results of any
 		 * previously executed queries.  (It's a bit cheesy to modify
@@ -321,8 +355,6 @@ ExplainOnePlanProv (Query *query, PlannedStmt *plannedstmt, ParamListInfo params
 			}
 		}
 
-		initStringInfo(&buf);
-
 		/* if a provenance query was executed explain which rewrite methods have been applied */
 		if (query && query->provInfo)
 		{
@@ -347,37 +379,6 @@ ExplainOnePlanProv (Query *query, PlannedStmt *plannedstmt, ParamListInfo params
 			//TODO append info about which methods were activated
 		}
 
-		/* if the user requested to get the SQL text of the query generate it and append it to explain text */
-		if (stmt->generateSQL)
-		{
-			StringInfo buf2;
-
-			buf2 = parseBackSafe(query);
-
-			appendStringInfoString(&buf,"\nQuery:\n---------------\n");
-			appendStringInfoString(&buf, buf2->data);
-			appendStringInfoString(&buf,"\n---------------\n\n");
-
-			pfree(buf2->data);
-			pfree(buf2);
-		}
-
-		/* if the user requested to get the SQL text of the query as DB2 SQL dialect generate it and append it to explain text */
-
-		/* if the user requested to get the SQL text of the query generate it and append it to explain text */
-		if (stmt->generateDB2SQL)
-		{
-			StringInfo buf2;
-
-			buf2 = parseBackDB2(query, true);
-
-			appendStringInfoString(&buf,"\nQuery:\n---------------\n");
-			appendStringInfoString(&buf, buf2->data);
-			appendStringInfoString(&buf,"\n---------------\n\n");
-
-			pfree(buf2->data);
-			pfree(buf2);
-		}
 
 
 		explain_outNode(&buf,

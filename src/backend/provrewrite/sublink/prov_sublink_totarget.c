@@ -58,17 +58,23 @@ static void adaptTestExpressions (List *sublinksAndAggs, List *map, List *sublin
 static Node *adaptTestExpressionMutator (Node *node, AdaptTestExpressionMutatorContext *context);
 
 
-static void rewriteTargetSublinks (Query *newTop, Query *query, List *uncorrelated, List *correlated, List *sublinks, Index subList[], List **rewritePos);
-static List *rewriteNormalSubqueries (Query *query, List **subList, Index maxRTindex);
-static void addProvenanceAttrsToNewTop (Query *newTop, List *sublinks, List *corrPstack, List *uncorrPstack, Index subList[]);
-static void addProvenanceAttr (Query *query, TargetEntry *te, List **pList, Index rtindex, Index *resno);
+static void rewriteTargetSublinks (Query *newTop, Query *query,
+		List *uncorrelated, List *correlated, List *sublinks,
+		Index *subList, List **rewritePos);
+static List *rewriteNormalSubqueries (Query *query, List **subList,
+		Index maxRTindex);
+static void addProvenanceAttrsToNewTop (Query *newTop, List *sublinks,
+		List *corrPstack, List *uncorrPstack, Index *subList);
+static void addProvenanceAttr (Query *query, TargetEntry *te, List **pList,
+		Index rtindex, Index *resno);
 
 /*
  *
  */
 
 Query *
-rewriteSublinkQueryWithMoveToTarget (Query *query, List *sublinks, List *uncorrelated, Index subList[], List **rewritePos)
+rewriteSublinkQueryWithMoveToTarget (Query *query, List *sublinks,
+		List *uncorrelated, Index *subList, List **rewritePos)
 {
 	Query *newTop;
 	List *correlatedSublinks;
@@ -77,43 +83,54 @@ rewriteSublinkQueryWithMoveToTarget (Query *query, List *sublinks, List *uncorre
 	List *notUnnested;
 
 	/* get all sublinks that have not been unnested */
-	notUnnested = findSublinksUnnested (sublinks, PROV_SUBLINK_SEARCH_NOUNNEST);
+	notUnnested = findSublinksUnnested (sublinks,
+			PROV_SUBLINK_SEARCH_NOUNNEST);
 
-	/* get correlated sublinks and check which uncorrelated sublinks can be savely moved to target list */
-	correlatedSublinks = findSublinkByCats (notUnnested, PROV_SUBLINK_SEARCH_CORR | PROV_SUBLINK_SEARCH_CORR_IN);
+	/* get correlated sublinks and check which uncorrelated sublinks can be
+	 * savely moved to target list */
+	correlatedSublinks = findSublinkByCats (notUnnested,
+			PROV_SUBLINK_SEARCH_CORR | PROV_SUBLINK_SEARCH_CORR_IN);
 
 	uncorrCondTrue = NIL;
 	uncorrCondFalse = NIL;
-	filterOutSublinkForRewrite (query, uncorrelated, &uncorrCondTrue, &uncorrCondFalse);
+	filterOutSublinkForRewrite (query, uncorrelated, &uncorrCondTrue,
+			&uncorrCondFalse);
 
-	/* create new top query node and move uncorrelated sublinks to target list of query */
-	newTop = moveSublinksToTargetList (query, uncorrCondTrue, correlatedSublinks);
+	/* create new top query node and move uncorrelated sublinks to target list
+	 * of query */
+	newTop = moveSublinksToTargetList (query, uncorrCondTrue,
+			correlatedSublinks);
 
 	/* rewriteSublinks */
-	rewriteTargetSublinks(newTop, query, uncorrelated, correlatedSublinks, sublinks, subList, rewritePos);
+	rewriteTargetSublinks(newTop, query, uncorrelated, correlatedSublinks,
+			sublinks, subList, rewritePos);
 
 	return newTop;
 }
 
 /*
- * Partitions the sublinks list into sublinks that can be moved to target list and those which can not. A
- * sublink cannot be moved to the target list if it used in the qualification of outer join or a join that
- * is below a outer join in the jointree.
+ * Partitions the sublinks list into sublinks that can be moved to target list
+ * and those which can not. A sublink cannot be moved to the target list if it
+ * used in the qualification of outer join or a join that is below a outer join
+ *  in the jointree.
  */
 
 static void
-filterOutSublinkForRewrite (Query *query, List *sublinks, List **condTrue, List **condFalse)
+filterOutSublinkForRewrite (Query *query, List *sublinks, List **condTrue,
+		List **condFalse)
 {
 	ListCell *lc;
 	SublinkInfo *info;
 	BelowLeftJoinContext *context;
 
-	/* for each sublink get the position of the join in the join tree where the sublink is used */
+	/* for each sublink get the position of the join in the join tree where
+	 * the sublink is used */
 	foreach(lc, sublinks)
 	{
 		info = (SublinkInfo *) lfirst(lc);
 
-		context = (BelowLeftJoinContext *) palloc(sizeof(BelowLeftJoinContext));
+		context = (BelowLeftJoinContext *)
+				palloc(sizeof(BelowLeftJoinContext));
 		context->sublink = info;
 		context->result = false;
 
@@ -133,7 +150,8 @@ filterOutSublinkForRewrite (Query *query, List *sublinks, List **condTrue, List 
  */
 
 static void
-isBelowLeftJoinWalker (Node *node, BelowLeftJoinContext *context, bool inOuterJoin)
+isBelowLeftJoinWalker (Node *node, BelowLeftJoinContext *context,
+		bool inOuterJoin)
 {
 	ListCell *lc;
 	Node *sub;
@@ -175,7 +193,8 @@ isBelowLeftJoinWalker (Node *node, BelowLeftJoinContext *context, bool inOuterJo
 }
 
 /*
- * Creates a new top query node and moves the qualifications using sublinks to this query node.
+ * Creates a new top query node and moves the qualifications using sublinks to
+ * this query node.
  */
 
 static Query *
@@ -198,7 +217,8 @@ moveSublinksToTargetList (Query *query, List *infos, List *correlated)//TODO ada
 
 	corrTarget = getSublinkTypes(correlated, PROV_SUBLINK_SEARCH_SELECT);
 	uncorrTarget = getSublinkTypes(infos, PROV_SUBLINK_SEARCH_SELECT);
-	uncorrWhere = getSublinkTypes(list_union(infos,correlated), PROV_SUBLINK_SEARCH_WHERE);
+	uncorrWhere = getSublinkTypes(list_union(infos,correlated),
+			PROV_SUBLINK_SEARCH_WHERE);
 
 	/* add query to RT of newTop */
 	addSubqueryToRT (newTop, query, "origWithSublinks");
@@ -207,13 +227,16 @@ moveSublinksToTargetList (Query *query, List *infos, List *correlated)//TODO ada
 	newTop->jointree->fromlist = list_make1(rtRef);
 
 	/* copy target list to new Top */
-	copyTargetListToNewTop (newTop, query, corrTarget, uncorrTarget, &sublinksAndVars, &map);
+	copyTargetListToNewTop (newTop, query, corrTarget, uncorrTarget,
+			&sublinksAndVars, &map);
 
 	/* adapt target list of query (add references to attributes used in qual */
-	addTargetEntriesForVarQualsAndSublinks(query, uncorrWhere, uncorrTarget, &sublinksAndVars, &map);
+	addTargetEntriesForVarQualsAndSublinks(query, uncorrWhere, uncorrTarget,
+			&sublinksAndVars, &map);
 
 	/* copy qual to newTop and adapt vars and replace sublinks by references */
-	newTop->jointree->quals = createTopQueryQual(infos, query->jointree->quals);
+	newTop->jointree->quals = createTopQueryQual(infos,
+			query->jointree->quals);
 	adaptReferences(newTop, sublinksAndVars, map);
 
 	/* adapt var references in the test expressions of the sublinks */
@@ -229,8 +252,8 @@ moveSublinksToTargetList (Query *query, List *infos, List *correlated)//TODO ada
 }
 
 /*
- * Creates the initial target list of the new top query node by adding references to the target list
- * entries of the original query.
+ * Creates the initial target list of the new top query node by adding
+ * references to the target list entries of the original query.
  */
 
 static void
@@ -264,8 +287,9 @@ copyTargetListToNewTop (Query *newTop, Query *query, List *corrTarget,
 		if (!te->resjunk)
 		{
 			/*
-			 * if a target sublink is included in the expression of this target entry move the
-			 * expression to the newTop target list and keep just the sublink in query target list
+			 * if a target sublink is included in the expression of this target
+			 *  entry move the expression to the newTop target list and keep
+			 *  just the sublink in query target list.
 			 */
 			foreach(innerLc, uncorrTarget)
 			{
@@ -277,12 +301,15 @@ copyTargetListToNewTop (Query *newTop, Query *query, List *corrTarget,
 					/* If expression is only the sublink then change nothing */
 					if (!isTopLevelSublink(info))
 					{
-						newTe = moveExpressionToTopTarget(query, te, curResno, corrTarget, uncorrTarget, sublinksAndVars, map);
+						newTe = moveExpressionToTopTarget(query, te, curResno,
+								corrTarget, uncorrTarget, sublinksAndVars, map);
 						newTop->targetList = lappend(newTop->targetList, newTe);
 						hasSublink  = true;
 					}
 					else
-						info->targetVar = makeVar(1, te->resno, exprType((Node *) te->expr), exprTypmod((Node *) te->expr), 0);
+						info->targetVar = makeVar(1, te->resno,
+								exprType((Node *) te->expr),
+								exprTypmod((Node *) te->expr), 0);
 				}
 			}
 
@@ -290,7 +317,9 @@ copyTargetListToNewTop (Query *newTop, Query *query, List *corrTarget,
 			{
 				newTe = copyObject(te);
 				newTe->resno = curResno;
-				newTe->expr = (Expr *) makeVar (1, curResno, exprType((Node *) te->expr), exprTypmod((Node *) te->expr), 0);
+				newTe->expr = (Expr *) makeVar (1, curResno,
+						exprType((Node *) te->expr),
+						exprTypmod((Node *) te->expr), 0);
 
 				newTop->targetList = lappend(newTop->targetList, newTe);
 			}
@@ -301,13 +330,16 @@ copyTargetListToNewTop (Query *newTop, Query *query, List *corrTarget,
 
 
 /*
- * For a target entry that is an expression over one or more sublinks move the expression to the top level target list
- * and add all uncorrelated sublinks to the target list of the original query (if they are not already available as
- * target list entries.
+ * For a target entry that is an expression over one or more sublinks move
+ * the expression to the top level target list and add all uncorrelated
+ * sublinks to the target list of the original query (if they are not already
+ * available as target list entries.
  */
 
 static TargetEntry *
-moveExpressionToTopTarget (Query *query, TargetEntry *te, Index curTopResno, List *corrTarget, List *uncorrTarget, List **sublinksAndVars, List **map)
+moveExpressionToTopTarget (Query *query, TargetEntry *te, Index curTopResno,
+		List *corrTarget, List *uncorrTarget, List **sublinksAndVars,
+		List **map)
 {
 	ListCell *lc;
 	ListCell *infoLc;
@@ -345,10 +377,10 @@ moveExpressionToTopTarget (Query *query, TargetEntry *te, Index curTopResno, Lis
 	}
 
 	/*
-	 *  check if the expression contains a correlated sublink too, which means we have to get their correlated
-	 *	Vars and add them to query target list and set varno correctly
+	 *  check if the expression contains a correlated sublink too, which means
+	 *  we have to get their correlated Vars and add them to query target list
+	 *  and set varno correctly
 	 */
-
 
 	foreach(lc, corrTarget)
 	{
@@ -367,7 +399,8 @@ moveExpressionToTopTarget (Query *query, TargetEntry *te, Index curTopResno, Lis
 	 */
 	replaceVars = NIL;
 
-	varContext = (VarAndSublinkWalkerContext *) palloc(sizeof(VarAndSublinkWalkerContext));
+	varContext = (VarAndSublinkWalkerContext *)
+			palloc(sizeof(VarAndSublinkWalkerContext));
 	varContext->result = &replaceVars;
 	varContext->maxVarlevelsUp = -1;
 
@@ -378,8 +411,9 @@ moveExpressionToTopTarget (Query *query, TargetEntry *te, Index curTopResno, Lis
 	curResno = list_length(query->targetList) + 1;
 
 	/*
-	 * if only a single uncorrelated sublink is used just adapt the te expression. Else add new
-	 * target entries for the remainder of the sublinks too.
+	 * if only a single uncorrelated sublink is used just adapt the te
+	 * expression. Else add new target entries for the remainder of the
+	 * sublinks too.
 	 */
 	newExpr = copyObject(te->expr);
 
@@ -387,19 +421,24 @@ moveExpressionToTopTarget (Query *query, TargetEntry *te, Index curTopResno, Lis
 	info = (SublinkInfo *) linitial(replaceSublinkInfos);
 	te->expr = (Expr *) copyObject(sublink);
 
-	newVar = makeVar(1, te->resno, exprType((Node *) te->expr), exprTypmod((Node *) te->expr), 0);
+	newVar = makeVar(1, te->resno, exprType((Node *) te->expr),
+			exprTypmod((Node *) te->expr), 0);
 	info->targetVar = newVar;
 	newVars = lappend(newVars, newVar);
 
 	curResno = list_length(query->targetList) + 1;
 
-	for(lc = replaceSublinks->head->next, infoLc = replaceSublinkInfos->head->next; lc != NULL; lc = lc->next, infoLc = infoLc->next)
+	for(lc = replaceSublinks->head->next,
+			infoLc = replaceSublinkInfos->head->next;
+			lc != NULL; lc = lc->next, infoLc = infoLc->next)
 	{
 		sublink = (SubLink *) lfirst(lc);
 		info = (SublinkInfo *) lfirst(infoLc);
 
-		newTe = makeTargetEntry((Expr *) sublink, curResno, "newExtractedTargetListSublink", false);
-		newVar = makeVar(1, curResno, exprType((Node *) newTe->expr), exprTypmod((Node *) newTe->expr), 0);
+		newTe = makeTargetEntry((Expr *) sublink, curResno,
+				"newExtractedTargetListSublink", false);
+		newVar = makeVar(1, curResno, exprType((Node *) newTe->expr),
+				exprTypmod((Node *) newTe->expr), 0);
 
 		info->targetVar = newVar;
 		newVars = lappend(newVars, newVar);
@@ -414,13 +453,15 @@ moveExpressionToTopTarget (Query *query, TargetEntry *te, Index curTopResno, Lis
 	//TODO two replacements can lead to errors if a var replaced in the first run is falsely replaced in second run.
 
 	/* replace vars in new expression by newVars */
-	adaptContext = (AdaptTestExpressionMutatorContext *) palloc(sizeof(AdaptTestExpressionMutatorContext));
+	adaptContext = (AdaptTestExpressionMutatorContext *)
+			palloc(sizeof(AdaptTestExpressionMutatorContext));
 	adaptContext->sublinksAndVars = *sublinksAndVars;
 	adaptContext->map = *map;
 
 	newExpr = adaptTestExpressionMutator (newExpr, adaptContext);
 
-	newTe = makeTargetEntry((Expr *) newExpr, curTopResno, te->resname, te->resjunk);
+	newTe = makeTargetEntry((Expr *) newExpr, curTopResno, te->resname,
+			te->resjunk);
 
 	return newTe;
 }
@@ -445,14 +486,16 @@ createTopQueryQual (List *infos, Node *origQual)
 
 	result = getNormalConditions (origQual);
 
-	/* AND all the rootexpr of all WHERE sublinks, but do not add a expression more than once. */
+	/* AND all the rootexpr of all WHERE sublinks, but do not add a expression
+	 * more than once. */
 	foreach(lc, noTarget)
 	{
 		info = (SublinkInfo *) lfirst(lc);
 
 		if (result != NULL && !list_member(exprSeen, info->exprRoot))
 		{
-			result = (Node *)  makeBoolExpr(AND_EXPR, list_make2(result, copyObject(info->exprRoot)));//CHECK have to copy?
+			result = (Node *)  makeBoolExpr(AND_EXPR,
+					list_make2(result, copyObject(info->exprRoot)));//CHECK have to copy?
 			exprSeen = lappend(exprSeen, info->exprRoot);
 		}
 		else
@@ -466,9 +509,10 @@ createTopQueryQual (List *infos, Node *origQual)
 }
 
 /*
- * Extracts conditions from the original query qual that do not contain sublinks. We know that
- * the qual is an and structure because otherwise we would not use the MOVE-strategy. Therefore
- * each subtree under a leaf AND can be handled separately.
+ * Extracts conditions from the original query qual that do not contain
+ * sublinks. We know that the qual is an and structure because otherwise we
+ * would not use the MOVE-strategy. Therefore, each subtree under a leaf AND
+ * can be handled separately.
  */
 
 static Node *
@@ -499,7 +543,8 @@ getNormalConditions (Node *qual)
 }
 
 /*
- * For a qual that is an ANDed condition return the list of subexpressions ANDed together by the qual
+ * For a qual that is an ANDed condition return the list of subexpressions
+ * ANDed together by the qual
  */
 
 static List *
@@ -540,7 +585,8 @@ getAndClauses (Node *qual)
  */
 
 static void
-addTargetEntriesForVarQualsAndSublinks (Query *query, List *uncorrWhere, List *uncorrTarget, List **sublinksAndVars, List **map)
+addTargetEntriesForVarQualsAndSublinks (Query *query, List *uncorrWhere,
+		List *uncorrTarget, List **sublinksAndVars, List **map)
 {
 	ListCell *lc;
 	VarAndSublinkWalkerContext *context;
@@ -566,8 +612,10 @@ addTargetEntriesForVarQualsAndSublinks (Query *query, List *uncorrWhere, List *u
 	{
 		info = (SublinkInfo *) lfirst(lc);
 
-		te = makeTargetEntry((Expr *) copyObject(info->sublink), curResno, "newSublinkAttr",false);
-		var = makeVar(1,curResno, exprType((Node *) info->sublink), exprTypmod((Node *) info->sublink), 0);
+		te = makeTargetEntry((Expr *) copyObject(info->sublink), curResno,
+				"newSublinkAttr",false);
+		var = makeVar(1,curResno, exprType((Node *) info->sublink),
+				exprTypmod((Node *) info->sublink), 0);
 
 		info->targetVar = var;
 		*sublinksAndVars = lappend(*sublinksAndVars, info->sublink);
@@ -580,8 +628,10 @@ addTargetEntriesForVarQualsAndSublinks (Query *query, List *uncorrWhere, List *u
 }
 
 /*
- * adds all expressions from "expressions" to the target list of query and stores their target list position in "map".
- * No target entry is added for expressions that are already in the target list, but their target list position is stored in "map".
+ * adds all expressions from "expressions" to the target list of query and
+ * stores their target list position in "map". No target entry is added for
+ * expressions that are already in the target list, but their target list
+ * position is stored in "map".
  */
 
 static void
@@ -597,7 +647,8 @@ addExpressionsToTargetList (List **expressions, List **map, Query *query)
 
 	curResno = list_length(query->targetList) + 1;
 
-	/* for each var used in qual add a new target entry if none for this var exists */
+	/* for each var used in qual add a new target entry if none for this var
+	 * exists */
 	listPos = 0;
 
 	foreach(lc, *expressions)
@@ -611,29 +662,31 @@ addExpressionsToTargetList (List **expressions, List **map, Query *query)
 		{
 			te = (TargetEntry *) lfirst(innerLc);
 
-			/* if expression is already a target entry just add an entry in map for the expression */
+			/* if expression is already a target entry just add an entry in
+			 * map for the expression */
 			if (equal(te->expr, var))
 			{
 				found = true;
 
 				/*
-				 * check if we have set this map entry before (this is the case if length of the map list is >= te->resno)
-				 * If not than append the target list position for the current expression to the map list.
+				 * check if we have set this map entry before (this is the case
+				 *  if length of the map list is >= te->resno). If not than
+				 *  append the target list position for the current expression
+				 *  to the map list.
 				 */
 				if (list_length(*map) < listPos)
-				{
 					*map = lappend_int(*map, te->resno);
-				}
 			}
 		}
 
 		/*
-		 * expression is not a target entry. add a new target entry for the expression
-		 * and add an entry to map for the expression
+		 * expression is not a target entry. add a new target entry for the
+		 * expression and add an entry to map for the expression
 		 */
 		if (!found)
 		{
-			te = makeTargetEntry (copyObject(var), curResno, "newSublinkVar", false);
+			te = makeTargetEntry (copyObject(var), curResno, "newSublinkVar",
+					false);
 
 			query->targetList = lappend(query->targetList, te);
 			*map = lappend_int(*map, curResno);
@@ -645,8 +698,8 @@ addExpressionsToTargetList (List **expressions, List **map, Query *query)
 
 
 /*
- *  Finds all vars used in an expression. This walker does not recurse into subqueries or
- *  the queries of sublinks.
+ *  Finds all vars used in an expression. This walker does not recurse into
+ *  subqueries or the queries of sublinks.
  */
 
 static bool
@@ -662,7 +715,8 @@ varAndSublinkWalker (Node *node, VarAndSublinkWalkerContext *context)
 
 		var = (Var *) node;
 
-		if (context->maxVarlevelsUp == -1 || var->varlevelsup <= context->maxVarlevelsUp)
+		if (context->maxVarlevelsUp == -1 ||
+				var->varlevelsup <= context->maxVarlevelsUp)
 			*(context->result) = lappend(*(context->result), var);
 
 		return false;
@@ -673,7 +727,8 @@ varAndSublinkWalker (Node *node, VarAndSublinkWalkerContext *context)
 
 		sublink = (SubLink *) node;
 
-		return expression_tree_walker(sublink->testexpr, varAndSublinkWalker, (void *) context);
+		return expression_tree_walker(sublink->testexpr, varAndSublinkWalker,
+				(void *) context);
 	}
 
 	// recurse
@@ -681,8 +736,9 @@ varAndSublinkWalker (Node *node, VarAndSublinkWalkerContext *context)
 }
 
 /*
- * Adapt the expressions of the new top level query node's target list. Replace vars and sublinks with references to the
- * target entries of the modified original query.
+ * Adapt the expressions of the new top level query node's target list. Replace
+ *  vars and sublinks with references to the target entries of the modified
+ *  original query.
  */
 
 static void
@@ -690,15 +746,18 @@ adaptReferences (Query *query, List *sublinksAndAggs, List *map)
 {
 	AdaptReferencesMutatorContext *context;
 
-	context = (AdaptReferencesMutatorContext *) palloc(sizeof(AdaptReferencesMutatorContext));
+	context = (AdaptReferencesMutatorContext *)
+			palloc(sizeof(AdaptReferencesMutatorContext));
 	context->map = map;
 	context->sublinksAndVars = sublinksAndAggs;
 
-	query->jointree->quals = adaptReferencesMutator (query->jointree->quals, context);
+	query->jointree->quals = adaptReferencesMutator
+			(query->jointree->quals, context);
 }
 
 /*
- * Replaces all occurrences from sublinksAndVars by a Var node with varattno defined by map.
+ * Replaces all occurrences from sublinksAndVars by a Var node with varattno
+ * defined by map.
  */
 
 static Node *
@@ -718,17 +777,20 @@ adaptReferencesMutator (Node *node, AdaptReferencesMutatorContext *context)
 			replaceNode = (Node *) lfirst(lc);
 
 			if (equal(node, replaceNode))
-				return  (Node *) makeVar(1, lfirst_int(mapLc), exprType(node), exprTypmod(node), 0);
+				return  (Node *) makeVar(1, lfirst_int(mapLc), exprType(node),
+						exprTypmod(node), 0);
 		}
 
 		return node;
 	}
 
-	return expression_tree_mutator(node, adaptReferencesMutator, (void *) context);
+	return expression_tree_mutator(node, adaptReferencesMutator,
+			(void *) context);
 }
 
 /*
- * Replace Vars and sublinks in the testexpression of a sublink with the elements from map.
+ * Replace Vars and sublinks in the testexpression of a sublink with the
+ * elements from map.
  */
 
 static void
@@ -738,25 +800,30 @@ adaptTestExpressions (List *sublinksAndAggs, List *map, List *sublinks)
 	ListCell *lc;
 	SubLink *sublink;
 
-	context = (AdaptTestExpressionMutatorContext *) palloc(sizeof(AdaptTestExpressionMutatorContext));
+	context = (AdaptTestExpressionMutatorContext *)
+			palloc(sizeof(AdaptTestExpressionMutatorContext));
 	context->map = map;
 	context->sublinksAndVars = sublinksAndAggs;
 
 	foreach(lc, sublinks)
 	{
 		sublink = ((SublinkInfo *) lfirst(lc))->sublink;
-		sublink->testexpr = adaptTestExpressionMutator (sublink->testexpr, context);
+		sublink->testexpr = adaptTestExpressionMutator
+				(sublink->testexpr, context);
 	}
 
 }
 
 /*
- * Mutator that replaces expressions from sublinksAndVars (context) with var entries with varattno set to the values defined in map. map
- * is an integer list that stores at position x the varattno value of the expression from position x in sublinksAndVars.
+ * Mutator that replaces expressions from sublinksAndVars (context) with var
+ * entries with varattno set to the values defined in map. map is an integer
+ * list that stores at position x the varattno value of the expression from
+ * position x in sublinksAndVars.
  */
 
 static Node *
-adaptTestExpressionMutator (Node *node, AdaptTestExpressionMutatorContext *context)
+adaptTestExpressionMutator (Node *node,
+		AdaptTestExpressionMutatorContext *context)
 {
 	ListCell *lc;
 	ListCell *mapLc;
@@ -772,15 +839,15 @@ adaptTestExpressionMutator (Node *node, AdaptTestExpressionMutatorContext *conte
 			replaceNode = (Node *) lfirst(lc);
 
 			if (equal(node, replaceNode))
-			{
-				return  (Node *) makeVar(1, lfirst_int(mapLc), exprType(node), exprTypmod(node), 0);
-			}
+				return  (Node *) makeVar(1, lfirst_int(mapLc), exprType(node),
+						exprTypmod(node), 0);
 		}
 
 		return node;
 	}
 
-	return expression_tree_mutator(node, adaptTestExpressionMutator, (void *) context);
+	return expression_tree_mutator(node, adaptTestExpressionMutator,
+			(void *) context);
 }
 
 /*
@@ -788,8 +855,8 @@ adaptTestExpressionMutator (Node *node, AdaptTestExpressionMutatorContext *conte
  */
 
 static void
-rewriteTargetSublinks (Query *newTop, Query *query, List *uncorrelated, List *correlated,
-						List *sublinks, Index subPos[], List **rewritePos)
+rewriteTargetSublinks (Query *newTop, Query *query, List *uncorrelated,
+		List *correlated, List *sublinks, Index *subPos, List **rewritePos)
 {
 	ListCell *lc;
 	SublinkInfo *info;
@@ -826,20 +893,24 @@ rewriteTargetSublinks (Query *newTop, Query *query, List *uncorrelated, List *co
 		}
 	}
 
-	/* reorder pStack for the sublink's pLists according to the sublinkPos of the sublinks */
+	/* reorder pStack for the sublink's pLists according to the sublinkPos of
+	 * the sublinks */
 	createSubList(subPos, &subList, *rewritePos);
 	bothPstack = popListAndReverse(&pStack, list_length(sublinks));
 	sortSublinkInfos(&sublinks);
 
-	/* create a separate pStack for the new top level query and the original query below it */
+	/* create a separate pStack for the new top level query and the original
+	 * query below it */
 	foreach(lc, sublinks)
 	{
 		info = (SublinkInfo *) lfirst(lc);
 		if (info->category == SUBCAT_UNCORRELATED && !info->unnested)
-			topPstack = lappend(topPstack, list_nth(bothPstack, info->sublinkPos));
+			topPstack = lappend(topPstack, list_nth(bothPstack,
+					info->sublinkPos));
 		else
 		{
-			belowPStack = lappend(belowPStack, list_nth(bothPstack, info->sublinkPos));
+			belowPStack = lappend(belowPStack, list_nth(bothPstack,
+					info->sublinkPos));
 			belowSubList = lappend_int(belowSubList, subPos[info->sublinkPos]);
 			push(&pStack, list_nth(bothPstack, info->sublinkPos));
 		}
@@ -851,7 +922,8 @@ rewriteTargetSublinks (Query *newTop, Query *query, List *uncorrelated, List *co
 	correctRTEAlias((RangeTblEntry *) linitial(newTop->rtable));
 
 	/* correct provenance attributes */
-	addProvenanceAttrsToNewTop (newTop, sublinks, belowPStack, topPstack, subPos);
+	addProvenanceAttrsToNewTop (newTop, sublinks, belowPStack, topPstack,
+			subPos);
 }
 
 /*
@@ -867,11 +939,13 @@ rewriteNormalSubqueries (Query *query, List **subList, Index maxRTindex)
 }
 
 /*
- * Adds the provenance attributes of query and the sublinks to the new top query.
+ * Adds the provenance attributes of query and the sublinks to the new top
+ * query.
  */
 
 static void
-addProvenanceAttrsToNewTop (Query *newTop, List *sublinks, List *corrPstack, List *uncorrPstack, Index subList[])
+addProvenanceAttrsToNewTop (Query *newTop, List *sublinks, List *corrPstack,
+		List *uncorrPstack, Index *subList)
 {
 	ListCell *lc;
 	ListCell *innerLc;
@@ -919,8 +993,9 @@ addProvenanceAttrsToNewTop (Query *newTop, List *sublinks, List *corrPstack, Lis
 			}
 		}
 		/*
-		 * if sublink is an correlated sublink get provenance attributes from query. The number
-		 * of attributes to copy is determined by the corrPstack entry for the correlated sublink.
+		 * if sublink is an correlated sublink get provenance attributes from
+		 * query. The number of attributes to copy is determined by the
+		 * corrPstack entry for the correlated sublink.
 		 */
 		else
 		{
@@ -948,11 +1023,13 @@ addProvenanceAttrsToNewTop (Query *newTop, List *sublinks, List *corrPstack, Lis
 }
 
 /*
- * adds a provenance attribute to target list of query and pList and increases resno.
+ * adds a provenance attribute to target list of query and pList and increases
+ * resno.
  */
 
 static void
-addProvenanceAttr (Query *query, TargetEntry *te, List **pList, Index rtindex, Index *resno)
+addProvenanceAttr (Query *query, TargetEntry *te, List **pList, Index rtindex,
+		Index *resno)
 {
 	TargetEntry *newTe;
 	Expr *expr;

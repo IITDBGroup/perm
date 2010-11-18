@@ -121,12 +121,11 @@ unionBitsets (TransSubInfo *info, List *bitsets, List *annotations)
 	/* check for each annotation if it is present at this subInfo.
 	 * If so, add the bitset of the subInfo to the bitset of the annotation.
 	 */
-	foreach(lc, info->annot)
+	foreachi(lc, listPos, annotations)
 	{
 		annot = (Value *) lfirst(lc);
-		listPos = nodePositionInList(annotations, (Node *) annot);
 
-		if (listPos != -1)
+		if (nodePositionInList(info->annot, (Node *) annot) != -1)
 		{
 			bitSet = (VarBit *) list_nth(bitsets, listPos);
 			bitSet = DatumGetVarBitP(varBitOr(VarBitPGetDatum(bitSet),
@@ -164,7 +163,7 @@ gatherAnnotations (Query *query, Node *info, TransProvInfo *curInfo)
 	{
 		tInfo = (TransProvInfo *) info;
 
-		if ((Node *) tInfo == curInfo->root)
+		if (tInfo != curInfo)
 			newQuery = (rt_fetch(tInfo->rtIndex, query->rtable))->subquery;
 		else
 			newQuery = query;

@@ -29,7 +29,9 @@ typedef struct FindSubQueryWalker
 
 extern bool checkJAstrategyPreconditions (SublinkInfo *info);
 extern bool checkEXISTSstrategyPreconditions (SublinkInfo *info);
-extern Query *rewriteJAstrategy (Query *query, SublinkInfo *info, Index subList[]);
-extern Query *rewriteEXISTSstrategy (Query *query, SublinkInfo *info, Index subList[]);
+extern Query *rewriteJAstrategy (Query *query, SublinkInfo *info,
+		Index *subList);
+extern Query *rewriteEXISTSstrategy (Query *query, SublinkInfo *info,
+		Index *subList);
 
 #endif /*PROV_SUBLINK_TOTARGET_H_*/

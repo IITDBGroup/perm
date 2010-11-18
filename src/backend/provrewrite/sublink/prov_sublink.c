@@ -37,10 +37,10 @@
 #include "provrewrite/prov_sublink_unnest.h"
 #include "provrewrite/prov_sublink_unn.h"
 
+/* prototypes */
 #define MAX_SUBLINK 100
 
-/* prototypes */
-static Query *unnestAndDecorrelate (Query *query, Index subList[], List *infos, List **rewritePos);
+static Query *unnestAndDecorrelate (Query *query, Index *subList, List *infos, List **rewritePos);
 static void setSublinkPositions (List *infos);
 
 /*
@@ -78,17 +78,21 @@ rewriteSublinks (Query *query, List **subList)
 	 */
 	if (prov_use_sublink_move_to_target)
 	{
-		uncorrSublinks = findSublinkByCats(sublinkInfos, PROV_SUBLINK_SEARCH_UNCORR);
-		uncorrSublinks = findSublinksUnnested (uncorrSublinks, PROV_SUBLINK_SEARCH_NOUNNEST);
+		uncorrSublinks = findSublinkByCats(sublinkInfos,
+				PROV_SUBLINK_SEARCH_UNCORR);
+		uncorrSublinks = findSublinksUnnested (uncorrSublinks,
+				PROV_SUBLINK_SEARCH_NOUNNEST);
 
 		/* if there are uncorrelated sublinks that have not been unnested use MOVE strategy */
 		if (uncorrSublinks != NIL)
-			return rewriteSublinkQueryWithMoveToTarget(query, sublinkInfos, uncorrSublinks, subPos, &rewritePos);
+			return rewriteSublinkQueryWithMoveToTarget(query, sublinkInfos,
+					uncorrSublinks, subPos, &rewritePos);
 	}
 
 
 	/* remove sublinks that have been unnested */
-	sublinkInfos = findSublinksUnnested (sublinkInfos, PROV_SUBLINK_SEARCH_NOUNNEST);
+	sublinkInfos = findSublinksUnnested (sublinkInfos,
+			PROV_SUBLINK_SEARCH_NOUNNEST);
 
 	/* rewrite each sublink */
 	foreach(lc, sublinkInfos)
@@ -110,7 +114,7 @@ rewriteSublinks (Query *query, List **subList)
  */
 
 void
-rewriteSublink (Query *query, SublinkInfo *info, Index subList[], List **rewritePos)
+rewriteSublink (Query *query, SublinkInfo *info, Index *subList, List **rewritePos)
 {
 	/*
 	 * if the left join rewrite method is activated and the sublink is uncorrelated
@@ -160,7 +164,7 @@ setSublinkPositions (List *infos)
  */
 
 void
-createSubList (Index subPos[], List **subList, List *rewritePos)
+createSubList (Index *subPos, List **subList, List *rewritePos)
 {
 	int i;
 	int sublinkPos;
@@ -191,7 +195,7 @@ createSubList (Index subPos[], List **subList, List *rewritePos)
  */
 
 static Query *
-unnestAndDecorrelate (Query *query, Index subList[], List *infos, List **rewritePos)
+unnestAndDecorrelate (Query *query, Index* subList, List *infos, List **rewritePos)
 {
 	ListCell *lc;
 	SublinkInfo *info;

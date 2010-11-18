@@ -19,7 +19,9 @@
 #include "provrewrite/prov_sublink_util_mutate.h"
 #include "provrewrite/prov_sublink_util_analyze.h"
 
-extern Query *rewriteSublinkUsingLeftJoin (Query *query, SublinkInfo *info, Index subList[]);
-extern Query *rewriteTargetSublinkUsingLeftJoin (Query *newTop, Query *query, SublinkInfo *info, Index subList[]);
+extern Query *rewriteSublinkUsingLeftJoin (Query *query, SublinkInfo *info,
+		Index *subList);
+extern Query *rewriteTargetSublinkUsingLeftJoin (Query *newTop, Query *query,
+		SublinkInfo *info, Index *subList);
 
 #endif /* PROV_SUBLINK_LEFTJOIN_H_ */

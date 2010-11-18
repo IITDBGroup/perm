@@ -58,12 +58,14 @@ extern void addUsedMethod (char *method);
 
 /* list sorting */
 extern List *sortIntList (List **list, bool increasing);
-extern List *sortList (List **list, int (*compare) (void *left, void *right), bool increasing);
+extern List *sortList (List **list,
+		int (*compare) (const void *left, const void *right), bool increasing);
 
 /* comparison functions for sorting */
-extern int compareTeOnRessortgroupref (void *left, void *right);
-extern int compareVars (void *left, void *right);
-extern int compareCopyMapRelEntryOnRtindex (void *left, void *right);
+extern int compareTeOnRessortgroupref (const void *left, const void *right);
+extern int compareVars (const void *left, const void *right);
+extern int compareCopyMapRelEntryOnRtindex (const void *left, const void *right);
+extern int compareInt (const void *left, const void *right);
 
 /* list removal */
 extern List *removeElems (List **list, List *pos);
