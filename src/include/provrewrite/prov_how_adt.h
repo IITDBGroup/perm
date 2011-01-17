@@ -41,11 +41,11 @@ typedef struct HowProv
 #define HOWDATA(x) ((char *) ((x->data) + HOWHEADERBYTES(x)))
 #define HOWNUMELEMS(x) (x->header_size)
 
-
 extern Datum howprov_in (PG_FUNCTION_ARGS);
 extern Datum howprov_out (PG_FUNCTION_ARGS);
 extern Datum howprov_out_human (PG_FUNCTION_ARGS);
 extern Datum howprov_add (PG_FUNCTION_ARGS);
 extern Datum howprov_multiply (PG_FUNCTION_ARGS);
+extern Datum oid_to_howprov (PG_FUNCTION_ARGS);
 
 #endif /* PROV_HOW_ADT_H_ */

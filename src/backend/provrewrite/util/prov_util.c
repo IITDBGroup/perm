@@ -769,7 +769,8 @@ createComparison (Node *left, Node *right, ComparisonType type)
 		ereport(ERROR,
 				(errcode(ERRCODE_INTERNAL_ERROR),
 		 				 errmsg("Can only create <,<=,>=,> and = operators "
-		 						 "and not %s", opName)));
+		 						 "and not %s",
+		 						 strVal(((Value *) linitial(opName))))));
 		break;
 	}
 
@@ -1540,7 +1541,8 @@ removeProvInfoNodesWalker (Node *node, void *context)
 		Query *query;
 
 		query = (Query *) node;
-		query->provInfo = NULL;
+		Provinfo(query)->shouldRewrite = false;
+		Provinfo(query)->copyInfo = NULL;
 
 		return query_tree_walker(query, removeProvInfoNodesWalker,
 				(void *) context, 0);

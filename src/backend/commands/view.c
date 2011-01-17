@@ -378,12 +378,12 @@ DefineView(ViewStmt *stmt, const char *queryString)
 	if (!prov_use_optimizer)
 	{
 		viewParse = provenanceRewriteQuery (viewParse);
-		//removeProvInfoNodes(viewParse); //TODO why causing error???
+		removeProvInfoNodes(viewParse); //TODO why causing error???
 	}
 	else
 	{
 		viewParse = generateCheapestPlanQuery (viewParse, 0, NULL); //CHECK ok, do we have the required lock, etc. if we are using optimizer
-		//removeProvInfoNodes(viewParse);
+		removeProvInfoNodes(viewParse);
 	}
 
 	/*

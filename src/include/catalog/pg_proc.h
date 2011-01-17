@@ -4440,12 +4440,15 @@ DESCR("I/O");
 DATA(insert OID = 3788 (  howprov_out PGNSP PGUID 12 1 0 f f t f i 1 2275 "3786" _null_ _null_ _null_ howprov_out - _null_ _null_ ));
 DESCR("I/O");
 DATA(insert OID = 3789 (  how_to_human PGNSP PGUID 12 1 0 f f t f i 1 25 "3786" _null_ _null_ _null_ howprov_out_human - _null_ _null_ ));
-DESCR("I/O");
-DATA(insert OID = 3790 (  how_pl PGNSP PGUID 12 1 0 f f t f i 2 3786 "3786 3786" _null_ _null_ _null_ howprov_add - _null_ _null_ ));
-DESCR("I/O");
-DATA(insert OID = 3791 (  how_mul PGNSP PGUID 12 1 0 f f t f i 2 3786 "3786 3786" _null_ _null_ _null_ howprov_multiply - _null_ _null_ ));
-DESCR("I/O");
-
+DESCR("Translates the polish how-CS notation into infix notation");
+DATA(insert OID = 3790 (  how_pl PGNSP PGUID 12 1 0 f f f f i 2 3786 "3786 3786" _null_ _null_ _null_ howprov_add - _null_ _null_ ));
+DESCR("Adds two how-provenance expressions");
+DATA(insert OID = 3791 (  how_mul PGNSP PGUID 12 1 0 f f f f i 2 3786 "3786 3786" _null_ _null_ _null_ howprov_multiply - _null_ _null_ ));
+DESCR("Multiplies two how-provenance expressions");
+DATA(insert OID = 3792 (  how_sum PGNSP PGUID 12 1 0 t f f f i 1 3786 "3786" _null_ _null_ _null_ aggregate_dummy - _null_ _null_ ));
+DESCR("Aggregate functions that sums up how-provenance inputs");
+DATA(insert OID = 3793 (  oid_to_howprov PGNSP PGUID 12 1 0 f f t f i 1 3786 "26" _null_ _null_ _null_ oid_to_howprov - _null_ _null_ ));
+DESCR("Interprets an oid as a how-CS value");
 
 /*
  * Symbolic values for provolatile column: these indicate whether the result

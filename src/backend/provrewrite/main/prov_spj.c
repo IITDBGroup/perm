@@ -248,12 +248,16 @@ void rewriteRTEwithProvenance (int rtindex, RangeTblEntry *rte)
 	List *pList;
 	TargetEntry *te;
 	Var * attrVar;
+	char *attrName;
+	bool isProvResult = false;
 
 	pList = NIL;
 
 	/* create Var nodes for all attributes of the RTE */
 	if (rte->rtekind == RTE_SUBQUERY)
 	{
+		isProvResult = ContributionType(rte->subquery) != CONTR_NONE;
+
 		/* if the RTE subquery is a provenance query we rewrite this query and
 		 * return */
 		if (IsProvRewrite(rte->subquery))
@@ -301,8 +305,12 @@ void rewriteRTEwithProvenance (int rtindex, RangeTblEntry *rte)
 			if (strcmp(attr->val.str, provattr->val.str) == 0)
 			{
 				found = true;
+				if (isProvResult)
+					attrName = attr->val.str;
+				else
+					attrName = createExternalProvAttrName(attr->val.str);
 				te = makeTargetEntry((Expr *) attrVar, attrVar->varattno,
-						createExternalProvAttrName(attr->val.str), false);
+						attrName, false);
 				pList = lappend(pList, te);
 			}
 		}

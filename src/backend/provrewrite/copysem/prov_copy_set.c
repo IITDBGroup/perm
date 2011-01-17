@@ -39,7 +39,7 @@ static void restructureSetOperationQueryNode (Query *top);
 static void createCopyJoinsForSetOp (Query *top, Query *query);
 static SetOperation getSetOpType (SetOperationStmt *setOp);
 
-static void replaceSetOperationSubTrees (Query *top, Node *node, Node **parentPointer, SetOperation rootType);
+static void replaceCSetOpSubTrees (Query *top, Node *node, Node **parentPointer, SetOperation rootType);
 static void replaceSetOperatorSubtree (Query *top, SetOperationStmt *setOp, Node **parent);
 static void correctChildMapRtindex(Query *query);
 static void correctNoRewriteRelEntry (CopyMapRelEntry *rel);
@@ -392,7 +392,7 @@ restructureSetOperationQueryNode (Query *top)
 		rootType = setOp->op;
 	}
 
-	replaceSetOperationSubTrees(top, top->setOperations, &(top->setOperations), rootType);
+	replaceCSetOpSubTrees(top, top->setOperations, &(top->setOperations), rootType);
 }
 
 /*
@@ -403,7 +403,7 @@ restructureSetOperationQueryNode (Query *top)
  */
 
 static void
-replaceSetOperationSubTrees (Query *top, Node *node, Node **parentPointer,
+replaceCSetOpSubTrees (Query *top, Node *node, Node **parentPointer,
 		SetOperation rootType)
 {
 	SetOperationStmt *setOp;
@@ -445,9 +445,9 @@ replaceSetOperationSubTrees (Query *top, Node *node, Node **parentPointer,
 			/* check if of the same type as parent */
 			if (setOp->op == rootType)
 			{
-				replaceSetOperationSubTrees (top, setOp->larg, &(setOp->larg),
+				replaceCSetOpSubTrees (top, setOp->larg, &(setOp->larg),
 						rootType);
-				replaceSetOperationSubTrees (top, setOp->rarg, &(setOp->rarg),
+				replaceCSetOpSubTrees (top, setOp->rarg, &(setOp->rarg),
 						rootType);
 			}
 			/* another type replace subtree */
@@ -458,7 +458,7 @@ replaceSetOperationSubTrees (Query *top, Node *node, Node **parentPointer,
 		case SETOP_EXCEPT:
 			/* if is root set operation ignore it because it only propagates
 			 * provenance from its left subtree */
-			replaceSetOperationSubTrees (top, setOp->larg, &(setOp->larg),
+			replaceCSetOpSubTrees (top, setOp->larg, &(setOp->larg),
 					rootType);
 		break;
 		default:

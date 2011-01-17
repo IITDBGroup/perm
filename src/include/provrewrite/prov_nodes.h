@@ -45,7 +45,8 @@ typedef enum ContributionType
 	CONTR_WHERE,
 	CONTR_WHERE_INSEN,
 	CONTR_WHERE_INSEN_NOUNION,
-	CONTR_HOW
+	CONTR_HOW,
+	CONTR_NONE
 } ContributionType;
 
 
@@ -168,14 +169,6 @@ typedef struct WhereAttrInfo {
 	List *inVars;
 	List *annotVars;
 } WhereAttrInfo;
-
-//typedef struct BaseVarInfo {
-//	NodeTag type;
-//	Var *var;
-//	Oid relation;
-//	char *relName;
-//	char *attrName;
-//} BaseVarInfo;
 
 /*
  * Datastructure that stores information for a query node that is needed for

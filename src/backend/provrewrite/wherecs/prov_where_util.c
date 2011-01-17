@@ -46,8 +46,8 @@ static List *makeAuxQueriesWithUnion (Query *rep, WhereAttrInfo *attr,
 		Var *inVar, List *rels);
 static List *getAllNormalRels (void);
 static List *makeAuxNoUnion (Query *rep);
-static Query *makeNoUnionAuxQuery (Query *rep, WhereAttrInfo *attr,
-		Var *inVar);
+static Query *makeNoUnionAuxQuery (Query *rep, Query *rewrRep,
+		WhereAttrInfo *attr, Var *inVar);
 static Query *addBaseRelationAnnotationAttrs (RangeTblEntry *rte, List *attrs);
 static Node *getAnnotValueExpr (Oid reloid, char *attrName);
 
@@ -315,12 +315,14 @@ makeAuxNoUnion (Query *rep)
 	WhereProvInfo *info = GET_WHERE_PROVINFO(rep);
 	ListCell *lc, *innerLc;
 	Query *newAux;
+	Query *reRep;
 	Var *inVar;
 
-	/* generate annotation propagation for representatice and add
+	/* generate annotation propagation for representative and add
 	 * representative to aux queries */
-	generateAnnotBaseQueries(rep);
-	result = lappend(result, rep);
+	reRep = copyObject(rep);
+	generateAnnotBaseQueries(reRep);
+	result = lappend(result, reRep);
 
 	/* foreach out attribute A and each input attribute S.B that is in the list of
 	 * input attribute that contribute to A, add a query with an additional join
@@ -333,7 +335,7 @@ makeAuxNoUnion (Query *rep)
 		foreach(innerLc, attr->inVars)
 		{
 			inVar = (Var *) lfirst(innerLc);
-			newAux = makeNoUnionAuxQuery(rep, attr, inVar);
+			newAux = makeNoUnionAuxQuery(rep, reRep, attr, inVar);
 			result = lappend(result, newAux);
 		}
 	}
@@ -346,7 +348,7 @@ makeAuxNoUnion (Query *rep)
  */
 
 static Query *
-makeNoUnionAuxQuery (Query *rep, WhereAttrInfo *attr, Var *inVar)
+makeNoUnionAuxQuery (Query *rep, Query *rewrRep, WhereAttrInfo *attr, Var *inVar)
 {
 	Query *result = copyObject(rep);
 	Query *baseAnnotQuery, *newAnnotQuery;
@@ -362,9 +364,9 @@ makeNoUnionAuxQuery (Query *rep, WhereAttrInfo *attr, Var *inVar)
 	/* get the base relation we want to join with in the
 	 * auxiliary query and generate an annotation propagation
 	 * query for it.*/
-	rte = rt_fetch(inVar->varno, result->rtable);
+	rte = rt_fetch(inVar->varno, rewrRep->rtable);
 	baseAnnotQuery = rte->subquery;
-	rte = rt_fetch(1, baseAnnotQuery->rtable);
+	rte = copyObject(rt_fetch(1, baseAnnotQuery->rtable));
 
 	newAnnotQuery = addBaseRelationAnnotationAttrs(rte,
 			list_make1_int(inVar->varattno));
@@ -396,7 +398,7 @@ makeNoUnionAuxQuery (Query *rep, WhereAttrInfo *attr, Var *inVar)
 }
 
 /*
- * Based on the WhereAttrInfos of the query exchange base relation accesses
+ * Based on the WhereAttrInfos of the query translate base relation accesses
  * into queries that propagate WHERE-CS annotations for all the base
  * relation attributes mentioned in the inVars of the WhereAttrInfos.
  */
@@ -569,7 +571,7 @@ getAnnotValueExpr (Oid reloid, char *attrName)
 
 	/* apply text concat to both values */
 	result = (Node *) makeFuncExpr(F_TEXTCAT, TEXTOID,
-			list_make2(annotConst, oidCast), COERCE_IMPLICIT_CAST);
+			list_make2(annotConst, oidCast), COERCE_EXPLICIT_CALL);
 
 	return result;
 }

@@ -24,6 +24,7 @@
 const char ProvPraefix[] = "prov_";
 const char AnnotPraefix[] = "annot_";
 const char TransProvName[] = "trans_prov";
+const char HowProvName[] = "howprov";
 
 /* list of counters for references to relations */
 static List *relRefCount;
@@ -364,19 +365,26 @@ resetRelReferences (void)
  * Returns true, if te is a provnenace attribute.
  */
 
+#define STR_LEN_CMP(compare,cmplen) \
+	(nameLen == cmplen && strncmp(te->resname, compare, cmplen) == 0)
+
 bool
 isProvAttr (TargetEntry *te)
 {
-	if (te->resname == NULL || strlen(te->resname) < 5)
+	int nameLen;
+
+	if (te->resname == NULL || (nameLen = strlen(te->resname)) < 5)
 		return false;
 
-	if (!strncmp(te->resname, ProvPraefix, 5))
+	if (!strncmp(te->resname, ProvPraefix, 5)
+			|| !strncmp(te->resname, AnnotPraefix, 6))
 		return true;
 
-	if (strlen(te->resname) < 10)
-		return false;
+	if (STR_LEN_CMP(TransProvName,10)
+			|| STR_LEN_CMP(HowProvName, 7))
+		return true;
 
-	return (!strncmp(te->resname, TransProvName, 10));
+	return false;
 }
 
 /*

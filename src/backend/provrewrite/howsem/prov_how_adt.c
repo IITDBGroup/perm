@@ -52,11 +52,9 @@ howprov_in (PG_FUNCTION_ARGS)
 {
 	char *input_string = PG_GETARG_CSTRING(0);
 	HowProv *result;
-//	int numElements = 0;
 	char *pos = input_string;
 	char *token;
 	List *tokens = NIL;
-//	int inputLength = strlen(input_string);
 	uint32 dataLength = 0;
 	uint32 headerLength = 0;
 	char *dataPtr;
@@ -200,12 +198,12 @@ parseOid (char *input)
 #define GETBIT(result,ptr,mask) \
 		do { \
 			result = (*ptr & mask); \
+			mask >>= 1; \
 			if (!mask) \
 			{ \
 				mask = HIGHBIT; \
 				ptr++; \
 			} \
-			mask >>= 1; \
 		} while(0)
 
 Datum
@@ -408,7 +406,7 @@ howprov_multiply (PG_FUNCTION_ARGS)
 /*
  *
  */
-
+//TODO merge same ops? e.g. how_pl('+ 1 2 |','+ 3 4 |') is now '+ + 1 2 | + 3 4 | |'
 static HowProv *
 concatHowProv(HowProv *left, HowProv *right, char op)
 {
@@ -422,8 +420,8 @@ concatHowProv(HowProv *left, HowProv *right, char op)
 	bool bitValue;
 
 	/* compute sizes and allocate data structure for result */
-	headerLength = left->header_size + right->header_size + 1;
-	dataLength = left->data_size + right->data_size + 1;
+	headerLength = left->header_size + right->header_size + 2;
+	dataLength = left->data_size + right->data_size + 2;
 
 	result = (HowProv *) palloc0(VARHDRSZ + HOWHDRSIZE + dataLength
 			+ BITSTOBYTELENGTH(headerLength));
@@ -471,5 +469,42 @@ concatHowProv(HowProv *left, HowProv *right, char op)
 		}
 	}
 
+	/* add final '|' */
+	SETBITPOS(headPtr, mask, 0);
+	dataPtr += right->data_size;
+	*dataPtr = '|';
+
 	return result;
+}
+
+/*
+ *
+ */
+
+Datum
+oid_to_howprov (PG_FUNCTION_ARGS)
+{
+	Oid oid;
+	HowProv *result;
+	bits8 *headPtr;
+	char *dataPtr;
+
+	if (PG_ARGISNULL(0))
+		PG_RETURN_NULL();
+
+	oid = PG_GETARG_OID(0);
+
+	result = (HowProv *) palloc0(VARHDRSZ + HOWHDRSIZE + sizeof(Oid)
+			+ BITSTOBYTELENGTH(1));
+	result->data_size = sizeof(Oid);
+	result->header_size = 1;
+	SET_VARSIZE(result, HOWTOTALSIZE(result));
+
+	headPtr = HOWHEADER(result);
+	*headPtr = HIGHBIT;
+
+	dataPtr = HOWDATA(result);
+	memcpy(dataPtr, &oid, sizeof(Oid));
+
+	PG_RETURN_HOWPROV_P(result);
 }

@@ -415,7 +415,7 @@ makeProvInfo (void)
 
 	result = makeNode(ProvInfo);
 	result->copyInfo = NULL;
-	result->contribution = CONTR_INFLUENCE;
+	result->contribution = CONTR_NONE;
 	result->rewriteInfo = NULL;
 	result->annotations = NIL;
 	result->provSublinkRewritten = false;

@@ -331,4 +331,9 @@ DATA(insert ( 1560 1560 1685 i ));
 DATA(insert ( 1562 1562 1687 i ));
 DATA(insert ( 1700 1700 1703 i ));
 
+/*
+ * Provenance data type casts
+ */
+DATA(insert (   26 3786 3793 e ));
+
 #endif   /* PG_CAST_H */

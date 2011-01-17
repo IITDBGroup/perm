@@ -43,8 +43,14 @@ static RangeTblEntry *scanNameSpaceForRefname(ParseState *pstate,
 static RangeTblEntry *scanNameSpaceForRelid(ParseState *pstate, Oid relid);
 static bool isLockedRel(ParseState *pstate, char *refname);
 //CHANGED
-static void expandTransProvenanceRTE (RangeTblEntry *rte, List **colnames, List **colvars, Index rtindex);
-static void expandProvenanceRTE (RangeTblEntry *rte, List **colnames, List **colvars, Index rtindex);
+static void expandTransProvenanceRTE (RangeTblEntry *rte, List **colnames,
+		List **colvars, Index rtindex);
+static void expandHowProvenanceRTE (RangeTblEntry *rte, List **colnames,
+		List **colvars, Index rtindex);
+static void expandWhereProvenanceRTE (RangeTblEntry *rte, List **colnames,
+		List **colvars, Index rtindex);
+static void expandProvenanceRTE (RangeTblEntry *rte, List **colnames,
+		List **colvars, Index rtindex);
 static void expandRelation(Oid relid, Alias *eref,
 			   int rtindex, int sublevels_up,
 			   bool include_dropped,
@@ -1215,7 +1221,8 @@ expandRTE(RangeTblEntry *rte, int rtindex, int sublevels_up,
  */
 
 static void
-expandTransProvenanceRTE (RangeTblEntry *rte, List **colnames, List **colvars, Index rtindex)
+expandTransProvenanceRTE (RangeTblEntry *rte, List **colnames, List **colvars,
+		Index rtindex)
 {
 	Var *newVar;
 	Value *newName;
@@ -1247,6 +1254,68 @@ expandTransProvenanceRTE (RangeTblEntry *rte, List **colnames, List **colvars, I
 		*colvars = lappend(*colvars, newVar);
 
 }
+
+/*
+ *
+ */
+
+static void
+expandHowProvenanceRTE (RangeTblEntry *rte, List **colnames, List **colvars,
+		Index rtindex)
+{
+	Var *newVar;
+	Value *newName;
+
+	newName = makeString(pstrdup("howprov"));
+	newVar = makeVar(rtindex, list_length(*colvars) + 1, HOWPROVOID, -1, 0);
+
+	if (colnames)
+		*colnames = lappend(*colnames, newName);
+	if (colvars)
+		*colvars = lappend(*colvars, newVar);
+}
+
+/*
+ *
+ */
+
+static void
+expandWhereProvenanceRTE (RangeTblEntry *rte, List **colnames, List **colvars,
+		Index rtindex)
+{
+	Var *newVar, *oldVar;
+	Value *newName, *oldName;
+	int numAttr, i;
+	ListCell *nameLc, *varLc;
+	int varattno = 1;
+
+	numAttr = colnames ? list_length(*colnames) : list_length(*colvars);
+
+	nameLc = list_head(*colnames);
+	varLc = list_head(*colvars);
+
+	for(i = 0; i < numAttr; i++)
+	{
+		if (colnames)
+		{
+			oldName = (Value *) lfirst(nameLc);
+			newName = makeString(getWhereAnnotName(strVal(oldName)));
+
+			lappend_cell(*colnames, nameLc, (void *) newName);
+			nameLc = nameLc->next->next;
+		}
+		if (colvars)
+		{
+			oldVar = (Var *) lfirst(varLc);
+			oldVar->varattno = varattno++;
+			newVar = makeVar(rtindex, varattno++, TEXTOID, -1, 0);
+
+			lappend_cell(*colvars, varLc, (void *) newVar);
+			varLc = varLc->next->next;
+		}
+	}
+}
+
 
 /*
  * Add provenance columns for a RTE marked for provenance rewrite. We
@@ -1626,6 +1695,14 @@ addProvenanceTEs (RangeTblEntry *rte) {
 		case CONTR_TRANS_SQL:
 		case CONTR_TRANS_XML:
 			expandTransProvenanceRTE(rte, &names, &provVars, 1);
+		break;
+		case CONTR_WHERE:
+		case CONTR_WHERE_INSEN:
+		case CONTR_WHERE_INSEN_NOUNION:
+			expandWhereProvenanceRTE(rte, &names, &provVars, 1);
+		break;
+		case CONTR_HOW:
+			expandHowProvenanceRTE(rte, &names, &provVars, 1);
 		break;
 		default:
 			//TODO error

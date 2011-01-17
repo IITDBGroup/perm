@@ -17,8 +17,8 @@
  *-------------------------------------------------------------------------
  */
 
-/*TODO the whole join generation should make use of the helper method
- * instead of reproducing similar functionality here.
+//TODO the whole join generation should make use of the helper method
+ /* instead of reproducing similar functionality here.
  */
 
 #include "postgres.h"
@@ -54,8 +54,6 @@ static void addDummyProvAttrs (RangeTblEntry *rte, List *subProv, int pos);
 static void adaptSetProvenanceAttrs (Query *query);
 static void adaptSetStmtCols (SetOperationStmt *stmt, List *colTypes,
 		List *colTypmods);
-static void replaceSetOperationSubTrees (Query *query, Node *node,
-		Node **parentPointer, SetOperation rootType);
 static void replaceSetOperatorSubtree (Query *query, SetOperationStmt *setOp,
 		Node **parent);
 static void rewriteSetRTEs (Query *newTop);
@@ -812,7 +810,7 @@ makeRTEVars (RangeTblEntry *rte, RangeTblEntry *newRte, Index rtindex)
  * its own query node regardless of its type.
  */
 
-static void
+void
 replaceSetOperationSubTrees (Query *query, Node *node, Node **parentPointer, SetOperation rootType)
 {
 	SetOperationStmt *setOp;

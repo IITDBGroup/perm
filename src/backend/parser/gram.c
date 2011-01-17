@@ -22222,7 +22222,7 @@ yyreduce:
 #line 6408 "gram.y"
     {	
 					ProvInfo *n = makeProvInfo();
-					n->contribution = CONTR_INFLUENCE;
+					n->contribution = CONTR_NONE;
 					(yyval.node) = (Node *) n; 
 				}
     break;

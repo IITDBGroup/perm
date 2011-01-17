@@ -16,5 +16,6 @@
 #include "nodes/parsenodes.h"
 
 extern Query *rewriteQueryHow (Query *query);
+extern Query *rewriteHowQueryNode (Query *query);
 
 #endif /* PROV_HOW_MAIN_H_ */
