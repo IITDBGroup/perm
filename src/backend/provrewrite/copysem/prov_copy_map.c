@@ -173,6 +173,10 @@ generateCopyMapForQueryNode (Query *query, ContributionType contr, Index rtindex
 		rte = (RangeTblEntry *) lfirst(lc);
 		currentMap = NULL;
 
+		if (strcmp("*NEW*", rte->eref->aliasname) == 0
+			|| strcmp("*OLD*", rte->eref->aliasname) == 0)
+			continue;
+
 		// generate map for rte
 		switch(rte->rtekind)
 		{
