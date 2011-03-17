@@ -60,6 +60,7 @@
 #include "provrewrite/prov_trans_bitset.h"
 #include "provrewrite/prov_where_main.h"
 #include "provrewrite/prov_how_main.h"
+#include "provrewrite/prov_sublink_util_search.h"
 
 /*
  * Global variables.
@@ -124,11 +125,8 @@ provenanceRewriteQuery (Query *query)
 	LOGNODE(query, "complete query tree");
 
 	/* check if we have to rewrite a part of the query */
-	if (!hasProvenanceSubquery(query))
+	if (!hasProvenanceSubqueryOrSublink(query))
 		return query;
-
-	/* try to pushdown selections be aware of provenance attrs */
-	//query = pushdownSelections(query);
 
 	/* if it is a cursor declaration notify the transformation provenance rewriter */
 	if (query->utilityStmt && IsA(query->utilityStmt, DeclareCursorStmt))
@@ -245,6 +243,20 @@ traverseQueryTree (RangeTblEntry *rteQuery, Query *query, char *cursorName)
 		if (rteQuery)
 			correctRTEAlias(rteQuery);
 	}
+	else if (hasProvenanceSublink(query))
+	{
+		List *provSublinks;
+		SubLink *pSublink;
+
+		provSublinks = getProvSublinks(query);
+		//TODO error for sublinks that need fixed schema
+		foreach(lc, provSublinks)
+		{
+			pSublink = (SubLink *) lfirst(lc);
+			pSublink->subselect = traverseQueryTree(NULL, pSublink->subselect,
+					cursorName);
+		}
+	}
 	// if not, test if one of the subqueries is marked for provenance rewrite
 	else
 	{
@@ -252,9 +264,7 @@ traverseQueryTree (RangeTblEntry *rteQuery, Query *query, char *cursorName)
 		{
 			rtEntry = (RangeTblEntry *) lfirst(lc);
 			if (rtEntry->rtekind ==  RTE_SUBQUERY)	// is subquery?
-			{
 				traverseQueryTree (rtEntry, rtEntry->subquery, cursorName);
-			}
 		}
 	}
 

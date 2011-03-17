@@ -34,6 +34,7 @@
 #include "provrewrite/provrewrite.h"
 #include "provrewrite/prov_util.h"
 #include "provrewrite/prov_nodes.h"
+#include "provrewrite/prov_sublink_util_search.h"
 
 
 
@@ -1616,13 +1617,16 @@ queryHasRewriteChildrenWalker (Node *node, bool *context)
  */
 
 bool
-hasProvenanceSubquery (Query *query)
+hasProvenanceSubqueryOrSublink (Query *query)
 {
 	bool result;
 	ListCell *lc;
 	RangeTblEntry *rte;
 
 	if (IsProvRewrite(query))
+		return true;
+
+	if (hasProvenanceSublink(query))
 		return true;
 
 	result = false;
@@ -1632,7 +1636,7 @@ hasProvenanceSubquery (Query *query)
 		rte = (RangeTblEntry *) lfirst(lc);
 
 		if (rte->rtekind == RTE_SUBQUERY)
-			result = result || hasProvenanceSubquery (rte->subquery);
+			result = result || hasProvenanceSubqueryOrSublink (rte->subquery);
 	}
 
 	return result;

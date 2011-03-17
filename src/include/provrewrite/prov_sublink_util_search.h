@@ -70,6 +70,8 @@ typedef struct FindLinkToExprWalkerContext
 
 /* Search functions */
 extern List *getSublinkBaseRelations(Query *query);
+extern bool hasProvenanceSublink (Query *query);
+extern List *getProvSublinks (Query *query);
 extern bool findExprSublinkWalker (Node *node, List **context);
 extern List *findSublinkLocations (Query *query, int flags);
 extern List *findSublinkByCats (List *sublinks, int flags);
