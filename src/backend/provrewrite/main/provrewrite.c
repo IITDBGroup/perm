@@ -243,23 +243,24 @@ traverseQueryTree (RangeTblEntry *rteQuery, Query *query, char *cursorName)
 		if (rteQuery)
 			correctRTEAlias(rteQuery);
 	}
-	else if (hasProvenanceSublink(query))
-	{
-		List *provSublinks;
-		SubLink *pSublink;
-
-		provSublinks = getProvSublinks(query);
-		//TODO error for sublinks that need fixed schema
-		foreach(lc, provSublinks)
-		{
-			pSublink = (SubLink *) lfirst(lc);
-			pSublink->subselect = traverseQueryTree(NULL, pSublink->subselect,
-					cursorName);
-		}
-	}
-	// if not, test if one of the subqueries is marked for provenance rewrite
 	else
 	{
+		// if not, test if one of the sublinks or subqueries is marked for provenance rewrite
+		if (hasProvenanceSublink(query))
+		{
+			List *provSublinks;
+			SubLink *pSublink;
+
+			provSublinks = getProvSublinks(query);
+			//TODO error for sublinks that need fixed schema
+			foreach(lc, provSublinks)
+			{
+				pSublink = (SubLink *) lfirst(lc);
+				pSublink->subselect = traverseQueryTree(NULL, pSublink->subselect,
+						cursorName);
+			}
+		}
+
 		foreach (lc, query->rtable)
 		{
 			rtEntry = (RangeTblEntry *) lfirst(lc);
