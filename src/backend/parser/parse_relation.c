@@ -1213,7 +1213,8 @@ expandRTE(RangeTblEntry *rte, int rtindex, int sublevels_up,
 		  bool include_dropped,
 		  List **colnames, List **colvars)
 {
-	expandRTEWithParam(rte, rtindex, sublevels_up, include_dropped, true, colnames, colvars);
+	expandRTEWithParam(rte, rtindex, sublevels_up, include_dropped, true,
+			colnames, colvars);
 }
 
 /*
@@ -1237,6 +1238,7 @@ expandTransProvenanceRTE (RangeTblEntry *rte, List **colnames, List **colvars,
 	case CONTR_TRANS_SET:
 		newVar = makeVar(rtindex, list_length(*colvars) + 1, VARBITOID, -1, 0);
 		break;
+	case CONTR_MAP:
 	case CONTR_TRANS_SQL:
 		newVar = makeVar(rtindex, list_length(*colvars) + 1, TEXTOID, -1, 0);
 		break;
@@ -1473,6 +1475,7 @@ expandRTEWithParam (RangeTblEntry *rte, int rtindex, int sublevels_up,
 						case CONTR_TRANS_SET:
 						case CONTR_TRANS_SQL:
 						case CONTR_TRANS_XML:
+						case CONTR_MAP:
 							expandTransProvenanceRTE(rte, colnames, colvars, rtindex);
 						break;
 						default:
@@ -1694,6 +1697,7 @@ addProvenanceTEs (RangeTblEntry *rte) {
 		case CONTR_TRANS_SET:
 		case CONTR_TRANS_SQL:
 		case CONTR_TRANS_XML:
+		case CONTR_MAP:
 			expandTransProvenanceRTE(rte, &names, &provVars, 1);
 		break;
 		case CONTR_WHERE:

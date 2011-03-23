@@ -202,6 +202,18 @@
 			WRITE_END_ONE("FunctionCall"); \
 	} while (0)
 
+/* macros to handle case when we do not have a TransProvInfo. That is
+ * when the parse back is called by query_sql_to_xml function.
+ */
+#define NEWINFO_ISSTATIC \
+	(context->transProv ? newInfo->isStatic : false)
+
+#define NEWINFO_ROOT \
+	(context->transProv ? newInfo->root : NULL)
+
+#define CURSUB_ISSTATIC \
+	(context->transProv ? curSub->isStatic : false)
+
 /* types */
 typedef enum XmlRepType
 {
@@ -318,7 +330,7 @@ parseBackTransToXML(Query *query, TransRepQueryInfo *newInfo, bool simple,
 static void
 parseBackXMLQueryNode(Query *query, char* alias, OUTPARAMS)
 {
-	TransProvInfo *newInfo;
+	TransProvInfo *newInfo = NULL;
 	bool newInDummy;
 	ParseXMLContext newContext;
 	deparse_namespace dpns;
@@ -365,8 +377,8 @@ parseBackXMLQueryNode(Query *query, char* alias, OUTPARAMS)
 	if (query->setOperations)
 	{
 		parseBackSetOp(query->setOperations, query, depth, &newContext,
-				newInfo->isStatic, false, newInfo,
-				(TransSubInfo *) newInfo->root);
+				NEWINFO_ISSTATIC, false, newInfo,
+				(TransSubInfo *) NEWINFO_ROOT);
 		return;
 	}
 
@@ -385,14 +397,14 @@ parseBackXMLQueryNode(Query *query, char* alias, OUTPARAMS)
 
 	// parse back SELECT
 	if (query->hasAggs)
-		parseBackAgg(query, depth, &newContext, newInfo->isStatic, newInDummy,
+		parseBackAgg(query, depth, &newContext, NEWINFO_ISSTATIC, newInDummy,
 				newInfo, newSub);
 	else
-		parseBackSelect(query, None, depth, &newContext, newInfo->isStatic,
+		parseBackSelect(query, None, depth, &newContext, NEWINFO_ISSTATIC,
 				newInDummy, newInfo, newSub);
 
 	// parse back FROM
-	parseBackFrom(query, depth, &newContext, newInfo->isStatic, newInDummy,
+	parseBackFrom(query, depth, &newContext, NEWINFO_ISSTATIC, newInDummy,
 			newInfo, (newContext.transProv ? NULL : NULL)); //CHECK that false is ok for topJoinNode
 
 	// parse back WHERE if present
@@ -401,23 +413,23 @@ parseBackXMLQueryNode(Query *query, char* alias, OUTPARAMS)
 				query,
 				depth,
 				&newContext,
-				newInfo->isStatic,
+				NEWINFO_ISSTATIC,
 				newInDummy,
 				newInfo,
 				(newContext.transProv ? getSpecificInfo(
-						(TransSubInfo *) newInfo->root, SUBOP_Selection) : NULL));
+						(TransSubInfo *) NEWINFO_ROOT, SUBOP_Selection) : NULL));
 
 	// parse back GROUP BY and HAVING if present
 	if (query->groupClause)
-		parseBackGroupBy(query, depth, &newContext, newInfo->isStatic,
+		parseBackGroupBy(query, depth, &newContext, NEWINFO_ISSTATIC,
 				newInDummy, newInfo, (newContext.transProv ? getSpecificInfo(
-						(TransSubInfo *) newInfo->root, SUBOP_Aggregation)
+						(TransSubInfo *) NEWINFO_ROOT, SUBOP_Aggregation)
 						: NULL));
 
 	if (query->havingQual)
-		parseBackHaving(query, depth, &newContext, newInfo->isStatic,
+		parseBackHaving(query, depth, &newContext, NEWINFO_ISSTATIC,
 				newInDummy, newInfo, (newContext.transProv ? getSpecificInfo(
-						(TransSubInfo *) newInfo->root, SUBOP_Having) : NULL));
+						(TransSubInfo *) NEWINFO_ROOT, SUBOP_Having) : NULL));
 
 	//TODO order by clause
 
@@ -474,13 +486,13 @@ parseBackSetOp(Node *setOp, Query *query, OUTPARAMS)
 		WRITE_START(setOpName);
 
 		parseBackSetOp(setOper->larg, query, depth, context, inStatic
-				|| curSub->isStatic, false, info,
+				|| CURSUB_ISSTATIC, false, info,
 				(context->transProv ? TSET_LARG(curSub) : NULL));
 		// for set difference the right node is never in the provenance.
 		if (setOper->op == SETOP_EXCEPT && context->transProv)
 			WRITE_START("NOT");
 		parseBackSetOp(setOper->rarg, query, depth, context, inStatic
-				|| curSub->isStatic, false, info,
+				|| CURSUB_ISSTATIC, false, info,
 				(context->transProv ? TSET_RARG(curSub) : NULL));
 		if (setOper->op == SETOP_EXCEPT && context->transProv)
 			WRITE_END("NOT");
@@ -650,17 +662,20 @@ parseBackAgg(Query *query, OUTPARAMS)
 		newSub = NULL;
 	}
 
-	switch (type)
+	if (context->transProv)
 	{
-	case ProjUnderAgg:
-	case ProjOverAgg:
-		push(context->infoStack, TSET_LARG(newSub));
-		/* fall through */
-	case ProjBothAgg:
-		push(context->infoStack, TSET_LARG(TSET_LARG(newSub)));
-		break;
-	default:
-		break;
+		switch (type)
+		{
+		case ProjUnderAgg:
+		case ProjOverAgg:
+			push(context->infoStack, TSET_LARG(newSub));
+			/* fall through */
+		case ProjBothAgg:
+			push(context->infoStack, TSET_LARG(TSET_LARG(newSub)));
+			break;
+		default:
+			break;
+		}
 	}
 
 	/* handle selection */
@@ -712,7 +727,7 @@ parseBackFrom(Query *query, OUTPARAMS)
 
 	if (context->transProv)
 	{
-		if (context->transProv && !inStatic && list_length(
+		if (!inStatic && list_length(
 				query->jointree->fromlist) > 1)
 		{
 			curSub = getTopJoinInfo(query, true);
@@ -790,10 +805,10 @@ parseBackFromItem(Node *fromItem, Query *query, OUTPARAMS)
 
 		/* process join children */
 		parseBackFromItem(join->larg, query, depth, context, inStatic
-				|| curSub->isStatic, false, info,
+				|| CURSUB_ISSTATIC, false, info,
 				(context->transProv ? TSET_LARG(curSub) : NULL));
 		parseBackFromItem(join->rarg, query, depth, context, inStatic
-				|| curSub->isStatic, false, info,
+				|| CURSUB_ISSTATIC, false, info,
 				(context->transProv ? TSET_RARG(curSub) : NULL));
 
 		/* process USING / ON */
@@ -1199,7 +1214,7 @@ parseBackExpr(Node *node, ParseXMLContext *context, TransProjType proType,
 
 	case T_CaseExpr:
 	{
-		//				CaseExpr   *caseexpr = (CaseExpr *) node;
+		//TODO				CaseExpr   *caseexpr = (CaseExpr *) node;
 		//				ListCell   *temp;
 		//
 		//				appendContextKeyword(context, "CASE",
