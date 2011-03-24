@@ -2088,3 +2088,4 @@ resolveToRteVar (Var *var, Query *query)
 
 	return resolveToRteVar (newVar, query);
 }
+

@@ -737,7 +737,7 @@ parseBackFrom(Query *query, OUTPARAMS)
 		else
 			newSub = curSub = getTopJoinInfo(query, false);
 
-		if (!inStatic && !isRoot && !inDummy)
+		if (curSub && !inStatic && !isRoot && !inDummy) //TODO
 			MAKE_RANGE(range, curSub);
 	}
 
@@ -759,7 +759,7 @@ parseBackFrom(Query *query, OUTPARAMS)
 
 	WRITE_END("From");
 
-	if (context->transProv && !inStatic && !isRoot && !inDummy)
+	if (context->transProv && curSub && !inStatic && !isRoot && !inDummy)
 		range->end = str->len;
 }
 
@@ -775,7 +775,7 @@ parseBackFromItem(Node *fromItem, Query *query, OUTPARAMS)
 	char *joinName;
 	OUTFUNC_HEADER;
 
-	if (context->transProv && !inStatic && !isRoot && !inDummy
+	if (context->transProv && curSub && !inStatic && !isRoot && !inDummy
 			&& !IsA(curSub,TransProvInfo))
 		MAKE_RANGE(range, curSub);
 
@@ -888,7 +888,7 @@ parseBackFromItem(Node *fromItem, Query *query, OUTPARAMS)
 		}
 	}
 
-	if (context->transProv && !inStatic && !isRoot && !inDummy
+	if (context->transProv && curSub && !inStatic && !isRoot && !inDummy
 			&& !IsA(curSub,TransProvInfo))
 		range->end = str->len;
 }
