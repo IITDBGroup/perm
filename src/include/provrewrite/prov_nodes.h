@@ -650,6 +650,14 @@ extern bool provNodesEquals(void *a, void *b);
 	(((ProvInfo *) ((Query *) query)->provInfo)->contribution)
 
 /* macros to distinguish between different copy contribution types */
+#define IS_COPY(query) \
+	( \
+	((((ProvInfo *) ((Query *) query)->provInfo)->contribution) == CONTR_COPY_COMPLETE_TRANSITIVE) \
+	|| ((((ProvInfo *) ((Query *) query)->provInfo)->contribution) == CONTR_COPY_PARTIAL_TRANSITIVE) \
+	|| ((((ProvInfo *) ((Query *) query)->provInfo)->contribution) == CONTR_COPY_COMPLETE_NONTRANSITIVE) \
+	|| ((((ProvInfo *) ((Query *) query)->provInfo)->contribution) == CONTR_COPY_PARTIAL_NONTRANSITIVE) \
+	)
+
 #define IS_TRANSC(ctype) \
 	(ctype == CONTR_COPY_COMPLETE_TRANSITIVE \
 		|| ctype == CONTR_COPY_PARTIAL_TRANSITIVE)

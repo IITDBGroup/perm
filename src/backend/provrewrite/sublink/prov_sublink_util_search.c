@@ -86,7 +86,7 @@ hasProvenanceSublink (Query *query) {
 	{
 		sublink = (SubLink *) lfirst(lc);
 
-		if (hasProvenanceSubqueryOrSublink(sublink->subselect))
+		if (hasProvenanceSubqueryOrSublink((Query *) sublink->subselect))
 			return true;
 	}
 
@@ -112,7 +112,7 @@ getProvSublinks (Query *query) {
 	{
 		sublink = (SubLink *) lfirst(lc);
 
-		if (hasProvenanceSubqueryOrSublink(sublink->subselect))
+		if (hasProvenanceSubqueryOrSublink((Query *) sublink->subselect))
 			pSublinks = lappend(pSublinks, sublink);
 	}
 

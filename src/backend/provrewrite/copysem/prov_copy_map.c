@@ -1587,88 +1587,71 @@ getEntryForBaseRel (CopyMap *map, Index rtindex)
 	return NULL;
 }
 
+/*
+ * Adapt a copy map for the removal of Dummy view expansion RTEs.
+ */
 
-///*
-// * A generic walker that applies a function to each of the relentries and attr
-// * entries of a copy map.
-// */
-//
-//void
-//copyMapWalker (List *entries, void *context, void *attrContext, void *inclContext,
-//				bool (*relWalker) (CopyMapRelEntry *entry, void *context),
-//				bool (*attrWalker) (CopyMapRelEntry *entry, CopyMapEntry *attr,
-//						void *context),
-//				bool (*inclWalker) (CopyMapRelEntry *entry, CopyMapEntry *attr,
-//						AttrInclusions *incl, void *context))
-//{
-//	CopyMapRelEntry *entry;
-//	CopyMapEntry *attr;
-//	AttrInclusions *incl;
-//	ListCell *lc;
-//	ListCell *attrLc;
-//	ListCell *inclLc;
-//
-//	foreach(lc, entries)
-//	{
-//		entry = (CopyMapRelEntry *) lfirst(lc);
-//
-//		/* if a relWalker is given apply it an skip the processing of its
-//		 * entries if it returns false.
-//		 */
-//		if (relWalker)
-//			if (!relWalker (entry, context))
-//				continue;
-//
-//		if (attrWalker)
-//		{
-//			foreach(attrLc, entry->attrEntries)
-//			{
-//				attr = (CopyMapEntry *) lfirst(attrLc);
-//
-//				if (attrWalker(entry, attr, attrContext))
-//				{
-//					if (inclWalker)
-//					{
-//						foreach(inclLc, attr->outAttrIncls)
-//						{
-//							incl = (AttrInclusions *) lfirst(inclLc);
-//							inclWalker(entry, attr, incl, inclContext);
-//						}
-//					}
-//				}
-//			}
-//		}
-//	}
-//}
-//
-///*
-// * Applies function to all InclusionCond's of an AttrInclusion.
-// */
-//
-//bool
-//inclusionCondWalker (AttrInclusions *incl,
-//		bool (*condWalker) (InclusionCond *cond, void *context), void *context)
-//{
-//	ListCell *lc;
-//	InclusionCond *cond;
-//
-//	foreach(lc, incl->inclConds)
-//	{
-//		cond = (InclusionCond *) lfirst(lc);
-//
-//		if (condWalker(cond, context))
-//			return true;
-//	}
-//
-//	return false;
-//}
-//
-///*
-// * Dummy walkers to allow processing of all subelements
-// */
-//
-//bool
-//dummyAttrWalker (CopyMapRelEntry *entry, CopyMapEntry *attr, void *context)
-//{
-//	return true;
-//}
+void
+adaptCopyMapForDummyRTERemoval (Query *query)
+{
+	CopyMapRelEntry *cur;
+	CopyMap *map;
+	CopyMapEntry *entry;
+	AttrInclusions *attrIncl, *innerAttr;
+	InclusionCond *cond, *innerCond;
+	ListCell *lc, *entryLc, *outLc, *condLc, *inCondLc;
+
+	map = GET_COPY_MAP(query);
+
+	foreach(lc, map->entries)
+	{
+		cur = (CopyMapRelEntry *) lfirst(lc);
+
+		// adapt attribute inclusion conditions
+		foreach(entryLc, cur->attrEntries)
+		{
+			entry = (CopyMapEntry *) lfirst(entryLc);
+
+			foreach(outLc, entry->outAttrIncls)
+			{
+				attrIncl = (AttrInclusions *) lfirst(outLc);
+
+				foreach(condLc, attrIncl->inclConds)
+				{
+					cond = (InclusionCond *) lfirst(condLc);
+
+					if(IsA(cond->existsAttr, AttrInclusions))
+					{
+						innerAttr = (AttrInclusions *) cond->existsAttr;
+
+						innerAttr->attr->varno -= 2;
+
+						foreach(inCondLc, innerAttr->inclConds)
+						{
+							Var *innerAttr;
+
+							innerCond = (InclusionCond *) lfirst(inCondLc);
+							innerAttr = (Var *) innerCond->existsAttr;
+							innerAttr->varno -= 2;
+						}
+					}
+				}
+			}
+		}
+
+		// substract 2 from the child rtindex
+		cur->child->rtindex -= 2;
+
+		// adapt out attrs of childr
+		foreach(entryLc, cur->child->attrEntries)
+		{
+			entry = (CopyMapEntry *) lfirst(entryLc);
+
+			foreach(outLc, entry->outAttrIncls)
+			{
+				attrIncl = (AttrInclusions *) lfirst(outLc);
+				attrIncl->attr->varno -= 2;
+			}
+		}
+	}
+}

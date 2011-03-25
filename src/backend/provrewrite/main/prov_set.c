@@ -43,7 +43,7 @@
 #include "provrewrite/provrewrite.h"
 #include "provrewrite/prov_nodes.h"
 #include "provrewrite/prov_set.h"
-
+#include "provrewrite/prov_copy_map.h"
 
 /* Function declarations */
 static void addSetSubqueryRTEs (Query *top, Query *orig);
@@ -276,6 +276,7 @@ removeDummyRewriterRTEs (Query *query)
 	ListCell *lc;
 	TargetEntry *te;
 	Var *var;
+	bool isCopy;
 
 	/* check if first range table entry is a dummy entry */
 	rte = (RangeTblEntry *) linitial (query->rtable);
@@ -304,6 +305,10 @@ removeDummyRewriterRTEs (Query *query)
 
 		/* adapt set operation tree */
 		substractRangeTblRefValuesWalker (query->setOperations, NULL);
+
+		/* for copy cs adapt the copy map entries */
+		if (IS_COPY(query))
+			adaptCopyMapForDummyRTERemoval(query);
 	}
 }
 
