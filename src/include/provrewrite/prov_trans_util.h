@@ -48,7 +48,7 @@ typedef enum TransProjType
 		(DatumGetVarBitP(datumCopy(((Datum) input), false, -1)))
 
 #define MAKE_SETOR_FUNC(args) \
-	(makeFuncExpr(F_BITOR_WITH_NULL, VARBITOID, args, COERCE_IMPLICIT_CAST))
+	(makeFuncExpr(F_BITOR_WITH_NULL, VARBITOID, args, COERCE_EXPLICIT_CALL))
 
 #define MAKE_SETOR_FUNC_NO_NULL(args) \
 	(makeFuncExpr(F_BITOR, VARBITOID, args, COERCE_EXPLICIT_CALL))
