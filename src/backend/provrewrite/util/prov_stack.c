@@ -692,7 +692,7 @@ reverseList (List *list)
 
 	result = NIL;
 
-	foreach(lc, result)
+	foreach(lc, list)
 	{
 		result = lcons(lfirst(lc), result);
 	}

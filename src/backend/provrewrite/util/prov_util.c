@@ -19,6 +19,7 @@
 #include "access/heapam.h"
 #include "catalog/pg_operator.h"		// pg_operator system table for operator lookup
 #include "catalog/pg_type.h"
+#include "catalog/namespace.h"
 #include "nodes/makefuncs.h"
 #include "parser/parsetree.h"			// rt_fetch
 #include "parser/parse_expr.h"
@@ -28,6 +29,7 @@
 #include "optimizer/clauses.h"
 #include "utils/syscache.h"				// used to release heap tuple references
 #include "utils/lsyscache.h"
+#include "utils/builtins.h"
 
 #include "provrewrite/provlog.h"
 #include "provrewrite/provstack.h"
@@ -57,6 +59,7 @@ static Node *getJoinTreeNodeWalker (Node *node, Index rtindex);
 static Node *getCastedVarOrConst (Node *node);
 static bool containsOuterJoins (Node *join);
 static bool correctSublinkAliasWalker (Node *node, void *context);
+static Var *getEquatedVar (Var *eqVar, Node *expr);
 
 /*
  *
@@ -311,12 +314,11 @@ correctRTEAlias (RangeTblEntry *rte)
  */
 
 void
-getRTindexForProvTE (Query *query, Var* var)
+getRTindexForProvTE (Query *query, Var *var)
 {
 	List *from;
-	ListCell *lc;
-	ListCell *aliasLc;
-	JoinExpr *joinExpr;
+	ListCell *lc, *aliasLc, *pathLc;
+	JoinExpr *joinExpr = NULL;
 	Index newRtindex;
 	Index rtindex;
 	AttrNumber newAttrNumber;
@@ -324,11 +326,13 @@ getRTindexForProvTE (Query *query, Var* var)
 	RangeTblEntry *rte;
 	Var *joinVar;
 	List *joinRTElist;
+	List *joinPath;
+	List *joins;
 
 	from = query->jointree->fromlist;
 	rtindex = var->varno;
 	joinRTElist = NIL;
-
+	joinPath = NIL;
 
 	/* search in all from items for a reference to the RTE of var */
 	foreach(lc, from)
@@ -336,7 +340,7 @@ getRTindexForProvTE (Query *query, Var* var)
 		if (IsA(lfirst(lc), JoinExpr))
 		{
 			joinExpr = (JoinExpr *) lfirst(lc);
-			if (findRTindexInJoin (rtindex, joinExpr, &joinRTElist, NULL))
+			if (findRTindexInJoin (rtindex, joinExpr, &joinRTElist, &joinPath))
 				break;
 		}
 	}
@@ -345,32 +349,113 @@ getRTindexForProvTE (Query *query, Var* var)
 			(errcode(ERRCODE_DIVISION_BY_ZERO),
 					errmsg("joinlistlength: %i", list_length(joinRTElist))));
 
+	// not found in any joins, return without modifying the var
+	if (joinRTElist == NIL)
+		return;
+
+	// get all parent join nodes in the jointree for rte access for var
+	joins = list_make1(joinExpr);
+	joinPath = reverseList(joinPath);
+	for(lc = list_head(joinPath); lnext(lc) != NULL; lc = lnext(lc))
+	{
+		switch(lfirst_int(lc))
+		{
+			case JCHILD_LEFT:
+				joinExpr = (JoinExpr *) joinExpr->larg;
+				break;
+			case JCHILD_RIGHT:
+				joinExpr = (JoinExpr *) joinExpr->rarg;
+				break;
+			default:
+				break;
+		}
+		joins = lcons(joinExpr,joins);
+	}
+
+
 	/*
 	 * resolve the RT indirections induced by join operations.
 	 * for each join-RTE adapt var to point to the join-RTE.
 	 * Start with the original RTE at the bottom of the jointree.
 	 */
-	foreach(lc,joinRTElist)
+	forboth(lc,joinRTElist,pathLc,joins)
 	{
 		newRtindex = lfirst_int(lc);
 		rte = rt_fetch(newRtindex, query->rtable);
+		joinExpr = (JoinExpr *) lfirst(pathLc);
 
+		foundAttrNum = -1;
 		newAttrNumber = 1;
 		foreach (aliasLc, rte->joinaliasvars)
 		{
 			joinVar = (Var *) lfirst(aliasLc);
 			if ((joinVar->varno == var->varno)
 					&& (joinVar->varattno == var->varattno))
-			{
 				foundAttrNum = newAttrNumber;
-			}
 			newAttrNumber++;
+		}
+
+		/* For natural joins the var may not be in the joinaliasvars list,
+		 * we have to find the var it is equated and use this one instead
+		 */
+		if (foundAttrNum == -1 && joinExpr && joinExpr->isNatural)
+		{
+			Var *eqVar;
+
+			eqVar = getEquatedVar(var, joinExpr->quals);
+
+			newAttrNumber = 1;
+			foreach (aliasLc, rte->joinaliasvars)
+			{
+				joinVar = (Var *) lfirst(aliasLc);
+				if ((joinVar->varno == eqVar->varno)
+						&& (joinVar->varattno == eqVar->varattno))
+					foundAttrNum = newAttrNumber;
+				newAttrNumber++;
+			}
 		}
 
 		var->varno = newRtindex;
 		var->varattno = foundAttrNum;
 	}
 }
+
+/*
+ * For a natural join condition find the var that is equated to the given
+ * Var node.
+ */
+
+static Var *
+getEquatedVar (Var *eqVar, Node *expr)
+{
+	if (IsA(expr, BoolExpr))
+	{
+		Var *result = NULL;
+		ListCell *lc;
+		BoolExpr *and = (BoolExpr *) expr;
+
+		foreach(lc, and->args)
+		{
+			if (!result)
+				result = getEquatedVar(eqVar, lfirst(lc));
+		}
+
+		return result;
+	}
+
+	if (IsA(expr, OpExpr))
+	{
+		OpExpr *op = (OpExpr *) expr;
+
+		if (equal(eqVar,linitial(op->args)))
+			return (Var *) lsecond(op->args);
+		if (equal(eqVar,lsecond(op->args)))
+			return (Var *) linitial(op->args);
+	}
+
+	return NULL;
+}
+
 
 /*
  *
@@ -832,7 +917,9 @@ createComparison (Node *left, Node *right, ComparisonType type)
 		ereport(ERROR,
 			(errcode(ERRCODE_INTERNAL_ERROR),
 			errmsg("Did not find %s operator for types %s and %s",
-							 opName, leftType, rightType)));
+					NameListToString(opName),
+					format_type_be(leftType),
+					format_type_be(rightType))));
 	// create a node for the operator
 	equal = makeNode (OpExpr);
 	equal->args = list_make2(left, right);
