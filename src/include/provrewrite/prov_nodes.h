@@ -41,7 +41,8 @@ typedef enum ContributionType
 	CONTR_TRANS_SQL,
 	CONTR_TRANS_XML,
 	CONTR_TRANS_XML_SIMPLE,
-	CONTR_MAP
+	CONTR_MAP,
+	CONTR_NONE
 } ContributionType;
 
 
@@ -520,6 +521,11 @@ extern bool provNodesEquals(void *a, void *b);
 #define IsProvRewrite(query) \
 	((((Query *) (query))->provInfo != NULL) && ((ProvInfo *) ((Query *) query)->provInfo)->shouldRewrite)
 
+/* does a RTE use the PROVENANCE (attrs) or BASERELATION clauses */
+#define RTE_IS_BASE_OR_PROV(rte) \
+	((((RangeTblEntry *) rte)->provAttrs != NIL) || (((RangeTblEntry *) rte)->isProvBase))
+
+
 /* mark or unmark a query for provenance rewrite */
 #define SetProvRewrite(query,value) \
 	do { \
@@ -620,6 +626,14 @@ extern bool provNodesEquals(void *a, void *b);
 	(((ProvInfo *) ((Query *) query)->provInfo)->contribution)
 
 /* macros to distinguish between different copy contribution types */
+#define IS_COPY(query) \
+	( \
+	((((ProvInfo *) ((Query *) query)->provInfo)->contribution) == CONTR_COPY_COMPLETE_TRANSITIVE) \
+	|| ((((ProvInfo *) ((Query *) query)->provInfo)->contribution) == CONTR_COPY_PARTIAL_TRANSITIVE) \
+	|| ((((ProvInfo *) ((Query *) query)->provInfo)->contribution) == CONTR_COPY_COMPLETE_NONTRANSITIVE) \
+	|| ((((ProvInfo *) ((Query *) query)->provInfo)->contribution) == CONTR_COPY_PARTIAL_NONTRANSITIVE) \
+	)
+
 #define IS_TRANSC(ctype) \
 	(ctype == CONTR_COPY_COMPLETE_TRANSITIVE \
 		|| ctype == CONTR_COPY_PARTIAL_TRANSITIVE)

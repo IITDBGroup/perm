@@ -43,8 +43,10 @@ static RangeTblEntry *scanNameSpaceForRefname(ParseState *pstate,
 static RangeTblEntry *scanNameSpaceForRelid(ParseState *pstate, Oid relid);
 static bool isLockedRel(ParseState *pstate, char *refname);
 //CHANGED
-static void expandTransProvenanceRTE (RangeTblEntry *rte, List **colnames, List **colvars, Index rtindex);
-static void expandProvenanceRTE (RangeTblEntry *rte, List **colnames, List **colvars, Index rtindex);
+static void expandTransProvenanceRTE (RangeTblEntry *rte, List **colnames, 
+				      List **colvars, Index rtindex);
+static void expandProvenanceRTE (RangeTblEntry *rte, List **colnames, 
+				 List **colvars, Index rtindex);
 static void expandRelation(Oid relid, Alias *eref,
 			   int rtindex, int sublevels_up,
 			   bool include_dropped,
@@ -1207,7 +1209,8 @@ expandRTE(RangeTblEntry *rte, int rtindex, int sublevels_up,
 		  bool include_dropped,
 		  List **colnames, List **colvars)
 {
-	expandRTEWithParam(rte, rtindex, sublevels_up, include_dropped, true, colnames, colvars);
+	expandRTEWithParam(rte, rtindex, sublevels_up, include_dropped, true, 
+			   colnames, colvars);
 }
 
 /*
@@ -1215,7 +1218,8 @@ expandRTE(RangeTblEntry *rte, int rtindex, int sublevels_up,
  */
 
 static void
-expandTransProvenanceRTE (RangeTblEntry *rte, List **colnames, List **colvars, Index rtindex)
+expandTransProvenanceRTE (RangeTblEntry *rte, List **colnames, List **colvars, 
+			  Index rtindex)
 {
 	Var *newVar;
 	Value *newName;
@@ -1230,6 +1234,7 @@ expandTransProvenanceRTE (RangeTblEntry *rte, List **colnames, List **colvars, I
 	case CONTR_TRANS_SET:
 		newVar = makeVar(rtindex, list_length(*colvars) + 1, VARBITOID, -1, 0);
 		break;
+	case CONTR_MAP:
 	case CONTR_TRANS_SQL:
 		newVar = makeVar(rtindex, list_length(*colvars) + 1, TEXTOID, -1, 0);
 		break;
@@ -1404,6 +1409,7 @@ expandRTEWithParam (RangeTblEntry *rte, int rtindex, int sublevels_up,
 						case CONTR_TRANS_SET:
 						case CONTR_TRANS_SQL:
 						case CONTR_TRANS_XML:
+					        case CONTR_MAP:
 							expandTransProvenanceRTE(rte, colnames, colvars, rtindex);
 						break;
 						default:
@@ -1625,6 +1631,7 @@ addProvenanceTEs (RangeTblEntry *rte) {
 		case CONTR_TRANS_SET:
 		case CONTR_TRANS_SQL:
 		case CONTR_TRANS_XML:
+		case CONTR_MAP:
 			expandTransProvenanceRTE(rte, &names, &provVars, 1);
 		break;
 		default:

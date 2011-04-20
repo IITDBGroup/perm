@@ -303,7 +303,6 @@ static PushdownInfo *_readPushdownInfo(void);
 static InequalityGraph *_readInequalityGraph(void);
 static InequalityGraphNode *_readInequalityGraphNode(void);
 static CopyMap *_readCopyMap(void);
-//static CopyProvInfo *_readCopyProvInfo(void);
 static CopyMapRelEntry *_readCopyMapRelEntry(void);
 static CopyMapEntry *_readCopyMapEntry(void);
 static CopyProvAttrInfo *_readCopyProvAttrInfo(void);
@@ -325,7 +324,6 @@ static void _outInequalityGraph(StringInfo str, InequalityGraph *node);
 static void _outInequalityGraphNode(StringInfo str, InequalityGraphNode *node);
 static void _outQueryPushdownInfo(StringInfo str, QueryPushdownInfo *node);
 static void _outCopyMap (StringInfo str, CopyMap *node);
-//static void _outCopyProvInfo (StringInfo str, CopyProvInfo *node);
 static void _outCopyMapRelEntry (StringInfo str, CopyMapRelEntry *node);
 static void _outCopyMapEntry (StringInfo str, CopyMapEntry *node);
 static void _outAttrInclusions (StringInfo str, AttrInclusions *node);
@@ -353,7 +351,6 @@ static bool _equalInequalityGraphNode(InequalityGraphNode *a, InequalityGraphNod
 static bool _equalQueryPushdownInfo(QueryPushdownInfo *a, QueryPushdownInfo *b);
 static bool _equalSelScope(SelScope *a, SelScope *b);
 static bool _equalCopyMap (CopyMap *a, CopyMap *b);
-//static bool _equalCopyProvInfo (CopyProvInfo *a, CopyProvInfo *b);
 static bool _equalCopyMapRelEntry (CopyMapRelEntry *a, CopyMapRelEntry *b);
 static bool _equalCopyMapEntry (CopyMapEntry *a, CopyMapEntry *b);
 static bool _equalAttrInclusions (AttrInclusions *a, AttrInclusions *b);
@@ -409,7 +406,7 @@ makeProvInfo (void)
 
 	result = makeNode(ProvInfo);
 	result->copyInfo = NULL;
-	result->contribution = CONTR_INFLUENCE;
+	result->contribution = CONTR_NONE;
 	result->rewriteInfo = NULL;
 	result->annotations = NIL;
 	result->provSublinkRewritten = false;
@@ -1166,9 +1163,6 @@ outProvNode(StringInfo str, void *obj)
 	case T_CopyMap:
 		_outCopyMap(str, obj);
 		break;
-//	case T_CopyProvInfo:
-//		_outCopyProvInfo(str, obj);
-//		break;
 	case T_CopyMapRelEntry:
 		_outCopyMapRelEntry(str, obj);
 		break;
@@ -1559,8 +1553,6 @@ parseProvNodeString(char *token, int length)
 		retval = _readInequalityGraph();
 	else if (MATCH("INEQUALITYGRAPHNODE", 19))
 		retval = _readInequalityGraphNode();
-//	else if (MATCH("COPYPROVINFO", 12))
-//		retval = _readCopyProvInfo();
 	else if (MATCH("COPYMAP", 7))
 		retval = _readCopyMap();
 	else if (MATCH("COPYMAPRELENTRY", 15))
@@ -1896,9 +1888,6 @@ void *copyProvNode (void *from)
 		case T_CopyMap:
 			retval = _copyCopyMap(from);
 			break;
-//		case T_CopyProvInfo:
-//			retval = _copyCopyProvInfo(from);
-//			break;
 		case T_CopyMapRelEntry:
 			retval = _copyCopyMapRelEntry(from);
 			break;

@@ -58,6 +58,7 @@
 #include "provrewrite/prov_copy_inclattr.h"
 #include "provrewrite/prov_trans_main.h"
 #include "provrewrite/prov_trans_bitset.h"
+#include "provrewrite/prov_sublink_util_search.h"
 
 /*
  * Global variables.
@@ -122,11 +123,8 @@ provenanceRewriteQuery (Query *query)
 	LOGNODE(query, "complete query tree");
 
 	/* check if we have to rewrite a part of the query */
-	if (!hasProvenanceSubquery(query))
+	if (!hasProvenanceSubqueryOrSublink(query))
 		return query;
-
-	/* try to pushdown selections be aware of provenance attrs */
-	//query = pushdownSelections(query);
 
 	/* if it is a cursor declaration notify the transformation provenance rewriter */
 	if (query->utilityStmt && IsA(query->utilityStmt, DeclareCursorStmt))
@@ -145,6 +143,47 @@ provenanceRewriteQuery (Query *query)
 	((ProvInfo *) query->provInfo)->rewriteInfo = copyObject(rewriteMethodStack);
 
 	return query;
+}
+
+ /*
+ * Call the rewrite method for the selected contribution semantics.
+ */
+
+Query *
+selectRewriteProvSemantics(Query *query, char *cursorName)
+{
+    /* rewrite query node according to the requested provenance type */
+    switch(ContributionType(query))
+	{
+		case CONTR_INFLUENCE:
+			return rewriteQueryNode (query);
+		case CONTR_COPY_PARTIAL_TRANSITIVE:
+		case CONTR_COPY_PARTIAL_NONTRANSITIVE:
+		case CONTR_COPY_COMPLETE_TRANSITIVE:
+		case CONTR_COPY_COMPLETE_NONTRANSITIVE:
+		{
+			int numQAttrs;
+
+			numQAttrs = list_length(query->targetList);
+			generateCopyMaps(query);
+			query = rewriteQueryNodeCopy (query);
+			addTopCopyInclExpr(query, numQAttrs);
+
+			return query;
+		}
+		case CONTR_TRANS_SET:
+		case CONTR_TRANS_SQL:
+		case CONTR_TRANS_XML:
+		case CONTR_TRANS_XML_SIMPLE:
+		case CONTR_MAP:
+			return rewriteQueryTransProv (query, cursorName);
+		default:
+			elog(ERROR,
+					"unkown type of contribution semantics %d",
+					ContributionType(query));
+
+			return NULL; // keep compiler quiet
+	}
 }
 
 /*
@@ -184,39 +223,9 @@ traverseQueryTree (RangeTblEntry *rteQuery, Query *query, char *cursorName)
 			query->utilityStmt = NULL;
 		}
 
-		/* rewrite query node according to the requested provenance type */
-		switch(ContributionType(query))
-		{
-			case CONTR_INFLUENCE:
-				query = rewriteQueryNode (query);
-			break;
-			case CONTR_COPY_PARTIAL_TRANSITIVE:
-			case CONTR_COPY_PARTIAL_NONTRANSITIVE:
-			case CONTR_COPY_COMPLETE_TRANSITIVE:
-			case CONTR_COPY_COMPLETE_NONTRANSITIVE:
-			{
-				int numQAttrs;
-
-				numQAttrs = list_length(query->targetList);
-				generateCopyMaps(query);
-				query = rewriteQueryNodeCopy (query);
-				addTopCopyInclExpr(query, numQAttrs);
-			}
-			break;
-			case CONTR_TRANS_SET:
-			case CONTR_TRANS_SQL:
-			case CONTR_TRANS_XML:
-			case CONTR_TRANS_XML_SIMPLE:
-			case CONTR_MAP:
-				query = rewriteQueryTransProv (query, cursorName);
-			break;
-			default:
-				elog(ERROR,
-						"unkown type of contribution semantics %d",
-						ContributionType(query));
-			break;
-		}
-
+		/* rewrite according to the selected contribution semantics */
+		query = selectRewriteProvSemantics(query, cursorName);		
+		
 		/* reset into and utiltiy and set rewritten query in RTE if present */
 		if (rteQuery != NULL)
 			rteQuery->subquery = query;
@@ -231,16 +240,31 @@ traverseQueryTree (RangeTblEntry *rteQuery, Query *query, char *cursorName)
 		if (rteQuery)
 			correctRTEAlias(rteQuery);
 	}
-	// if not, test if one of the subqueries is marked for provenance rewrite
 	else
 	{
+	        // if not, test if one of the sublinks or subqueries is marked for provenance rewrite
+		if (hasProvenanceSublink(query))
+		{
+			List *provSublinks;
+			SubLink *pSublink;
+
+			provSublinks = getProvSublinks(query);
+			//TODO error for sublinks that need fixed schema
+			foreach(lc, provSublinks)
+			{
+				pSublink = (SubLink *) lfirst(lc);
+				pSublink->subselect = (Node *) traverseQueryTree(NULL,
+						(Query *) pSublink->subselect,
+						cursorName);
+			}
+		}
+
+
 		foreach (lc, query->rtable)
 		{
 			rtEntry = (RangeTblEntry *) lfirst(lc);
 			if (rtEntry->rtekind ==  RTE_SUBQUERY)	// is subquery?
-			{
 				traverseQueryTree (rtEntry, rtEntry->subquery, cursorName);
-			}
 		}
 	}
 

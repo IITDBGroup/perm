@@ -338,6 +338,9 @@ resetRelReferences (void)
  * Returns true, if te is a provnenace attribute.
  */
 
+#define STR_LEN_CMP(compare,cmplen) \
+	(nameLen == cmplen && strncmp(te->resname, compare, cmplen) == 0)
+
 bool
 isProvAttr (TargetEntry *te)
 {
