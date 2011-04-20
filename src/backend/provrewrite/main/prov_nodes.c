@@ -1715,17 +1715,6 @@ _readCopyMap(void)
 	READ_DONE();
 }
 
-//static CopyProvInfo *
-//_readCopyProvInfo(void)
-//{
-//	READ_LOCALS(CopyProvInfo);
-//
-//	READ_NODE_FIELD(inMap);
-//	READ_NODE_FIELD(outMap);
-//
-//	READ_DONE();
-//}
-
 static CopyMapRelEntry *
 _readCopyMapRelEntry(void)
 {
