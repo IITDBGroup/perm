@@ -6407,7 +6407,7 @@ opt_provenance:
 			| /* EMPTY */							
 				{	
 					ProvInfo *n = makeProvInfo();
-					n->contribution = CONTR_INFLUENCE;
+					n->contribution = CONTR_NONE;
 					$$ = (Node *) n; 
 				}
 		;
