@@ -344,16 +344,17 @@ resetRelReferences (void)
 bool
 isProvAttr (TargetEntry *te)
 {
-	if (te->resname == NULL || strlen(te->resname) < 5)
+  int nameLen;
+	if (te->resname == NULL || (nameLen = strlen(te->resname)) < 5)
 		return false;
 
 	if (!strncmp(te->resname, ProvPraefix, 5))
 		return true;
 
-	if (strlen(te->resname) < 10)
-		return false;
+	if (STR_LEN_CMP(TransProvName,10))
+		return true;
 
-	return (!strncmp(te->resname, TransProvName, 10));
+	return false;
 }
 
 /*
