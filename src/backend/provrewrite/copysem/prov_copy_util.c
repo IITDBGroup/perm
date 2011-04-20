@@ -234,7 +234,7 @@ copyAddProvAttrs (Query *query, List *subList)
 	}
 
 	/* add copy map attributes */
-	generateCopyMapAttributs(query, origAttrNum);
+	generateCopyMapAttributes(query, origAttrNum);
 }
 
 /*
@@ -249,6 +249,9 @@ addProvAttrsForRelEntry (Query *query, CopyMapRelEntry *rel,
 	Index curResno = list_length(query->targetList);
 	TargetEntry *newTe, *te;
 	Expr *expr;
+
+	if (rel->provAttrs)
+		rel->provAttrs = NIL;
 
 	foreach(lc, child->provAttrs)
 	{

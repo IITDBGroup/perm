@@ -78,16 +78,40 @@ addTopCopyInclExpr (Query *query, int origAttrNum)
 		{
 			Expr *attrExpr;
 
-			foreach(innerLc, relEntry->attrEntries)
+			// fake rel entry for RTE with PROVENANCE (attrs) clause
+			if (relEntry->relation == InvalidOid)
 			{
-				attrEntry = (CopyMapEntry *) lfirst(innerLc);
+				CopyMapRelEntry *childEntry = relEntry;
 
-				attrExpr = (Expr *) makeNullConst(
-						attrEntry->baseRelAttr->vartype,
-						attrEntry->baseRelAttr->vartypmod);
-				provAttr = makeTargetEntry(attrExpr, ++tlPos,
-						attrEntry->provAttrName, false);
-				newTarget = lappend(newTarget, provAttr);
+				while(childEntry->child != NULL)
+					childEntry = childEntry->child;
+
+				foreach(innerLc, childEntry->provAttrs)
+				{
+					provAttr = (TargetEntry *) lfirst(innerLc);
+
+					attrExpr = (Expr *) makeNullConst(
+							exprType((Node *) provAttr->expr),
+							exprTypmod((Node *) provAttr->expr));
+					provAttr = makeTargetEntry (attrExpr, ++tlPos,
+							provAttr->resname, false);
+					newTarget = lappend(newTarget, provAttr);
+				}
+			}
+			// normal rel entry
+			else
+			{
+				foreach(innerLc, relEntry->attrEntries)
+				{
+					attrEntry = (CopyMapEntry *) lfirst(innerLc);
+
+					attrExpr = (Expr *) makeNullConst(
+							attrEntry->baseRelAttr->vartype,
+							attrEntry->baseRelAttr->vartypmod);
+					provAttr = makeTargetEntry(attrExpr, ++tlPos,
+							attrEntry->provAttrName, false);
+					newTarget = lappend(newTarget, provAttr);
+				}
 			}
 		}
 		// is static: provenance attribute values are taken from the input
@@ -187,7 +211,7 @@ createCompleteFinalInclConds (CopyMapRelEntry *rel, int origAttrNum)
  */
 
 void
-generateCopyMapAttributs (Query *query, int numQAttrs)
+generateCopyMapAttributes (Query *query, int numQAttrs)
 {
 	CopyMap *map = GET_COPY_MAP(query);
 	CopyMapRelEntry *rel;

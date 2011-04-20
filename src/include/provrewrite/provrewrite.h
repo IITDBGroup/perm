@@ -22,6 +22,7 @@
 /* function prototypes */
 extern List *provenanceRewriteQueryList (List *queries);
 extern Query *provenanceRewriteQuery (Query *query);
+extern Query *selectRewriteProvSemantics(Query *query, char *cursorName);
 extern Query *rewriteQueryNode (Query * query);
 extern Query *rewriteQueryNodeCopy (Query *query);
 

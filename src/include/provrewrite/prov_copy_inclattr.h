@@ -16,6 +16,6 @@
 #include "nodes/parsenodes.h"
 
 extern void addTopCopyInclExpr (Query *query, int numQAttrs);
-extern void generateCopyMapAttributs (Query *query, int numQAttrs);
+extern void generateCopyMapAttributes (Query *query, int numQAttrs);
 
 #endif /* PROV_COPY_INCLATTR_H_ */

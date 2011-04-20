@@ -542,6 +542,10 @@ extern bool provNodesEquals(void *a, void *b);
 #define IsProvRewrite(query) \
 	((((Query *) (query))->provInfo != NULL) && ((ProvInfo *) ((Query *) query)->provInfo)->shouldRewrite)
 
+/* does a RTE use the PROVENANCE (attrs) or BASERELATION clauses */
+#define RTE_IS_BASE_OR_PROV(rte) \
+	((((RangeTblEntry *) rte)->provAttrs != NIL) || (((RangeTblEntry *) rte)->isProvBase))
+
 /* mark or unmark a query for provenance rewrite */
 #define SetProvRewrite(query,value) \
 	do { \

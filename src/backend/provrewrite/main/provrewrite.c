@@ -148,6 +148,55 @@ provenanceRewriteQuery (Query *query)
 }
 
 /*
+ * Call the rewrite method for the selected contribution semantics.
+ */
+
+Query *
+selectRewriteProvSemantics(Query *query, char *cursorName)
+{
+    /* rewrite query node according to the requested provenance type */
+    switch(ContributionType(query))
+	{
+		case CONTR_INFLUENCE:
+			return rewriteQueryNode (query);
+		case CONTR_COPY_PARTIAL_TRANSITIVE:
+		case CONTR_COPY_PARTIAL_NONTRANSITIVE:
+		case CONTR_COPY_COMPLETE_TRANSITIVE:
+		case CONTR_COPY_COMPLETE_NONTRANSITIVE:
+		{
+			int numQAttrs;
+
+			numQAttrs = list_length(query->targetList);
+			generateCopyMaps(query);
+			query = rewriteQueryNodeCopy (query);
+			addTopCopyInclExpr(query, numQAttrs);
+
+			return query;
+		}
+		case CONTR_TRANS_SET:
+		case CONTR_TRANS_SQL:
+		case CONTR_TRANS_XML:
+		case CONTR_TRANS_XML_SIMPLE:
+		case CONTR_MAP:
+			return rewriteQueryTransProv (query, cursorName);
+		case CONTR_WHERE:
+			return rewriteQueryWhere (query);
+		case CONTR_WHERE_INSEN:
+			return rewriteQueryWhereInSen (query);
+		case CONTR_WHERE_INSEN_NOUNION:
+			return rewriteQueryWhereInSenNoUnion (query);
+		case CONTR_HOW:
+			return rewriteQueryHow (query);
+		default:
+			elog(ERROR,
+					"unkown type of contribution semantics %d",
+					ContributionType(query));
+
+			return NULL; // keep compiler quiet
+	}
+}
+
+/*
  * Recursively traverses a query tree to find query nodes marked for provenance rewrite (provRewrite = true). These nodes
  * are passed to the appropriate provenance rewriter.
  */
@@ -184,52 +233,10 @@ traverseQueryTree (RangeTblEntry *rteQuery, Query *query, char *cursorName)
 			query->utilityStmt = NULL;
 		}
 
-		/* rewrite query node according to the requested provenance type */
-		switch(ContributionType(query))
-		{
-			case CONTR_INFLUENCE:
-				query = rewriteQueryNode (query);
-			break;
-			case CONTR_COPY_PARTIAL_TRANSITIVE:
-			case CONTR_COPY_PARTIAL_NONTRANSITIVE:
-			case CONTR_COPY_COMPLETE_TRANSITIVE:
-			case CONTR_COPY_COMPLETE_NONTRANSITIVE:
-			{
-				int numQAttrs;
+		/* rewrite according to the selected contribution semantics */
+	    query = selectRewriteProvSemantics(query, cursorName);
 
-				numQAttrs = list_length(query->targetList);
-				generateCopyMaps(query);
-				query = rewriteQueryNodeCopy (query);
-				addTopCopyInclExpr(query, numQAttrs);
-			}
-			break;
-			case CONTR_TRANS_SET:
-			case CONTR_TRANS_SQL:
-			case CONTR_TRANS_XML:
-			case CONTR_TRANS_XML_SIMPLE:
-			case CONTR_MAP:
-				query = rewriteQueryTransProv (query, cursorName);
-			break;
-			case CONTR_WHERE:
-				query = rewriteQueryWhere (query);
-			break;
-			case CONTR_WHERE_INSEN:
-				query = rewriteQueryWhereInSen (query);
-			break;
-			case CONTR_WHERE_INSEN_NOUNION:
-				query = rewriteQueryWhereInSenNoUnion (query);
-			break;
-			case CONTR_HOW:
-				query = rewriteQueryHow (query);
-			break;
-			default:
-				elog(ERROR,
-						"unkown type of contribution semantics %d",
-						ContributionType(query));
-			break;
-		}
-
-		/* reset into and utiltiy and set rewritten query in RTE if present */
+	    /* reset into and utiltiy and set rewritten query in RTE if present */
 		if (rteQuery != NULL)
 			rteQuery->subquery = query;
 
@@ -256,7 +263,8 @@ traverseQueryTree (RangeTblEntry *rteQuery, Query *query, char *cursorName)
 			foreach(lc, provSublinks)
 			{
 				pSublink = (SubLink *) lfirst(lc);
-				pSublink->subselect = traverseQueryTree(NULL, pSublink->subselect,
+				pSublink->subselect = (Node *) traverseQueryTree(NULL,
+						(Query *) pSublink->subselect,
 						cursorName);
 			}
 		}
