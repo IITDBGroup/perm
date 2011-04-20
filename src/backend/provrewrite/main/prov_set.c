@@ -17,8 +17,8 @@
  *-------------------------------------------------------------------------
  */
 
-/*TODO the whole join generation should make use of the helper method
- * instead of reproducing similar functionality here.
+//TODO the whole join generation should make use of the helper method
+ /* instead of reproducing similar functionality here.
  */
 
 #include "postgres.h"
@@ -43,7 +43,7 @@
 #include "provrewrite/provrewrite.h"
 #include "provrewrite/prov_nodes.h"
 #include "provrewrite/prov_set.h"
-
+#include "provrewrite/prov_copy_map.h"
 
 /* Function declarations */
 static void addSetSubqueryRTEs (Query *top, Query *orig);
@@ -54,8 +54,6 @@ static void addDummyProvAttrs (RangeTblEntry *rte, List *subProv, int pos);
 static void adaptSetProvenanceAttrs (Query *query);
 static void adaptSetStmtCols (SetOperationStmt *stmt, List *colTypes,
 		List *colTypmods);
-static void replaceSetOperationSubTrees (Query *query, Node *node,
-		Node **parentPointer, SetOperation rootType);
 static void replaceSetOperatorSubtree (Query *query, SetOperationStmt *setOp,
 		Node **parent);
 static void rewriteSetRTEs (Query *newTop);
@@ -278,6 +276,7 @@ removeDummyRewriterRTEs (Query *query)
 	ListCell *lc;
 	TargetEntry *te;
 	Var *var;
+	bool isCopy;
 
 	/* check if first range table entry is a dummy entry */
 	rte = (RangeTblEntry *) linitial (query->rtable);
@@ -306,6 +305,10 @@ removeDummyRewriterRTEs (Query *query)
 
 		/* adapt set operation tree */
 		substractRangeTblRefValuesWalker (query->setOperations, NULL);
+
+		/* for copy cs adapt the copy map entries */
+		if (IS_COPY(query))
+			adaptCopyMapForDummyRTERemoval(query);
 	}
 }
 
@@ -812,7 +815,7 @@ makeRTEVars (RangeTblEntry *rte, RangeTblEntry *newRte, Index rtindex)
  * its own query node regardless of its type.
  */
 
-static void
+void
 replaceSetOperationSubTrees (Query *query, Node *node, Node **parentPointer, SetOperation rootType)
 {
 	SetOperationStmt *setOp;

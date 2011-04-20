@@ -72,11 +72,13 @@ checkUnnStrategyPreconditions (SublinkInfo *info, Query *query)
 }
 
 /*
- *	Rewrites a single uncorrelated ANY sublink in an AND-tree by transforming the sublink into a join.
+ *	Rewrites a single uncorrelated ANY sublink in an AND-tree by transforming
+ *	the sublink into a join.
  */
 
 Query *
-rewriteUnnStrategy (Query *query, SublinkInfo *info,  Index subList[], List *infos)
+rewriteUnnStrategy (Query *query, SublinkInfo *info,  Index *subList,
+		List *infos)
 {
 	Query *sublinkQuery;
 	Index sublinkIndex;
@@ -87,7 +89,8 @@ rewriteUnnStrategy (Query *query, SublinkInfo *info,  Index subList[], List *inf
 	/* create range table entry for the sublink query */
 	sublinkQuery = (Query *) copyObject(info->sublink->subselect);
 	info->rewrittenSublinkQuery = rewriteQueryNode(sublinkQuery);
-	addSubqueryToRT(query, info->rewrittenSublinkQuery, appendIdToString("rewrittenSublink",&curUniqueRelNum));
+	addSubqueryToRT(query, info->rewrittenSublinkQuery,
+			appendIdToString("rewrittenSublink",&curUniqueRelNum));
 	correctRTEAlias((RangeTblEntry *) lfirst(query->rtable->tail));
 	IGNORE_RTE_INDEX (query, list_length(query->rtable));
 
@@ -104,14 +107,15 @@ rewriteUnnStrategy (Query *query, SublinkInfo *info,  Index subList[], List *inf
 }
 
 /*
- * Checks the if a NOT / ANY or ALL sublink fulfills the preconditions to be unnested using the
- * rewriteUncorrNotAnyOrAll rewrite method. These are:
+ * Checks the if a NOT / ANY or ALL sublink fulfills the preconditions to
+ * be unnested using the rewriteUncorrNotAnyOrAll rewrite method. These are:
  * 		1) Sublink has no correlations
  * 		2) Sublink is used in WHERE clause
  * 		3) is an ANY or ALL(//TODO) sublink
  * 		4) Sublink is not used in an OUTER JOIN qual
- * 		5) Sublink does not contain sublinks that have to be rewritten using GEN-strategy (the correlations used
- *			there wouldn't work in a FROM-clause item)
+ * 		5) Sublink does not contain sublinks that have to be rewritten using
+ * 			GEN-strategy (the correlations used there wouldn't work in a
+ * 			FROM-clause item)
  */
 bool
 checkUnnNotStrategyPreconditions (SublinkInfo *info, Query *query)
@@ -133,7 +137,8 @@ checkUnnNotStrategyPreconditions (SublinkInfo *info, Query *query)
  */
 
 Query *
-rewriteUnnNotStrategy (Query *query, SublinkInfo *info, Index subList[], List *infos)
+rewriteUnnNotStrategy (Query *query, SublinkInfo *info, Index *subList,
+		List *infos)
 {
 	Index sublinkIndex;
 	Index subIndex;
@@ -144,7 +149,8 @@ rewriteUnnNotStrategy (Query *query, SublinkInfo *info, Index subList[], List *i
 	Query *adaptedSublinkQuery;
 
 	info->unnested = true;
-	info->rewrittenSublinkQuery = (Query *) copyObject(info->sublink->subselect);
+	info->rewrittenSublinkQuery = (Query *)
+			copyObject(info->sublink->subselect);
 
 	/* add left join between query and sublink query */
 	joinQueryRTEs (query);
@@ -166,8 +172,10 @@ rewriteUnnNotStrategy (Query *query, SublinkInfo *info, Index subList[], List *i
 
 	query->jointree->fromlist = list_make1(newJoin);//CHECK ok to add as top level join
 
-	/* create range table entry for the rewritten sublink query in this case static null values */
-	info->rewrittenSublinkQuery = rewriteQueryNode(info->rewrittenSublinkQuery);
+	/* create range table entry for the rewritten sublink query in this case
+	 * static null values */
+	info->rewrittenSublinkQuery =
+			rewriteQueryNode(info->rewrittenSublinkQuery);
 
 	addSubqueryToRT(query, info->rewrittenSublinkQuery,
 					appendIdToString("rewrittenSublink", &curUniqueRelNum));
@@ -195,13 +203,16 @@ rewriteUnnNotStrategy (Query *query, SublinkInfo *info, Index subList[], List *i
 	nullTest = makeNode(NullTest);
 	nullTest->nulltesttype = IS_NULL;
 	nullTest->arg = (Expr *) makeVar(subIndex,
-									list_length(adaptedSublinkQuery->targetList),
+									list_length(
+											adaptedSublinkQuery->targetList),
 									exprType((Node *) te->expr),
 									exprTypmod((Node *) te->expr),
 									0);
 
-	query->jointree = (FromExpr *) replaceSubExpression ((Node *) query->jointree,
-			list_make1(info->parent), list_make1((Node *) nullTest),REPLACE_SUB_EXPR_QUERY);
+	query->jointree = (FromExpr *) replaceSubExpression (
+			(Node *) query->jointree,
+			list_make1(info->parent), list_make1((Node *) nullTest),
+			REPLACE_SUB_EXPR_QUERY);
 
 	return query;
 }
@@ -230,13 +241,15 @@ inOuterJoin (SublinkInfo *info, Query *query)
 }
 
 /*
- * Replaces the original sublink with the modified testexpression CsubPlus. For other sublinks with the same rootExpr adapt the
- * rootExpr. This is nessesary, because otherwise the MOVE strategy would use the unmodified rootExpr to create the top level
- * query qual.
+ * Replaces the original sublink with the modified testexpression CsubPlus. For
+ *  other sublinks with the same rootExpr adapt the rootExpr. This is
+ *  nessesary, because otherwise the MOVE strategy would use the unmodified
+ *  rootExpr to create the top level query qual.
  */
 
 static void
-replaceSublinkWithCsub (SublinkInfo *info, Query *query, List *infos, RangeTblRef *rtRef)
+replaceSublinkWithCsub (SublinkInfo *info, Query *query, List *infos,
+		RangeTblRef *rtRef)
 {
 	Node **join;
 	JoinExpr *newJoin;
@@ -257,10 +270,12 @@ replaceSublinkWithCsub (SublinkInfo *info, Query *query, List *infos, RangeTblRe
 	{
 		if (info->sublink->subLinkType == EXPR_SUBLINK)
 		{
-			te = (TargetEntry *) linitial(((Query *)info->sublink->subselect)->targetList);
+			te = (TargetEntry *) linitial(((Query *)
+					info->sublink->subselect)->targetList);
 			expr = (Node *) te->expr;
 
-			cSubPlus = (Node *) makeVar(rtRef->rtindex,1, exprType(expr), exprTypmod(expr),0);
+			cSubPlus = (Node *) makeVar(rtRef->rtindex, 1, exprType(expr),
+					exprTypmod(expr), 0);
 		}
 		else
 			cSubPlus = makeBoolConst(true,false);
@@ -289,7 +304,8 @@ replaceSublinkWithCsub (SublinkInfo *info, Query *query, List *infos, RangeTblRe
 		{
 			replaceList = list_make1(makeBoolConst(true,false));
 
-			newJoin->quals = replaceSubExpression((Node *) newJoin->quals, searchList, replaceList, REPLACE_SUB_EXPR_QUERY);
+			newJoin->quals = replaceSubExpression((Node *) newJoin->quals,
+					searchList, replaceList, REPLACE_SUB_EXPR_QUERY);
 		}
 
 	}
@@ -298,7 +314,8 @@ replaceSublinkWithCsub (SublinkInfo *info, Query *query, List *infos, RangeTblRe
 	else {
 		query->jointree->fromlist = lappend (query->jointree->fromlist, rtRef);
 
-		/* adapt testexpr by substituting references to the new range table entry for the Params */
+		/* adapt testexpr by substituting references to the new range table
+		 * entry for the Params */
 		if (equal(info->exprRoot, info->sublink))
 			query->jointree->quals = cSubPlus;
 		else
@@ -306,7 +323,8 @@ replaceSublinkWithCsub (SublinkInfo *info, Query *query, List *infos, RangeTblRe
 			replaceList = list_make1(cSubPlus);
 
 			query->jointree = (FromExpr *) replaceSubExpression
-					((Node *) query->jointree, searchList, replaceList, REPLACE_SUB_EXPR_QUERY);
+					((Node *) query->jointree, searchList, replaceList,
+							REPLACE_SUB_EXPR_QUERY);
 		}
 	}
 
@@ -315,7 +333,8 @@ replaceSublinkWithCsub (SublinkInfo *info, Query *query, List *infos, RangeTblRe
 	{
 		curInfo = (SublinkInfo *) lfirst(lc);
 
-		curInfo->exprRoot = replaceSubExpression(curInfo->exprRoot, searchList, replaceList, REPLACE_SUB_EXPR_QUERY);
+		curInfo->exprRoot = replaceSubExpression(curInfo->exprRoot, searchList,
+				replaceList, REPLACE_SUB_EXPR_QUERY);
 	}
 }
 
@@ -335,7 +354,8 @@ findSublinksWithSameExprRoot (List *infos, SublinkInfo *info)
 	{
 		curInfo = (SublinkInfo *) lfirst(lc);
 
-		if (curInfo->sublinkPos != info->sublinkPos && equal(info->exprRoot, curInfo->exprRoot))
+		if (curInfo->sublinkPos != info->sublinkPos
+				&& equal(info->exprRoot, curInfo->exprRoot))
 			result = lappend(result, curInfo);
 	}
 
@@ -343,8 +363,8 @@ findSublinksWithSameExprRoot (List *infos, SublinkInfo *info)
 }
 
 /*
- * For a ANY- or ALL-sublink we create a condition that resembles the sublink test expression.
- * For example if the sublink is:
+ * For a ANY- or ALL-sublink we create a condition that resembles the sublink
+ * test expression. For example if the sublink is:
  * 		a = ANY (SELECT b FROM R)
  * the new condition is
  * 		a = b
@@ -378,7 +398,7 @@ generateCsubPlus (SublinkInfo *info, Index rtIndex, bool forNot)
 		nullTest->nulltesttype = IS_NULL;
 		nullTest->arg = (Expr *) copyObject(result);
 
-		result = makeBoolExpr(OR_EXPR, list_make2(result, nullTest));
+		result = (Node *) makeBoolExpr(OR_EXPR, list_make2(result, nullTest));
 	}
 
 	result = replaceParamsMutator (result, context);

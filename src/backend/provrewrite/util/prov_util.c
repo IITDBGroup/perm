@@ -18,6 +18,8 @@
 #include "postgres.h"
 #include "access/heapam.h"
 #include "catalog/pg_operator.h"		// pg_operator system table for operator lookup
+#include "catalog/pg_type.h"
+#include "catalog/namespace.h"
 #include "nodes/makefuncs.h"
 #include "parser/parsetree.h"			// rt_fetch
 #include "parser/parse_expr.h"
@@ -27,12 +29,14 @@
 #include "optimizer/clauses.h"
 #include "utils/syscache.h"				// used to release heap tuple references
 #include "utils/lsyscache.h"
+#include "utils/builtins.h"
 
 #include "provrewrite/provlog.h"
 #include "provrewrite/provstack.h"
 #include "provrewrite/provrewrite.h"
 #include "provrewrite/prov_util.h"
 #include "provrewrite/prov_nodes.h"
+#include "provrewrite/prov_sublink_util_search.h"
 
 
 
@@ -55,6 +59,7 @@ static Node *getJoinTreeNodeWalker (Node *node, Index rtindex);
 static Node *getCastedVarOrConst (Node *node);
 static bool containsOuterJoins (Node *join);
 static bool correctSublinkAliasWalker (Node *node, void *context);
+static Var *getEquatedVar (Var *eqVar, Node *expr);
 
 /*
  *
@@ -309,12 +314,11 @@ correctRTEAlias (RangeTblEntry *rte)
  */
 
 void
-getRTindexForProvTE (Query *query, Var* var)
+getRTindexForProvTE (Query *query, Var *var)
 {
 	List *from;
-	ListCell *lc;
-	ListCell *aliasLc;
-	JoinExpr *joinExpr;
+	ListCell *lc, *aliasLc, *pathLc;
+	JoinExpr *joinExpr = NULL;
 	Index newRtindex;
 	Index rtindex;
 	AttrNumber newAttrNumber;
@@ -322,11 +326,13 @@ getRTindexForProvTE (Query *query, Var* var)
 	RangeTblEntry *rte;
 	Var *joinVar;
 	List *joinRTElist;
+	List *joinPath;
+	List *joins;
 
 	from = query->jointree->fromlist;
 	rtindex = var->varno;
 	joinRTElist = NIL;
-
+	joinPath = NIL;
 
 	/* search in all from items for a reference to the RTE of var */
 	foreach(lc, from)
@@ -334,7 +340,7 @@ getRTindexForProvTE (Query *query, Var* var)
 		if (IsA(lfirst(lc), JoinExpr))
 		{
 			joinExpr = (JoinExpr *) lfirst(lc);
-			if (findRTindexInJoin (rtindex, joinExpr, &joinRTElist, NULL))
+			if (findRTindexInJoin (rtindex, joinExpr, &joinRTElist, &joinPath))
 				break;
 		}
 	}
@@ -343,32 +349,113 @@ getRTindexForProvTE (Query *query, Var* var)
 			(errcode(ERRCODE_DIVISION_BY_ZERO),
 					errmsg("joinlistlength: %i", list_length(joinRTElist))));
 
+	// not found in any joins, return without modifying the var
+	if (joinRTElist == NIL)
+		return;
+
+	// get all parent join nodes in the jointree for rte access for var
+	joins = list_make1(joinExpr);
+	joinPath = reverseList(joinPath);
+	for(lc = list_head(joinPath); lnext(lc) != NULL; lc = lnext(lc))
+	{
+		switch(lfirst_int(lc))
+		{
+			case JCHILD_LEFT:
+				joinExpr = (JoinExpr *) joinExpr->larg;
+				break;
+			case JCHILD_RIGHT:
+				joinExpr = (JoinExpr *) joinExpr->rarg;
+				break;
+			default:
+				break;
+		}
+		joins = lcons(joinExpr,joins);
+	}
+
+
 	/*
 	 * resolve the RT indirections induced by join operations.
 	 * for each join-RTE adapt var to point to the join-RTE.
 	 * Start with the original RTE at the bottom of the jointree.
 	 */
-	foreach(lc,joinRTElist)
+	forboth(lc,joinRTElist,pathLc,joins)
 	{
 		newRtindex = lfirst_int(lc);
 		rte = rt_fetch(newRtindex, query->rtable);
+		joinExpr = (JoinExpr *) lfirst(pathLc);
 
+		foundAttrNum = -1;
 		newAttrNumber = 1;
 		foreach (aliasLc, rte->joinaliasvars)
 		{
 			joinVar = (Var *) lfirst(aliasLc);
 			if ((joinVar->varno == var->varno)
 					&& (joinVar->varattno == var->varattno))
-			{
 				foundAttrNum = newAttrNumber;
-			}
 			newAttrNumber++;
+		}
+
+		/* For natural joins the var may not be in the joinaliasvars list,
+		 * we have to find the var it is equated and use this one instead
+		 */
+		if (foundAttrNum == -1 && joinExpr && joinExpr->isNatural)
+		{
+			Var *eqVar;
+
+			eqVar = getEquatedVar(var, joinExpr->quals);
+
+			newAttrNumber = 1;
+			foreach (aliasLc, rte->joinaliasvars)
+			{
+				joinVar = (Var *) lfirst(aliasLc);
+				if ((joinVar->varno == eqVar->varno)
+						&& (joinVar->varattno == eqVar->varattno))
+					foundAttrNum = newAttrNumber;
+				newAttrNumber++;
+			}
 		}
 
 		var->varno = newRtindex;
 		var->varattno = foundAttrNum;
 	}
 }
+
+/*
+ * For a natural join condition find the var that is equated to the given
+ * Var node.
+ */
+
+static Var *
+getEquatedVar (Var *eqVar, Node *expr)
+{
+	if (IsA(expr, BoolExpr))
+	{
+		Var *result = NULL;
+		ListCell *lc;
+		BoolExpr *and = (BoolExpr *) expr;
+
+		foreach(lc, and->args)
+		{
+			if (!result)
+				result = getEquatedVar(eqVar, lfirst(lc));
+		}
+
+		return result;
+	}
+
+	if (IsA(expr, OpExpr))
+	{
+		OpExpr *op = (OpExpr *) expr;
+
+		if (equal(eqVar,linitial(op->args)))
+			return (Var *) lsecond(op->args);
+		if (equal(eqVar,lsecond(op->args)))
+			return (Var *) linitial(op->args);
+	}
+
+	return NULL;
+}
+
 
 /*
  *
@@ -747,84 +834,93 @@ createComparison (Node *left, Node *right, ComparisonType type)
 	leftType = exprType(left);
 	rightType = exprType(right);
 
-        switch(type)
-        {
-        case COMP_SMALLER:
-          opName = list_make1(makeString("<"));
-            break;
-        case COMP_SMALLEREQ:
-          opName = list_make1(makeString("<="));
-          break;
-        case COMP_BIGGER:
-          opName = list_make1(makeString(">"));
-          break;
-        case COMP_BIGGEREQ:
-          opName = list_make1(makeString(">="));
-          break;
-        case COMP_EQUAL:
-          opName = list_make1(makeString("="));
-          break;
-        default:
-          //TODO error
-            break;
-        }
-
-        // both types are the same use simple approach
-	if (leftType == rightType)
-        {
-          switch(type)
-          {
-          case COMP_SMALLER:
-            operTuple = ordering_oper (leftType, false);
-              break;
-          case COMP_BIGGER:
-            operTuple = reverse_ordering_oper (leftType, false);
-            break;
-          case COMP_EQUAL:
-            operTuple = equality_oper (leftType, false);
-            break;
-          case COMP_SMALLEREQ:
-          case COMP_BIGGEREQ:
-            operTuple = compatible_oper(NULL, opName, leftType, rightType,
-            		false, -1);
-            break;
-          default:
-              break;
-          }
-
-          operator = (Form_pg_operator) GETSTRUCT(operTuple);
-        }
-        // different types, try first to get an oper if they are binary
-        // otherwise the nodes have be coerced first.
-	else
+	switch(type)
 	{
-	  operTuple = compatible_oper(NULL, opName, leftType, rightType, true, -1);
-
-	  // try to find operator that would work with type coercion
-	  if (operTuple == NULL)
-	  {
-		  operTuple = oper(NULL, opName, leftType, rightType, true, -1);
-
-		  // did not work out
-		  if (operTuple == NULL)
-              elog(ERROR,
-                  "Could not find an operator %s for types %d, %d",
-                  strVal(((Value *) linitial(opName))),
-                  leftType,
-                  rightType);
-	  }
-
-	  // add cast if necessary
-	  operator = (Form_pg_operator) GETSTRUCT(operTuple);
-	  left = coerce_to_target_type(NULL, left, leftType, operator->oprleft,
-			  -1, COERCION_EXPLICIT, COERCE_DONTCARE);
-	  right = coerce_to_target_type(NULL, right, rightType, operator->oprright,
-			  -1, COERCION_EXPLICIT, COERCE_DONTCARE);
+	case COMP_SMALLER:
+	  opName = list_make1(makeString("<"));
+		break;
+	case COMP_SMALLEREQ:
+	  opName = list_make1(makeString("<="));
+	  break;
+	case COMP_BIGGER:
+	  opName = list_make1(makeString(">"));
+	  break;
+	case COMP_BIGGEREQ:
+	  opName = list_make1(makeString(">="));
+	  break;
+	case COMP_EQUAL:
+	  opName = list_make1(makeString("="));
+	  break;
+	default:
+		ereport(ERROR,
+				(errcode(ERRCODE_INTERNAL_ERROR),
+		 				 errmsg("Can only create <,<=,>=,> and = operators "
+		 						 "and not %s",
+		 						 strVal(((Value *) linitial(opName))))));
+		break;
 	}
 
+	// both types are the same use simple approach
+	if (leftType == rightType)
+	{
+		switch(type)
+		{
+			case COMP_SMALLER:
+				operTuple = ordering_oper (leftType, false);
+			break;
+			case COMP_BIGGER:
+				operTuple = reverse_ordering_oper (leftType, false);
+			break;
+			case COMP_EQUAL:
+				operTuple = equality_oper (leftType, false);
+			break;
+			case COMP_SMALLEREQ:
+			case COMP_BIGGEREQ:
+				operTuple = compatible_oper(NULL, opName, leftType, rightType,
+						false, -1);
+			break;
+			default:
+			break;
+		}
+
+		operator = (Form_pg_operator) GETSTRUCT(operTuple);
+	}
+	// different types, try first to get an oper if they are binary
+	// otherwise the nodes have be coerced first.
+	else
+	{
+		operTuple = compatible_oper(NULL, opName, leftType, rightType, true, -1);
+
+		// try to find operator that would work with type coercion
+		if (operTuple == NULL)
+		{
+			operTuple = oper(NULL, opName, leftType, rightType, true, -1);
+
+			// did not work out, use brutal force coerceviaio to text
+			if (operTuple == NULL)
+			  operTuple = oper(NULL, opName, TEXTOID, TEXTOID, true, -1);
+
+			// add cast if necessary
+			operator = (Form_pg_operator) GETSTRUCT(operTuple);
+			left = coerce_to_target_type(NULL, left, leftType,
+				  operator->oprleft, -1, COERCION_EXPLICIT,
+				  COERCE_EXPLICIT_CAST);
+			right = coerce_to_target_type(NULL, right, rightType,
+				  operator->oprright, -1, COERCION_EXPLICIT,
+				  COERCE_EXPLICIT_CAST);
+		}
+		else
+			operator = (Form_pg_operator) GETSTRUCT(operTuple);
+	}
+
+	if (operTuple == NULL)
+		ereport(ERROR,
+			(errcode(ERRCODE_INTERNAL_ERROR),
+			errmsg("Did not find %s operator for types %s and %s",
+					NameListToString(opName),
+					format_type_be(leftType),
+					format_type_be(rightType))));
 	// create a node for the operator
-
-
 	equal = makeNode (OpExpr);
 	equal->args = list_make2(left, right);
 	equal->opfuncid = operator->oprcode;
@@ -1533,7 +1629,8 @@ removeProvInfoNodesWalker (Node *node, void *context)
 		Query *query;
 
 		query = (Query *) node;
-		query->provInfo = NULL;
+		Provinfo(query)->shouldRewrite = false;
+		Provinfo(query)->copyInfo = NULL;
 
 		return query_tree_walker(query, removeProvInfoNodesWalker,
 				(void *) context, 0);
@@ -1607,13 +1704,16 @@ queryHasRewriteChildrenWalker (Node *node, bool *context)
  */
 
 bool
-hasProvenanceSubquery (Query *query)
+hasProvenanceSubqueryOrSublink (Query *query)
 {
 	bool result;
 	ListCell *lc;
 	RangeTblEntry *rte;
 
 	if (IsProvRewrite(query))
+		return true;
+
+	if (hasProvenanceSublink(query))
 		return true;
 
 	result = false;
@@ -1623,7 +1723,7 @@ hasProvenanceSubquery (Query *query)
 		rte = (RangeTblEntry *) lfirst(lc);
 
 		if (rte->rtekind == RTE_SUBQUERY)
-			result = result || hasProvenanceSubquery (rte->subquery);
+			result = result || hasProvenanceSubqueryOrSublink (rte->subquery);
 	}
 
 	return result;
@@ -1767,7 +1867,7 @@ isVarOrConstWithCast (Node *node)
 }
 
 /*
- * if expr is a VAr or Const surrounded by casts return the Var or Const.
+ * if expr is a Var or Const surrounded by casts return the Var or Const.
  * Return NULL else.
  */
 
@@ -1785,7 +1885,7 @@ getCastedVarOrConst (Node *node)
 	if (IsA(node, Const))
 		return node;
 
-	else if (IsA(node, FuncExpr))
+	if (IsA(node, FuncExpr))
 	{
 		funcExpr = (FuncExpr *) node;
 
@@ -1804,6 +1904,18 @@ getCastedVarOrConst (Node *node)
 
 		return newNode;
 	}
+
+	if (IsA(node, CoerceViaIO))
+	{
+		CoerceViaIO *coerce = (CoerceViaIO *) node;
+
+		arg = (Node *) coerce->arg;
+
+		newNode = getCastedVarOrConst(arg);
+
+		return newNode;
+	}
+
 	return NULL;
 }
 
@@ -1992,7 +2104,8 @@ getVarFromTeIfSimple (Node *node)
 
 		return var;
 	}
-	else if (IsA(node, FuncExpr))
+
+	if (IsA(node, FuncExpr))
 	{
 		funcExpr = (FuncExpr *) node;
 
@@ -2009,6 +2122,16 @@ getVarFromTeIfSimple (Node *node)
 			return getVarFromTeIfSimple(arg);
 		}
 	}
+
+	if (IsA(node, CoerceViaIO))
+	{
+		CoerceViaIO *coerce = (CoerceViaIO *) node;
+
+		arg = (Node *) coerce->arg;
+
+		return getVarFromTeIfSimple(arg);
+	}
+
 	return NULL;
 }
 
@@ -2029,7 +2152,10 @@ getAlias (RangeTblEntry *rte)
 }
 
 /*
- *
+ * For a Var "var" used in a query return the var itself if it references a
+ * range table entry that is a query or base relation. If "var" is from a
+ * join RTE trace it back to the query or relation RTE it transitively
+ * references.
  */
 
 Var *
@@ -2049,3 +2175,4 @@ resolveToRteVar (Var *var, Query *query)
 
 	return resolveToRteVar (newVar, query);
 }
+

@@ -16,7 +16,12 @@
  */
 
 #include "postgres.h"
+
+#include "catalog/pg_type.h"
 #include "nodes/makefuncs.h"
+#include "parser/parse_expr.h"
+#include "parser/parse_relation.h"
+
 #include "provrewrite/provrewrite.h"
 #include "provrewrite/prov_util.h"
 #include "provrewrite/prov_spj.h"
@@ -28,7 +33,10 @@
 #include "provrewrite/prov_copy_map.h"
 #include "provrewrite/provstack.h"
 
-static void rewriteCopyBaseRel (RangeTblEntry *rte, Index rtindex, CopyMap *map);
+static void rewriteCopyBaseRel (RangeTblEntry *rte, Index rtindex,
+		CopyMap *map);
+static void rewriteCopyRTEwithProvenance (RangeTblEntry *rte, Index rtindex,
+		CopyMap *map);
 static bool rteShouldRewrite (Query *query, Index rtindex);
 static void rewriteCopyDistinctClause (Query *query);
 
@@ -58,7 +66,7 @@ rewriteSPJQueryCopy (Query *query)
 	correctSubQueryAlias (query);
 
 	/* add provenance attributes of sub queries to targetlist */
-	copyAddProvAttrs (query, subList);
+	copyAddProvAttrs (query, subList);//TODO adapt for rte baserel clause and prov clause
 
 	/* if a distinct clause is present include provenance attributes
 	 * otherwise we would incorrectly omit duplicate result tuples with
@@ -104,14 +112,14 @@ rewriteRTEsCopy (Query *query, List **subList, Index maxRtindex)
 		{
 			/* rte is a stored provenance query */
 			if (rte->provAttrs != NIL)
-			//TODO	rewriteRTEwithProvenance (rtindex, rte, query);
-				;
-			/* rte is subquery */
-			else if (rte->rtekind == RTE_SUBQUERY)
-				rte->subquery = rewriteQueryNodeCopy (rte->subquery);
+				rewriteCopyRTEwithProvenance (rte, rtindex,
+						GET_COPY_MAP(query));
 			/* rte is base relation */
 			else if (rte->rtekind == RTE_RELATION || rte->isProvBase)
 				rewriteCopyBaseRel (rte, rtindex, GET_COPY_MAP(query));
+			/* rte is subquery */
+			else if (rte->rtekind == RTE_SUBQUERY)
+				rte->subquery = rewriteQueryNodeCopy (rte->subquery);
 		}
 
 		/* rte is not a join RTE so add it to subList*/
@@ -119,6 +127,125 @@ rewriteRTEsCopy (Query *query, List **subList, Index maxRtindex)
 			*subList = lappend_int(*subList, rtindex);
 
 		rtindex++;
+	}
+}
+
+/*
+ * Rewrite a RTE that uses the PROVENANCE (attrs) clause.
+ */
+
+static void
+rewriteCopyRTEwithProvenance (RangeTblEntry *rte, Index rtindex, CopyMap *map)
+{
+	ListCell *lc;
+	List *vars;
+	ListCell *varLc;
+	List *names;
+	ListCell *nameLc;
+	Value *provattr;
+	Value *attr;
+	bool found;
+	List *pList;
+	TargetEntry *te;
+	Var * attrVar;
+	char *attrName;
+	bool isProvResult = false;
+	CopyMapRelEntry *entry;
+
+	pList = NIL;
+
+	/* create Var nodes for all attributes of the RTE */
+	if (rte->rtekind == RTE_SUBQUERY)
+	{
+		isProvResult = ContributionType(rte->subquery) != CONTR_NONE;
+
+		/* if the RTE subquery is a provenance query we rewrite this query and
+		 * return */
+		if (IsProvRewrite(rte->subquery))
+		{
+			rte->subquery = selectRewriteProvSemantics(rte->subquery, NULL);
+			return;
+		}
+
+		/* subquery is not marked for provenance rewrite */
+		vars = NIL;
+		names = NIL;
+
+		foreach(lc, rte->subquery->targetList)
+		{
+			te = (TargetEntry *) lfirst(lc);
+
+			attr = makeString(te->resname);
+			names = lappend(names, attr);
+
+			attrVar = makeVar(rtindex, te->resno, exprType((Node *) te->expr),
+					exprTypmod((Node *) te->expr), 0);
+			vars = lappend(vars, attrVar);
+		}
+	}
+	else if (rte->rtekind == RTE_RELATION)
+	{
+		expandRTEWithParam(rte, rtindex, 0, false, false, &names, &vars);
+
+		/* check if provAttrs mentions Oid. If so add oid attr */
+		foreach(lc, rte->provAttrs)
+		{
+			provattr = (Value *) lfirst(lc);
+
+			if (strcmp(strVal(provattr),"oid") == 0)
+			{
+				attr = makeString("oid");
+				names = lcons(attr, names);
+				attrVar = makeVar(rtindex, ObjectIdAttributeNumber, OIDOID, -1, 0);
+				vars = lcons(attrVar, vars);
+			}
+		}
+	}
+	else
+		elog(ERROR,
+				"PROVENANCE construct in FROM clause is only allowed"
+				"for base relations and subqueries");
+
+	/* adapt copy map rel entry for this thing */
+	/* get copy map entry for base relation */
+	entry = getEntryForBaseRel(map, rtindex);
+
+	if (entry->provAttrs)
+		entry ->provAttrs = NIL;
+
+	/* walk through provAttrs and find correspoding var */
+	foreach(lc, rte->provAttrs)
+	{
+		provattr = (Value *) lfirst(lc);
+
+		found = false;
+		forboth(nameLc, names, varLc, vars)
+		{
+			attr = (Value *) lfirst(nameLc);
+			attrVar = (Var *) lfirst(varLc);
+
+			// found attribute
+			if (strcmp(strVal(attr), strVal(provattr)) == 0)
+			{
+				found = true;
+				if (isProvResult)
+					attrName = attr->val.str;
+				else
+					attrName = createExternalProvAttrName(attr->val.str);
+
+				te = makeTargetEntry((Expr *) attrVar, attrVar->varattno,
+						attrName, false);
+				entry->provAttrs = lappend(entry->provAttrs, te);
+
+				break;
+			}
+		}
+		if (!found)
+			elog(ERROR,
+					"Provenance attribute %s given in the "
+					"PROVENANCE attribute list is not found in %s",
+					provattr->val.str,
+					getAlias(rte));
 	}
 }
 
@@ -200,7 +327,7 @@ rewriteCopyDistinctClause (Query *query)
 		pList = list_concat(pList, rel->provAttrs);
 	}
 
-	push(&pStack, pList);
+	push(&pStack, pList);//CHECK artifacts from PI-CS method?
 	rewriteDistinctClause (query);
 	pop(&pStack);
 }

@@ -21,7 +21,7 @@
 #include "provrewrite/prov_sublink_util_analyze.h"
 
 extern Query *rewriteSublinks (Query *query, List **subList);
-extern void rewriteSublink (Query *query, SublinkInfo *info, Index subList[], List **rewritePos);
-extern void createSubList (Index subPos[], List **subList, List *rewritePos);
+extern void rewriteSublink (Query *query, SublinkInfo *info, Index *subList, List **rewritePos);
+extern void createSubList (Index *subPos, List **subList, List *rewritePos);
 
 #endif /*PROV_SUBLINK_H_*/

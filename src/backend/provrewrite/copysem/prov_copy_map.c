@@ -78,7 +78,12 @@ typedef struct EquiGraphNode {
 // prototypes
 static CopyMap *generateCopyMapForQueryNode (Query *query, ContributionType contr,
 		Index rtindex);
+static CopyMap *generateCopyMapForBaserelClause (RangeTblEntry *rte,
+		Index rtindex);
+static CopyMap *generateCopyMapForProvClause(RangeTblEntry *rte, Index rtindex);
 static CopyMap *generateBaseRelCopyMap (RangeTblEntry *rte, Index rtindex);
+static void expandRteAndAddAttrsToCopyRel (RangeTblEntry *rte, Index rtindex,
+		CopyMapRelEntry *relMap);
 
 static void inferStaticCopy (Query *query, ContributionType contr);
 static void inferStaticCopyQueryNode (Query *query, ContributionType contr);
@@ -109,7 +114,7 @@ static void addEqualityForNonStaticPaths (EquiGraphNode *start,
 static int getNodePos (List *graph, Var *var);
 static void searchStaticPath (EquiGraphNode *root, EquiGraphNode *node,
 		bool *hasStatic, int numNodes);
-static int compareEquiNode (void *left, void *right);
+static int compareEquiNode (const void *left, const void *right);
 static bool findVarEqualitiesWalker (Node *node, VarEqualitiesContext *context);
 
 static void setCopyMapRTindices (CopyMap *map, Index rtindex);
@@ -173,15 +178,30 @@ generateCopyMapForQueryNode (Query *query, ContributionType contr, Index rtindex
 		rte = (RangeTblEntry *) lfirst(lc);
 		currentMap = NULL;
 
+		if (strcmp("*NEW*", rte->eref->aliasname) == 0
+			|| strcmp("*OLD*", rte->eref->aliasname) == 0)
+			continue;
+
 		// generate map for rte
 		switch(rte->rtekind)
 		{
 		case RTE_SUBQUERY:
-			currentMap = generateCopyMapForQueryNode(rte->subquery, contr, i + 1);
-			setCopyMapRTindices (currentMap, i + 1);
+			// rte has PROVENANCE clause
+			if (rte->isProvBase && list_length(rte->provAttrs) == 0)
+				currentMap = generateCopyMapForBaserelClause (rte, i + 1);
+			else if (list_length(rte->provAttrs) > 0)
+				currentMap = generateCopyMapForProvClause (rte, i + 1);
+			else
+			{
+				currentMap = generateCopyMapForQueryNode(rte->subquery, contr, i + 1);
+				setCopyMapRTindices (currentMap, i + 1);
+			}
 			break;
 		case RTE_RELATION:
-			currentMap = generateBaseRelCopyMap(rte, i + 1);
+			if (list_length(rte->provAttrs) > 0)
+				currentMap = generateCopyMapForProvClause (rte, i + 1);
+			else
+				currentMap = generateBaseRelCopyMap(rte, i + 1);
 			break;
 		default:
 			//TODO
@@ -1051,10 +1071,10 @@ searchStaticPath (EquiGraphNode *root, EquiGraphNode *node, bool *hasStatic,
  */
 
 static int
-compareEquiNode (void *left, void *right)
+compareEquiNode (const void *left, const void *right)
 {
-	EquiGraphNode *l = (EquiGraphNode *) left;
-	EquiGraphNode *r = (EquiGraphNode *) right;
+	EquiGraphNode *l = *((EquiGraphNode **) left);
+	EquiGraphNode *r = *((EquiGraphNode **) right);
 
 	if (l->nodeVar->varno < r->nodeVar->varno)
 		return 1;
@@ -1108,6 +1128,118 @@ findVarEqualitiesWalker (Node *node, VarEqualitiesContext *context)
 			(void *) context);
 }
 
+/*
+ * -Create a CopyMap for a RTE that uses the PROVENANCE clause. Such an RTE is
+ * handled as a base relation with regard to copying.
+ * -Create a CopyMap for a RTE that uses the BASERELATION clause.
+ */
+
+static CopyMap *
+generateCopyMapForBaserelClause (RangeTblEntry *rte, Index rtindex)
+{
+	CopyMap *result;
+	CopyMapRelEntry *relMap;
+
+	result = makeCopyMap();
+	result->rtindex = rtindex;
+
+	relMap = makeCopyMapRelEntry ();
+	relMap->relation = -1; // is fake rel
+	relMap->refNum = 0;
+	relMap->rtindex = rtindex;
+	relMap->isStatic = true;
+
+	expandRteAndAddAttrsToCopyRel (rte, rtindex, relMap);
+
+	result->entries = list_make1(relMap);
+
+	return result;
+}
+
+/*
+ * Create a CopyMap for a RTE that uses the BASERELATION clause.
+ */
+
+static CopyMap *
+generateCopyMapForProvClause(RangeTblEntry *rte, Index rtindex)
+{
+	CopyMap *result;
+	CopyMapRelEntry *relMap;
+	List *vars;
+	List *names;
+	ListCell *varLc, *nameLc, *provLc;
+	Var *var;
+	CopyMapEntry *attrEntry;
+	AttrInclusions *attrIncl;
+	char *provName, *name;
+	bool isProv;
+	TargetEntry *te;
+
+	result = makeCopyMap();
+	result->rtindex = rtindex;
+
+	relMap = makeCopyMapRelEntry ();
+	// if RTE is subquery set relation to -1
+	relMap->relation = (rte->rtekind == RTE_RELATION) ? rte->relid :
+			InvalidOid;
+	relMap->refNum = 0;
+	relMap->rtindex = rtindex;
+	relMap->isStatic = true;
+
+	/* get Attributes */
+	vars = NIL;
+	names = NIL;
+	expandRTE(rte, rtindex, 0, false, &names, &vars);
+
+	/* add attrs to CopyRelMapEntry */
+	forboth(varLc, vars, nameLc, names)
+	{
+		var = (Var *) lfirst(varLc);
+		name = strVal((Value *) lfirst(nameLc));
+		isProv = false;
+
+		// check if name is in the PROVENANCE clause attribute list
+		foreach(provLc, rte->provAttrs)
+		{
+			provName = strVal((Value *) lfirst(provLc));
+
+			if (strcmp(name,provName) == 0)
+			{
+				isProv = true;
+				break;
+			}
+		}
+
+		// attribute is not mentioned in the PROVENANCE clause
+		if (!isProv)
+		{
+			attrIncl = makeAttrInclusions();
+			attrIncl->attr = var;
+			attrIncl->isStatic = true;
+
+			attrEntry = makeCopyMapEntry();
+			attrEntry->baseRelAttr = var;
+			attrEntry->provAttrName = createProvAttrName(rte, name);
+			attrEntry->isStaticTrue = true;
+			attrEntry->isStaticFalse = false;
+			attrEntry->outAttrIncls = list_make1(attrIncl);
+
+			relMap->attrEntries = lappend(relMap->attrEntries, attrEntry);
+		}
+		/* is mentioned in PROVENANCE clause add provAttr for it to relEntry */
+		else
+		{
+			te = makeTargetEntry((Expr *) var, var->varattno,
+					createExternalProvAttrName(provName),
+					false);
+			relMap->provAttrs = lappend(relMap->provAttrs, te);
+		}
+	}
+	result->entries = list_make1(relMap);
+
+
+	return result;
+}
 
 /*
  * Generates a CopyMap struct for a base relation.
@@ -1118,15 +1250,13 @@ generateBaseRelCopyMap (RangeTblEntry *rte, Index rtindex)
 {
 	CopyMap *result;
 	CopyMapRelEntry *relMap;
-	List *vars;
-	List *names;
-	ListCell *varLc, *nameLc;
-	Var *var;
-	CopyMapEntry *attrEntry;
-	AttrInclusions *attrIncl;
+//	List *vars;
+//	List *names;
+//	ListCell *varLc, *nameLc;
+//	Var *var;
+//	CopyMapEntry *attrEntry;
+//	AttrInclusions *attrIncl;
 
-	vars = NIL;
-	names = NIL;
 	result = makeCopyMap();
 	result->rtindex = rtindex;
 	relMap = makeCopyMapRelEntry ();
@@ -1136,9 +1266,56 @@ generateBaseRelCopyMap (RangeTblEntry *rte, Index rtindex)
 	relMap->rtindex = rtindex;
 	relMap->isStatic = true;
 
+	expandRteAndAddAttrsToCopyRel (rte, rtindex, relMap);
+
+//	/* get Attributes */
+//	expandRTE(rte, rtindex, 0, false, &names, &vars);
+//
+//	forboth(varLc, vars, nameLc, names)
+//	{
+//		var = (Var *) lfirst(varLc);
+//
+//		attrIncl = makeAttrInclusions();
+//		attrIncl->attr = var;
+//		attrIncl->isStatic = true;
+//
+//		attrEntry = makeCopyMapEntry();
+//		attrEntry->baseRelAttr = var;
+//		attrEntry->provAttrName = createProvAttrName(rte, strVal((Value *) lfirst(nameLc)));
+//		attrEntry->isStaticTrue = true;
+//		attrEntry->isStaticFalse = false;
+//		attrEntry->outAttrIncls = list_make1(attrIncl);
+//
+//		relMap->attrEntries = lappend(relMap->attrEntries, attrEntry);
+//	}
+
+	result->entries = list_make1(relMap);
+
+	return result;
+}
+
+/*
+ * Expand a RTE and add its attributes to a CopyRelMapEntry.
+ */
+
+static void
+expandRteAndAddAttrsToCopyRel (RangeTblEntry *rte, Index rtindex,
+		CopyMapRelEntry *relMap)
+{
+	List *vars;
+	List *names;
+	ListCell *varLc, *nameLc;
+	Var *var;
+	CopyMapEntry *attrEntry;
+	AttrInclusions *attrIncl;
+
+	vars = NIL;
+	names = NIL;
+
 	/* get Attributes */
 	expandRTE(rte, rtindex, 0, false, &names, &vars);
 
+	/* add attrs to CopyRelMapEntry */
 	forboth(varLc, vars, nameLc, names)
 	{
 		var = (Var *) lfirst(varLc);
@@ -1156,10 +1333,6 @@ generateBaseRelCopyMap (RangeTblEntry *rte, Index rtindex)
 
 		relMap->attrEntries = lappend(relMap->attrEntries, attrEntry);
 	}
-
-	result->entries = list_make1(relMap);
-
-	return result;
 }
 
 /*
@@ -1303,7 +1476,7 @@ inferStaticCopyQueryNode (Query *query, ContributionType contr)
 	{
 		rte= (RangeTblEntry *) lfirst(lc);
 
-		if (rte->rtekind == RTE_SUBQUERY)
+		if (rte->rtekind == RTE_SUBQUERY && !RTE_IS_BASE_OR_PROV(rte))
 			inferStaticCopyQueryNode(rte->subquery, contr);
 	}
 
@@ -1583,88 +1756,71 @@ getEntryForBaseRel (CopyMap *map, Index rtindex)
 	return NULL;
 }
 
+/*
+ * Adapt a copy map for the removal of Dummy view expansion RTEs.
+ */
 
-///*
-// * A generic walker that applies a function to each of the relentries and attr
-// * entries of a copy map.
-// */
-//
-//void
-//copyMapWalker (List *entries, void *context, void *attrContext, void *inclContext,
-//				bool (*relWalker) (CopyMapRelEntry *entry, void *context),
-//				bool (*attrWalker) (CopyMapRelEntry *entry, CopyMapEntry *attr,
-//						void *context),
-//				bool (*inclWalker) (CopyMapRelEntry *entry, CopyMapEntry *attr,
-//						AttrInclusions *incl, void *context))
-//{
-//	CopyMapRelEntry *entry;
-//	CopyMapEntry *attr;
-//	AttrInclusions *incl;
-//	ListCell *lc;
-//	ListCell *attrLc;
-//	ListCell *inclLc;
-//
-//	foreach(lc, entries)
-//	{
-//		entry = (CopyMapRelEntry *) lfirst(lc);
-//
-//		/* if a relWalker is given apply it an skip the processing of its
-//		 * entries if it returns false.
-//		 */
-//		if (relWalker)
-//			if (!relWalker (entry, context))
-//				continue;
-//
-//		if (attrWalker)
-//		{
-//			foreach(attrLc, entry->attrEntries)
-//			{
-//				attr = (CopyMapEntry *) lfirst(attrLc);
-//
-//				if (attrWalker(entry, attr, attrContext))
-//				{
-//					if (inclWalker)
-//					{
-//						foreach(inclLc, attr->outAttrIncls)
-//						{
-//							incl = (AttrInclusions *) lfirst(inclLc);
-//							inclWalker(entry, attr, incl, inclContext);
-//						}
-//					}
-//				}
-//			}
-//		}
-//	}
-//}
-//
-///*
-// * Applies function to all InclusionCond's of an AttrInclusion.
-// */
-//
-//bool
-//inclusionCondWalker (AttrInclusions *incl,
-//		bool (*condWalker) (InclusionCond *cond, void *context), void *context)
-//{
-//	ListCell *lc;
-//	InclusionCond *cond;
-//
-//	foreach(lc, incl->inclConds)
-//	{
-//		cond = (InclusionCond *) lfirst(lc);
-//
-//		if (condWalker(cond, context))
-//			return true;
-//	}
-//
-//	return false;
-//}
-//
-///*
-// * Dummy walkers to allow processing of all subelements
-// */
-//
-//bool
-//dummyAttrWalker (CopyMapRelEntry *entry, CopyMapEntry *attr, void *context)
-//{
-//	return true;
-//}
+void
+adaptCopyMapForDummyRTERemoval (Query *query)
+{
+	CopyMapRelEntry *cur;
+	CopyMap *map;
+	CopyMapEntry *entry;
+	AttrInclusions *attrIncl, *innerAttr;
+	InclusionCond *cond, *innerCond;
+	ListCell *lc, *entryLc, *outLc, *condLc, *inCondLc;
+
+	map = GET_COPY_MAP(query);
+
+	foreach(lc, map->entries)
+	{
+		cur = (CopyMapRelEntry *) lfirst(lc);
+
+		// adapt attribute inclusion conditions
+		foreach(entryLc, cur->attrEntries)
+		{
+			entry = (CopyMapEntry *) lfirst(entryLc);
+
+			foreach(outLc, entry->outAttrIncls)
+			{
+				attrIncl = (AttrInclusions *) lfirst(outLc);
+
+				foreach(condLc, attrIncl->inclConds)
+				{
+					cond = (InclusionCond *) lfirst(condLc);
+
+					if(IsA(cond->existsAttr, AttrInclusions))
+					{
+						innerAttr = (AttrInclusions *) cond->existsAttr;
+
+						innerAttr->attr->varno -= 2;
+
+						foreach(inCondLc, innerAttr->inclConds)
+						{
+							Var *innerAttr;
+
+							innerCond = (InclusionCond *) lfirst(inCondLc);
+							innerAttr = (Var *) innerCond->existsAttr;
+							innerAttr->varno -= 2;
+						}
+					}
+				}
+			}
+		}
+
+		// substract 2 from the child rtindex
+		cur->child->rtindex -= 2;
+
+		// adapt out attrs of childr
+		foreach(entryLc, cur->child->attrEntries)
+		{
+			entry = (CopyMapEntry *) lfirst(entryLc);
+
+			foreach(outLc, entry->outAttrIncls)
+			{
+				attrIncl = (AttrInclusions *) lfirst(outLc);
+				attrIncl->attr->varno -= 2;
+			}
+		}
+	}
+}

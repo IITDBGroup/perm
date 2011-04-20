@@ -28,6 +28,7 @@
 #include "parser/parse_expr.h"
 #include "parser/parse_relation.h"
 #include "rewrite/rewriteDefine.h"
+#include "rewrite/rewriteHandler.h"
 #include "rewrite/rewriteManip.h"
 #include "rewrite/rewriteSupport.h"
 #include "utils/acl.h"
@@ -375,15 +376,25 @@ DefineView(ViewStmt *stmt, const char *queryString)
 	 * the code that actually creates the views relation and
 	 * rewrite rule.
 	 */
-	if (!prov_use_optimizer)
+	if (hasProvenanceSubqueryOrSublink(viewParse))
 	{
-		viewParse = provenanceRewriteQuery (viewParse);
-		//removeProvInfoNodes(viewParse); //TODO why causing error???
-	}
-	else
-	{
-		viewParse = generateCheapestPlanQuery (viewParse, 0, NULL); //CHECK ok, do we have the required lock, etc. if we are using optimizer
-		//removeProvInfoNodes(viewParse);
+		List *rewrites;
+
+		rewrites = QueryRewrite(viewParse);
+
+		if (list_length(rewrites) != 1)
+			ereport(ERROR,
+					(errcode(ERRCODE_SYNTAX_ERROR),
+					 errmsg("Applying rewrites to view definition resulted"
+							 " in more than one query")));
+
+		viewParse = (Query *) linitial(rewrites);
+
+		if (!prov_use_optimizer)
+			viewParse = provenanceRewriteQuery (viewParse);
+		else
+			viewParse = generateCheapestPlanQuery (viewParse, 0, NULL); //CHECK ok, do we have the required lock, etc. if we are using optimizer
+		removeProvInfoNodes(viewParse);
 	}
 
 	/*

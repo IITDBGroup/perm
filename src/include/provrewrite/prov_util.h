@@ -121,7 +121,7 @@ extern bool ignoreRTE(RangeTblEntry *rte);
 extern void setIgnoreRTE (RangeTblEntry *rte);
 extern void removeProvInfoNodes (Query *query);
 extern bool queryHasRewriteChildren (Query *query);
-extern bool hasProvenanceSubquery (Query *query);
+extern bool hasProvenanceSubqueryOrSublink (Query *query);
 extern List *addProvenanceAttrsForRange (Query *query, int min, int max,
 		List *pList);
 extern List *addProvenanceAttrs (Query *query, List *subList, List *pList);

@@ -239,17 +239,9 @@ getListAndReverse (List *stack, int numElem)
 
 	Assert(list_length(stack) >= numElem);
 
-	LOGDEBUG("gLaR    -- START");
-
 	result = NIL;
 	for (i = 0; i < numElem; i++)
-	{
 		result = lcons(list_nth(stack,i),result);
-	}
-
-	logPList(result);
-
-	logDebug("gLaR    -- FINISHED");
 
 	return result;
 }
@@ -541,35 +533,34 @@ replaceNth (List *list, void *newElem, int pos)
  */
 
 List *
-sortIntList (List **list, bool increasing)	//OPTIMIZE use more efficient sort method instead of bubble sort
+sortIntList (List **list, bool increasing)
 {
 	ListCell *lc;
-	int i, j, sortTemp;
-	bool switchElems;
+	int i;
+	size_t intSize = sizeof(int);
+	int numElem = list_length(*list);
+	int *arrayRep = palloc(intSize * numElem);
 
-	for (i = 0; i < list_length(*list); i++)
+	/* generate an array representation of the list */
+	foreachi(lc, i, *list)
+		arrayRep[i] = lfirst_int(lc);
+
+	/* sort with qsort */
+	qsort((void *) arrayRep, numElem, sizeof(int), compareInt);
+
+	/* change list to increasing or decreasing order */
+	if (increasing)
 	{
-		lc = (*list)->head;
-		for (j = 0; j < list_length(*list) - 1; j++)
-		{
-			if (increasing)
-			{
-				switchElems = lfirst_int(lc) > lfirst_int(lc->next);
-			}
-			else
-			{
-				switchElems = lfirst_int(lc) < lfirst_int(lc->next);
-			}
-
-			if (switchElems)
-			{
-				sortTemp = lfirst_int(lc);
-				lfirst_int(lc) = lfirst_int(lc->next);
-				lfirst_int(lc->next) = sortTemp;
-			}
-			lc = lc->next;
-		}
+		foreachi(lc, i, *list)
+			lfirst_int(lc) = arrayRep[i];
 	}
+	else
+	{
+		foreachi(lc, i, *list)
+			lfirst_int(lc) = arrayRep[numElem - 1 - i];
+	}
+
+	pfree(arrayRep);
 
 	return *list;
 }
@@ -579,33 +570,35 @@ sortIntList (List **list, bool increasing)	//OPTIMIZE use more efficient sort me
  */
 
 List *
-sortList (List **list, int (*compare) (void *left, void *right), bool increasing)
+sortList (List **list, int (*compare) (const void *left, const void *right),
+		bool increasing)
 {
 	ListCell *lc;
-	int i,j;
-	void *sortTemp;
-	int comparison, factor;
+	int i;
+	size_t pointerSize = sizeof(void *);
+	int numElem = list_length(*list);
+	void **arrayRep = palloc(pointerSize * numElem);
 
-	factor = increasing ? 1 : -1;
+	/* copy the pointers to an array */
+	foreachi(lc, i, *list)
+		arrayRep[i] = lfirst(lc);
 
-	for (i = 0; i < list_length(*list); i++)
+	/* sort the array in increasing order with qsort */
+	qsort((void *) arrayRep, numElem, pointerSize, compare);
+
+	/* create a list from the ordered array */
+	if (increasing)
 	{
-		lc = (*list)->head;
-
-		for(j = 0; j < list_length(*list) - 1; j++)
-		{
-			comparison = compare (lfirst(lc), lfirst(lc->next)) * factor;
-
-			if (comparison == 1)
-			{
-				sortTemp = lfirst(lc);
-				lfirst(lc) = lfirst(lc->next);
-				lfirst(lc->next) = sortTemp;
-			}
-
-			lc = lc->next;
-		}
+		foreachi(lc, i, *list)
+			lfirst(lc) = arrayRep[i];
 	}
+	else
+	{
+		foreachi(lc, i, *list)
+			lfirst(lc) = arrayRep[numElem - 1 - i];
+	}
+
+	pfree(arrayRep);
 
 	return *list;
 }
@@ -615,13 +608,13 @@ sortList (List **list, int (*compare) (void *left, void *right), bool increasing
  */
 
 int
-compareVars (void *left, void *right)
+compareVars (const void *left, const void *right)
 {
 	Var *l;
 	Var *r;
 
-	l = (Var *) left;
-	r = (Var *) right;
+	l = *((Var **) left);
+	r = *((Var **) right);
 
 	if (l->varattno < r->varattno)
 		return -1;
@@ -635,13 +628,13 @@ compareVars (void *left, void *right)
  */
 
 int
-compareTeOnRessortgroupref (void *left, void *right)
+compareTeOnRessortgroupref (const void *left, const void *right)
 {
 	TargetEntry *l;
 	TargetEntry *r;
 
-	l = (TargetEntry *) left;
-	r = (TargetEntry *) right;
+	l = *((TargetEntry **) left);
+	r = *((TargetEntry **) right);
 
 	if (l->ressortgroupref < r->ressortgroupref)
 		return -1;
@@ -655,17 +648,34 @@ compareTeOnRessortgroupref (void *left, void *right)
  */
 
 int
-compareCopyMapRelEntryOnRtindex (void *left, void *right)
+compareCopyMapRelEntryOnRtindex (const void *left, const void *right)
 {
 	CopyMapRelEntry *l;
 	CopyMapRelEntry *r;
 
-	l = (CopyMapRelEntry *) left;
-	r = (CopyMapRelEntry *) right;
+	l = *((CopyMapRelEntry **) left);
+	r = *((CopyMapRelEntry **) right);
 
 	if (l->rtindex < r->rtindex)
 		return -1;
 	else if (l->rtindex > r->rtindex)
+		return 1;
+	return 0;
+}
+
+/*
+ * Compare two integer values.
+ */
+
+int
+compareInt (const void *left, const void *right)
+{
+	int l = *((int *) left);
+	int r = *((int *) right);
+
+	if (l < r)
+		return -1;
+	if (r > l)
 		return 1;
 	return 0;
 }
@@ -682,7 +692,7 @@ reverseList (List *list)
 
 	result = NIL;
 
-	foreach(lc, result)
+	foreach(lc, list)
 	{
 		result = lcons(lfirst(lc), result);
 	}
@@ -739,9 +749,7 @@ generateDuplicatesList (void *elem, int count)
 	result = NIL;
 
 	for(i = 0; i < count; i++)
-	{
 		result = lappend(result, elem);
-	}
 
 	return result;
 }
@@ -758,9 +766,7 @@ listNthFirstInts (int numElems, int offset)
 	result = NIL;
 
 	while(numElems-- > 0)
-	{
 		result = lcons_int(numElems + offset, result);
-	}
 
 	return result;
 }

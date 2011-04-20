@@ -16,11 +16,15 @@
  */
 
 #include "postgres.h"
+
+#include "access/htup.h"
+#include "catalog/pg_type.h"
 #include "nodes/makefuncs.h"			// needed to create new nodes
 #include "parser/parsetree.h"
 #include "parser/parse_expr.h"
 #include "parser/parse_relation.h"
 #include "parser/parse_oper.h"
+
 #include "provrewrite/provrewrite.h"
 #include "provrewrite/prov_spj.h"
 #include "provrewrite/prov_util.h"
@@ -248,12 +252,16 @@ void rewriteRTEwithProvenance (int rtindex, RangeTblEntry *rte)
 	List *pList;
 	TargetEntry *te;
 	Var * attrVar;
+	char *attrName;
+	bool isProvResult = false;
 
 	pList = NIL;
 
 	/* create Var nodes for all attributes of the RTE */
 	if (rte->rtekind == RTE_SUBQUERY)
 	{
+		isProvResult = ContributionType(rte->subquery) != CONTR_NONE;
+
 		/* if the RTE subquery is a provenance query we rewrite this query and
 		 * return */
 		if (IsProvRewrite(rte->subquery))
@@ -279,13 +287,27 @@ void rewriteRTEwithProvenance (int rtindex, RangeTblEntry *rte)
 		}
 	}
 	else if (rte->rtekind == RTE_RELATION)
+	{
 		expandRTEWithParam(rte, rtindex, 0, false, false, &names, &vars);
+
+		/* check if provAttrs mentions Oid. If so add oid attr */
+		foreach(lc, rte->provAttrs)
+		{
+			provattr = (Value *) lfirst(lc);
+
+			if (strcmp(strVal(provattr),"oid") == 0)
+			{
+				attr = makeString("oid");
+				names = lcons(attr, names);
+				attrVar = makeVar(rtindex, ObjectIdAttributeNumber, OIDOID, -1, 0);
+				vars = lcons(attrVar, vars);
+			}
+		}
+	}
 	else
 		elog(ERROR,
 				"PROVENANCE construct in FROM clause is only allowed"
 				"for base relations and subqueries");
-
-
 
 	/* walk through provAttrs and find correspoding var */
 	foreach(lc, rte->provAttrs)
@@ -298,11 +320,15 @@ void rewriteRTEwithProvenance (int rtindex, RangeTblEntry *rte)
 			attr = (Value *) lfirst(name);
 			attrVar = (Var *) lfirst(var);
 
-			if (strcmp(attr->val.str, provattr->val.str) == 0)
+			if (strcmp(strVal(attr), strVal(provattr)) == 0)
 			{
 				found = true;
+				if (isProvResult)
+					attrName = attr->val.str;
+				else
+					attrName = createExternalProvAttrName(attr->val.str);
 				te = makeTargetEntry((Expr *) attrVar, attrVar->varattno,
-						createExternalProvAttrName(attr->val.str), false);
+						attrName, false);
 				pList = lappend(pList, te);
 			}
 		}

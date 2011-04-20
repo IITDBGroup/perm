@@ -16,6 +16,8 @@
 #include "nodes/parsenodes.h"
 
 extern Query *rewriteSetQuery (Query *query);
+extern void replaceSetOperationSubTrees (Query *query, Node *node,
+		Node **parentPointer, SetOperation rootType);
 extern void removeDummyRewriterRTEs (Query *query);
 extern void createSetJoinCondition (Query *query, JoinExpr *join, Index leftIndex, Index rightIndex, bool neq);
 extern void findSetOpRTEs (List *rtable, Node *setTreeNode, List **rtes, List **rtindex);

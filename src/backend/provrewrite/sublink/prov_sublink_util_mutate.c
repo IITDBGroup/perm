@@ -35,7 +35,7 @@
 #include "provrewrite/prov_sublink_util_mutate.h"
 
 /* Static methods */
-static int compareSublinkInfos (void *left, void *right);
+static int compareSublinkInfos (const void *left, const void *right);
 
 /*
  * Replaces the Param nodes in a sublink test-expression with Var nodes referencing the
@@ -224,13 +224,13 @@ sortSublinkInfos (List **sublinks)
  */
 
 static int
-compareSublinkInfos (void *left, void *right)
+compareSublinkInfos (const void *left, const void *right)
 {
         SublinkInfo *l;
         SublinkInfo *r;
 
-        l = (SublinkInfo *) left;
-        r = (SublinkInfo *) right;
+        l = *((SublinkInfo **) left);
+        r = *((SublinkInfo **) right);
 
         if (l->sublinkPos < r->sublinkPos)
                 return -1;

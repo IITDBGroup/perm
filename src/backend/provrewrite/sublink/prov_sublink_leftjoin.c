@@ -29,7 +29,8 @@
 
 /* prototypes */
 static Index addLeftJoinWithRewrittenSublink (Query *query, SublinkInfo *info);
-static void createJoinCondition (Query *query, SublinkInfo *info, bool isTargetRewrite);
+static void createJoinCondition (Query *query, SublinkInfo *info,
+		bool isTargetRewrite);
 static Node *generateCsub (SublinkInfo *info);
 static Node *generateCsubPlus (SublinkInfo *info, Index rtIndex);
 
@@ -38,7 +39,7 @@ static Node *generateCsubPlus (SublinkInfo *info, Index rtIndex);
  */
 
 Query *
-rewriteSublinkUsingLeftJoin (Query *query, SublinkInfo *info, Index subList[])
+rewriteSublinkUsingLeftJoin (Query *query, SublinkInfo *info, Index *subList)
 {
 	Query *rewrittenSublink;
 	Index subIndex;
@@ -61,12 +62,15 @@ rewriteSublinkUsingLeftJoin (Query *query, SublinkInfo *info, Index subList[])
 }
 
 /*
- *	Rewrites a sublink by joining the original query with the rewritten sublink query. This method is called by the Move strategy and expects that
- *	the sublink to be rewritten is located in the target list of "query". the left join is added to newTop (which has
+ *	Rewrites a sublink by joining the original query with the rewritten sublink
+ *	query. This method is called by the Move strategy and expects that the
+ *	sublink to be rewritten is located in the target list of "query". the left
+ *	join is added to newTop (which has
  */
 
 Query *
-rewriteTargetSublinkUsingLeftJoin (Query *newTop, Query *query, SublinkInfo *info, Index subList[])
+rewriteTargetSublinkUsingLeftJoin (Query *newTop, Query *query,
+		SublinkInfo *info, Index *subList)
 {
 	Query *rewrittenSublink;
 	Index subIndex;

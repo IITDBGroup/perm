@@ -66,6 +66,60 @@ getSublinkBaseRelations(Query *query)
 }
 
 /*
+ * Checks if a sublink in a query has provenance queries.
+ */
+
+bool
+hasProvenanceSublink (Query *query) {
+	List *sublinks = NIL;
+	SubLink *sublink;
+	ListCell *lc;
+
+	if (!query->hasSubLinks)
+		return false;
+
+	findExprSublinkWalker((Node *) query->jointree, &sublinks);
+	findExprSublinkWalker((Node *) query->targetList, &sublinks);
+	findExprSublinkWalker((Node *) query->havingQual, &sublinks);
+
+	foreach(lc, sublinks)
+	{
+		sublink = (SubLink *) lfirst(lc);
+
+		if (hasProvenanceSubqueryOrSublink((Query *) sublink->subselect))
+			return true;
+	}
+
+	return false;
+}
+
+/*
+ *
+ */
+
+List *
+getProvSublinks (Query *query) {
+	List *sublinks = NIL;
+	List *pSublinks = NIL;
+	ListCell *lc;
+	SubLink *sublink;
+
+	findExprSublinkWalker((Node *) query->jointree, &sublinks);
+	findExprSublinkWalker((Node *) query->targetList, &sublinks);
+	findExprSublinkWalker((Node *) query->havingQual, &sublinks);
+
+	foreach(lc, sublinks)
+	{
+		sublink = (SubLink *) lfirst(lc);
+
+		if (hasProvenanceSubqueryOrSublink((Query *) sublink->subselect))
+			pSublinks = lappend(pSublinks, sublink);
+	}
+
+	return pSublinks;
+}
+
+/*
  * expression walker used to find sublinks. All sublinks that are found are
  * appended to the context list.
  */
@@ -317,6 +371,8 @@ findSublevelsUpVarWalker(Node *node, GetCorrelatedVarsWalkerContext *context)
 	newContext->location = context->location;
 	newContext->parent = node;
 	newContext->realLevelsUp = list_copy(context->realLevelsUp);
+	newContext->belowAgg = context->belowAgg;
+	newContext->belowSet = context->belowSet;
 
 	// check for var nodes with sublevelsup
 	if (IsA(node, Var))

@@ -18,6 +18,7 @@
 #include "provrewrite/prov_sublink_util_mutate.h"
 #include "provrewrite/prov_sublink_util_analyze.h"
 
-extern void rewriteSublinkWithCorrelationToBase (Query *query, SublinkInfo *info, Index subList[]);
+extern void rewriteSublinkWithCorrelationToBase (Query *query,
+		SublinkInfo *info, Index *subList);
 
 #endif /*PROV_SUBLINK_KEEPCOR_H_*/
