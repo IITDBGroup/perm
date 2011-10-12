@@ -20,4 +20,4 @@ SUBSYS.o: $(OBJS)
 	$(LD) $(LDREL) $(LDOUT) SUBSYS.o $(OBJS)
 
 clean:
-	rm -f SUBSYS.o
+	rm -f SUBSYS.o $(OBJS)
