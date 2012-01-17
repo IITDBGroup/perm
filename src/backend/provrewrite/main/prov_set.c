@@ -276,7 +276,6 @@ removeDummyRewriterRTEs (Query *query)
 	ListCell *lc;
 	TargetEntry *te;
 	Var *var;
-	bool isCopy;
 
 	/* check if first range table entry is a dummy entry */
 	rte = (RangeTblEntry *) linitial (query->rtable);

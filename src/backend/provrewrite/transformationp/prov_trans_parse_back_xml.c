@@ -645,7 +645,15 @@ parseBackAgg(Query *query, OUTPARAMS)
 {
 	TransProjType type;
 	bool underHaving = false;
-	OUTFUNC_HEADER;
+	StringInfo str;
+	TransSubInfo *newSub;
+	TransParseRange *range;
+	bool isRoot;
+
+	str = context->buf;
+	newSub = ((void *)0);
+	isRoot = (!curSub || !info) ? ((bool) 0) :
+			(equal(info->root, curSub) ? ((bool) 1) : ((bool) 0));
 
 	/* get agg type */
 	if (context->transProv)
@@ -1999,7 +2007,6 @@ parseBackSublink(SubLink *sublink, ParseXMLContext *context,
 	char *verbName = NULL;
 	Node *outerInput;
 	StringInfo str = context->buf;
-	int indendHelper;
 
 	/*
 	 * Note that we print the name of only the first operator, when there are
@@ -2115,7 +2122,6 @@ parseBackOpExpr(OpExpr *op, ParseXMLContext *context, TransProjType projType,
 	char *opName;
 	char *verbName;
 	Node *arg1, *arg2;
-	int indendHelper;
 
 	if (list_length(args) == 2)
 	{

@@ -688,7 +688,7 @@ extern bool provNodesEquals(void *a, void *b);
 
 #define DO_SET_TRANS_INFO(query) \
 	do { \
-		SET_TRANS_INFO(query); \
+		TransProvInfo *dummy = SET_TRANS_INFO(query); \
 	} while (0)
 
 #define SET_TRANS_INFO_TO(query,newInfo) \

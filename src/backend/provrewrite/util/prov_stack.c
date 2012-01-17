@@ -276,9 +276,7 @@ popListAndReverse (List **stack, int numElem)
 
 	result = NIL;
 	for (i = 0; i < numElem; i++)
-	{
 		result = lcons(pop(stack),result);
-	}
 
 	logPList(result);
 

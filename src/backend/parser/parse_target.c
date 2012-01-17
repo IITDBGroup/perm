@@ -231,16 +231,16 @@ transformExpressionList(ParseState *pstate, List *exprlist)
 void
 markTargetListOrigins(ParseState *pstate, List *targetlist)
 {
-	ListCell   *l;
-	
-	foreach(l, targetlist)
-	{
-		TargetEntry *tle = (TargetEntry *) lfirst(l);
-
-		//CHANGED don't mark provenance TEs because we might not know the varno of a provenance TE should be ok with new approach
-		/*if (strncmp(tle->resname, "prov_", 5) != 0)
-			markTargetListOrigin(pstate, tle, (Var *) tle->expr, 0);*/
-	}
+//	ListCell   *l;
+//
+//	foreach(l, targetlist)
+//	{
+//		TargetEntry *tle = (TargetEntry *) lfirst(l);
+//
+//		//CHANGED don't mark provenance TEs because we might not know the varno of a provenance TE should be ok with new approach
+//		/*if (strncmp(tle->resname, "prov_", 5) != 0) */
+//			markTargetListOrigin(pstate, tle, (Var *) tle->expr, 0);
+//	}
 }
 
 /*

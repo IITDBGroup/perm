@@ -16,6 +16,7 @@
 #include "nodes/parsenodes.h"
 #include "lib/stringinfo.h"
 #include "nodes/plannodes.h"
+#include "provrewrite/prov_parse_back_replace_unnamed.h"
 
 /* data types */
 /*
@@ -64,7 +65,6 @@ extern char *generate_operator_name(Oid operid, Oid arg1, Oid arg2);
 extern char *generate_relation_name(Oid relid);
 extern const char *get_simple_binary_op_name(OpExpr *expr);
 extern bool isSimpleNode(Node *node, Node *parentNode, int prettyFlags);
-extern bool replaceUnnamedColumnsWalker (Node *node, void *context);
 extern RangeTblEntry *find_rte_by_refname(const char *refname, List *namespaces);
 
 #endif /* PROV_PARSE_BACK_UTIL_H_ */

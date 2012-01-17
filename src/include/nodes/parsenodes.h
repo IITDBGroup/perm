@@ -1884,6 +1884,7 @@ typedef struct ExplainStmt
 	bool		graph;			/* output query graph as dot commandos instead of plan */
 	bool		generateSQL; 	/* output the rewritten query as SQL text */
 	bool		generateDB2SQL;	/* output the rewritten query as SQL text in DB2 dialect */
+	bool	    generateOracleSQL; /* output the rewritten query as SQL text in Oracle dialect */
 } ExplainStmt;
 
 /* ----------------------

@@ -2651,24 +2651,24 @@ _outInclusionCond(StringInfo str, InclusionCond *node, int depth)
 	WRITE_NODE_END("INCLUSIONCOND");
 }
 
-static void
-_outVarLenghtIntArray (StringInfo str, int *array, int numMembers) //CHECK remove
-{
-	int i;
-
-	if(array == NULL || numMembers == 0)
-	{
-		appendStringInfo(str, "[]");
-		return;
-	}
-
-	appendStringInfo(str, "[");
-	for(i = 0; i < numMembers - 1; i++)
-	{
-		appendStringInfo(str, "%i ,", array[i]);
-	}
-	appendStringInfo (str, "%i]", array[numMembers - 1]);
-}
+//static void
+//_outVarLenghtIntArray (StringInfo str, int *array, int numMembers) //CHECK remove
+//{
+//	int i;
+//
+//	if(array == NULL || numMembers == 0)
+//	{
+//		appendStringInfo(str, "[]");
+//		return;
+//	}
+//
+//	appendStringInfo(str, "[");
+//	for(i = 0; i < numMembers - 1; i++)
+//	{
+//		appendStringInfo(str, "%i ,", array[i]);
+//	}
+//	appendStringInfo (str, "%i]", array[numMembers - 1]);
+//}
 
 
 /*
