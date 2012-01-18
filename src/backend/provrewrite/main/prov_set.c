@@ -46,6 +46,7 @@
 #include "provrewrite/prov_copy_map.h"
 
 /* Function declarations */
+static void resetOldVarNoAndAttrno (List *tlist);
 static void addSetSubqueryRTEs (Query *top, Query *orig);
 static void createNullSetDiffProvAttrs(Query *newTop, Query *query,
 		List **pList);
@@ -113,6 +114,7 @@ rewriteSetQuery (Query * query)
 	newTop = makeQuery();
 	addSetSubqueryRTEs(newTop, query);
 	newTop->targetList = copyObject(query->targetList);
+	resetOldVarNoAndAttrno(newTop->targetList);
 	newTop->intoClause = copyObject(query->intoClause);
 	SetSublinkRewritten(newTop, true);
 
@@ -132,10 +134,16 @@ rewriteSetQuery (Query * query)
 	createJoinsForSetOp (newTop, ((SetOperationStmt *) query->setOperations)->op);
 
 	/* add provenance attributes from the subqueries to the top query target list */
-	pList = addProvenanceAttrsForRange (newTop, 2, 2 + numSubs, pList);
+	if (!prov_use_wl_union_semantics &&  ((SetOperationStmt *)
+			query->setOperations)->op == SETOP_EXCEPT)
+		pList = addProvenanceAttrs (newTop, createIntList(2,numSubs,1), pList, false);
+	else
+		pList = addProvenanceAttrs (newTop, createIntList(2,numSubs,2), pList, false);
+
 	if (prov_use_wl_union_semantics && ((SetOperationStmt *)
 			query->setOperations)->op == SETOP_EXCEPT)
 		createNullSetDiffProvAttrs(newTop, query, &pList);
+
 	push(&pStack, pList);
 
 	/* increase sublevelsup of vars in case we are rewriting in an sublink query */
@@ -145,6 +153,28 @@ rewriteSetQuery (Query * query)
 	pfree(context);
 
 	return newTop;
+}
+
+/*
+ * Walk through a target list of a set operation (simple Vars) and reset the
+ * varnoold and varoattno.
+ */
+
+static void
+resetOldVarNoAndAttrno (List *tlist)
+{
+	TargetEntry *te;
+	Var *var;
+	ListCell *lc;
+
+	foreach(lc, tlist) {
+		te = (TargetEntry *) lfirst(lc);
+		Assert(IsA(te->expr, Var));
+		var = (Var *) te->expr;
+
+		var->varnoold = var->varno;
+		var->varoattno = var->varattno;
+	}
 }
 
 /*
@@ -521,10 +551,14 @@ static void
 createJoinsForSetOp (Query *query, SetOperation setType)
 {
 	RangeTblRef *rtRef;
+	RangeTblEntry *rte;
 	Node *curJoin;
+	List *todo;
+	ListCell *lc;
 	JoinExpr *newJoin;
 	JoinType joinType;
-	int i, rtableLength, origRtableLength;
+	int rtableLength;
+//	int i, origRtableLength;
 
 	/* define join type to use in join expression */
 	switch (setType)
@@ -547,8 +581,12 @@ createJoinsForSetOp (Query *query, SetOperation setType)
 		break;
 	}
 
+	/* set original rtable to first two item and todo list to the remainder */
+	todo = list_copy(query->rtable);
+	todo = list_delete_first(list_delete_first(todo));
+	query->rtable = list_truncate(query->rtable, 2);
+
 	/* create the leaf join */
-	origRtableLength = list_length(query->rtable);
 	rtableLength = list_length(query->rtable);
 
 	newJoin = (JoinExpr *) makeNode(JoinExpr);
@@ -557,7 +595,6 @@ createJoinsForSetOp (Query *query, SetOperation setType)
 
 	MAKE_RTREF(rtRef, 1);
 	newJoin->larg = (Node *) rtRef;
-
 	MAKE_RTREF(rtRef, 2);
 	newJoin->rarg = (Node *) rtRef;
 
@@ -565,32 +602,77 @@ createJoinsForSetOp (Query *query, SetOperation setType)
 	createSetJoinCondition (query, newJoin, 0, 1, false);
 	curJoin = (Node *) newJoin;
 
-
-	/* add a join for each range table entry */
-	for (i = 2; i < origRtableLength ;i++)
+	/* create the joins with each rewritten set operation input */
+	foreach(lc, todo)
 	{
-		/* create a new join expression and add join expression created in last step
-		 * as right child. Left child is the current range table entry
-		 */
+		rte = (RangeTblEntry *) lfirst(lc);
+		query->rtable = lappend(query->rtable, rte);
+		rtableLength = list_length(query->rtable);
+
 		newJoin = (JoinExpr *) makeNode(JoinExpr);
 		newJoin->jointype = joinType;
-		newJoin->rtindex = rtableLength + 2;
-
+		newJoin->rtindex = rtableLength + 1;
 		newJoin->larg = curJoin;
 
-		MAKE_RTREF(rtRef,i + 1);
+		MAKE_RTREF(rtRef, rtableLength);
 		newJoin->rarg = (Node *) rtRef;
 
 		/* create join range table entry */
-		createRTEforJoin(query, newJoin, rtableLength, i);
+		createRTEforJoin(query, newJoin, rtableLength - 2, rtableLength - 1);
 
 		/* create join condition */
-		createSetJoinCondition (query, newJoin, 0, i, false);
+		createSetJoinCondition (query, newJoin, 0, rtableLength - 1, false);
 
 		/* create join range table entry */
 		curJoin = (Node *) newJoin;
-		rtableLength++;
 	}
+
+	list_free(todo);
+
+//	/* create the leaf join */
+//	origRtableLength = list_length(query->rtable);
+//	rtableLength = list_length(query->rtable);
+//
+//	newJoin = (JoinExpr *) makeNode(JoinExpr);
+//	newJoin->rtindex = rtableLength + 1;
+//	newJoin->jointype = joinType;
+//
+//	MAKE_RTREF(rtRef, 1);
+//	newJoin->larg = (Node *) rtRef;
+//
+//	MAKE_RTREF(rtRef, 2);
+//	newJoin->rarg = (Node *) rtRef;
+//
+//	createRTEforJoin(query, newJoin, 0, 1);
+//	createSetJoinCondition (query, newJoin, 0, 1, false);
+//	curJoin = (Node *) newJoin;
+//
+//
+//	/* add a join for each range table entry */
+//	for (i = 2; i < origRtableLength ;i++)
+//	{
+//		/* create a new join expression and add join expression created in last step
+//		 * as right child. Left child is the current range table entry
+//		 */
+//		newJoin = (JoinExpr *) makeNode(JoinExpr);
+//		newJoin->jointype = joinType;
+//		newJoin->rtindex = rtableLength + 2;
+//
+//		newJoin->larg = curJoin;
+//
+//		MAKE_RTREF(rtRef,i + 1);
+//		newJoin->rarg = (Node *) rtRef;
+//
+//		/* create join range table entry */
+//		createRTEforJoin(query, newJoin, rtableLength, i);
+//
+//		/* create join condition */
+//		createSetJoinCondition (query, newJoin, 0, i, false);
+//
+//		/* create join range table entry */
+//		curJoin = (Node *) newJoin;
+//		rtableLength++;
+//	}
 
 	/* set top level join as jointree of top query */
 	query->jointree->fromlist = list_make1(curJoin);
@@ -736,7 +818,7 @@ createRTEforJoin (Query *query, JoinExpr *join, Index leftIndex, Index rightInde
 	newRte->alias = NULL;
 	newRte->eref->aliasname = pstrdup("unnamed_join");
 	newRte->jointype = join->jointype;
-
+	newRte->requiredPerms = ACL_NO_RIGHTS;
 	/* add join var aliases for left */
 	rte = (RangeTblEntry *) list_nth(query->rtable, leftIndex);
 	makeRTEVars (rte, newRte, leftIndex);

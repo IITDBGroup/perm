@@ -96,11 +96,9 @@ addProvenanceAttrsForRange (Query *query, int min, int max, List *pList)
 
 	subList = NIL;
 	for(i = min; i < max; i++)
-	{
 		subList = lappend_int(subList, i);
-	}
 
-	return addProvenanceAttrs (query, subList, pList);
+	return addProvenanceAttrs (query, subList, pList, true);
 }
 
 /*
@@ -110,7 +108,7 @@ addProvenanceAttrsForRange (Query *query, int min, int max, List *pList)
  */
 
 List *
-addProvenanceAttrs (Query *query, List *subList, List *pList)
+addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
 {
 	ListCell *subqLc;
 	ListCell *pTeLc;
@@ -151,7 +149,8 @@ addProvenanceAttrs (Query *query, List *subList, List *pList)
 			newTe = makeTargetEntry(expr, curResno, te->resname, false);
 
 			/* adapt varno und varattno if referenced rte is used in a join-RTE */
-			getRTindexForProvTE (query, (Var *) expr);
+			if (adaptToJoins)
+				getRTindexForProvTE (query, (Var *) expr);
 
 			/* append to targetList and pList */
 			targetList = lappend (targetList, newTe);

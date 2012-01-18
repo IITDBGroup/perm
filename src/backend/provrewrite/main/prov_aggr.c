@@ -123,7 +123,7 @@ rewriteAggregateQuery (Query *query)
 	adaptRTEsForJoins(list_make1(linitial(newTopQuery->jointree->fromlist)), newTopQuery, "joinAggAndRewrite");
 
 	/* add provenance attributes of sub queries to targetlist */
-	pList = addProvenanceAttrs (newTopQuery, list_make1_int (2), pList);
+	pList = addProvenanceAttrs (newTopQuery, list_make1_int (2), pList, true);
 
 
 	/* push list of provenance attributes to pStack */

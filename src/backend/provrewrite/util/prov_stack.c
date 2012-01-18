@@ -792,6 +792,21 @@ listNthFirstInts (int numElems, int offset)
 	return result;
 }
 
+/*
+ * Create a list of integers of length "length" starting with "start", using increment "incr".
+ */
+
+List *
+createIntList (int start, int length, int incr)
+{
+	List *result = NIL;
+
+	for (; length > 0; length--, start += incr)
+		result = lappend_int(result, start);
+
+	return result;
+}
+
 
 /*
  * Appends the name of a rewrite strategy used during a rewrite. This is used by explain to output the
