@@ -1129,7 +1129,7 @@ static struct config_bool ConfigureNamesBool[] =
 						 "For target list sublinks the left join rewrite method is more efficient."),
 		},
 		&prov_use_sublink_move_to_target,
-		true, NULL, NULL
+		false, NULL, NULL
 	},
 
 	{
@@ -1195,7 +1195,7 @@ static struct config_bool ConfigureNamesBool[] =
 					"of (t,r,s)"),
 		},
 		&prov_use_wl_union_semantics,
-		false, NULL, NULL
+		true, NULL, NULL
 	},
 
 
