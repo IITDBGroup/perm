@@ -355,7 +355,7 @@ createNewBottomQueryForSublinks (Query *query, List *infos)
 		expr = (Node *) lfirst(lc);
 
 		te = makeTargetEntry ((Expr *) copyObject(expr), resno,
-				appendIdToString("newAggExprTarget", &curUniqueAttrNum), false);
+				appendIdToStringPP("newAggExprTarget", &curUniqueAttrNum), false);
 
 		query->targetList = lappend(query->targetList, te);
 		resno++;
@@ -366,7 +366,7 @@ createNewBottomQueryForSublinks (Query *query, List *infos)
 
 	/* add query to newBottom range table */
 	addSubqueryToRT (newBottom, query,
-			appendIdToString(
+			appendIdToStringPP(
 					"outsourced_aggregation_inputs_and_group_by_expressions",
 					&curUniqueRelNum));
 
@@ -377,7 +377,7 @@ createNewBottomQueryForSublinks (Query *query, List *infos)
 	correctSubQueryAlias(newBottom);
 
 	/* log rewritten query */
-	LOGNODE(newBottom,appendIdToString("new bottom for aggregation",
+	LOGNODE(newBottom,appendIdToStringPP("new bottom for aggregation",
 			&curUniqueRelNum));
 
 	return newBottom;
@@ -473,7 +473,7 @@ createNewTopQueryForSublinks (Query *query, List *infos)
 	newTop->jointree->fromlist = list_make1(rtRef);
 
 	/* add range table entry for aggregation query */
-	alias = makeAlias(appendIdToString("aggregation_query", &curUniqueRelNum),
+	alias = makeAlias(appendIdToStringPP("aggregation_query", &curUniqueRelNum),
 			NIL);
 	rte = addRangeTableEntryForSubquery(NULL, query, alias, true);
 
@@ -623,7 +623,7 @@ createTargetEntriesForNewAgg (Query *query, List *aggsAndVars)
 			 * copy the */
 
 			te = makeTargetEntry((Expr *) node, resno,
-					appendIdToString("newAggAttr", &curUniqueAttrNum) , false);
+					appendIdToStringPP("newAggAttr", &curUniqueAttrNum) , false);
 
 			/* is group by expr, then create groupClause */
 			if (IsA(node, Var))

@@ -21,7 +21,8 @@ extern List *pStack;
 extern List *rewriteMethodStack;
 
 /* prototypes */
-extern char *appendIdToString (char *string, int *id);
+extern char *appendIdToStringPP (char *string, int *id);
+extern char *appendIdToString (char *string, int id);
 extern void deactiveBaseRelStack (void);
 extern void resetUniqueNameGens (void);
 

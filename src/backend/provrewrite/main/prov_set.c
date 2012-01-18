@@ -117,7 +117,7 @@ rewriteSetQuery (Query * query)
 	SetSublinkRewritten(newTop, true);
 
 	/* add original query as first range table entry */
-	addSubqueryToRTWithParam (newTop, orig, "originalSet", false, ACL_NO_RIGHTS, false);
+	addSubqueryToRTWithParam (newTop, orig, "originalSet", true, ACL_NO_RIGHTS, false);
 
 	/* rewrite the subqueries used in the set operation */
 	rewriteSetRTEs (newTop);
@@ -505,6 +505,8 @@ rewriteSetRTEs (Query *newTop)
 		rte = (RangeTblEntry *) lfirst(lc);
 		query = rewriteQueryNode (rte->subquery);
 		rte->subquery = query;
+		rte->inFromCl = true;
+		rte->requiredPerms = ACL_SELECT;
 	}
 }
 
@@ -583,7 +585,7 @@ createJoinsForSetOp (Query *query, SetOperation setType)
 		createRTEforJoin(query, newJoin, rtableLength, i);
 
 		/* create join condition */
-		createSetJoinCondition (query, newJoin, rtableLength, i, false);
+		createSetJoinCondition (query, newJoin, 0, i, false);
 
 		/* create join range table entry */
 		curJoin = (Node *) newJoin;
@@ -645,7 +647,7 @@ createSetDiffJoin (Query *query)
 
 	createRTEforJoin(query, outerJoin, 3, 2);
 	if (all)
-		createSetJoinCondition (query, outerJoin, 3, 2, true);
+		createSetJoinCondition (query, outerJoin, 0, 2, true);
 	else
 		outerJoin->quals =  (Node *) makeBoolConst(true, false);
 
@@ -731,9 +733,9 @@ createRTEforJoin (Query *query, JoinExpr *join, Index leftIndex, Index rightInde
 
 	/* create new RTE */
 	newRte = makeRte (RTE_JOIN);
+	newRte->alias = NULL;
+	newRte->eref->aliasname = pstrdup("unnamed_join");
 	newRte->jointype = join->jointype;
-	newRte->alias->aliasname = "LEFT_JOIN_RIGHT";
-	newRte->eref->aliasname = "LEFT_JOIN_RIGHT";
 
 	/* add join var aliases for left */
 	rte = (RangeTblEntry *) list_nth(query->rtable, leftIndex);

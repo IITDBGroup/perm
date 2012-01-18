@@ -110,7 +110,7 @@ addLeftJoinWithRewrittenSublink (Query *query, SublinkInfo *info)
 	Index sublinkIndex;
 
 	/* add the rewritten sublink query to the queries range table */
-	addSubqueryToRT(query, info->rewrittenSublinkQuery, appendIdToString("rewrittenSublink", &curUniqueRelNum));
+	addSubqueryToRT(query, info->rewrittenSublinkQuery, appendIdToStringPP("rewrittenSublink", &curUniqueRelNum));
 	correctRTEAlias((RangeTblEntry *) lfirst(query->rtable->tail));
 
 	sublinkIndex = list_length(query->rtable);

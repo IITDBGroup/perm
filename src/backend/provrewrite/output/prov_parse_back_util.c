@@ -449,7 +449,7 @@ replaceUnnamedColumnsWalker (Node *node, void *context)
 		te = (TargetEntry *) node;
 
 		if (!te->resname || strcmp(te->resname, "?column?") == 0)
-			te->resname = appendIdToString("newcolumn", &curUniqueAttrNum);
+			te->resname = appendIdToStringPP("newcolumn", &curUniqueAttrNum);
 	}
 	else if (IsA(node, Query))
 	{

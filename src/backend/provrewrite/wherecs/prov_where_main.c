@@ -316,7 +316,7 @@ unionQueryList (List *queries, Query *outer)
 	foreach(lc, queries)
 	{
 		addSubqueryToRT(result, (Query *) lfirst(lc),
-				appendIdToString("DirectPropagator_",&i));
+				appendIdToStringPP("DirectPropagator_",&i));
 		rte = (RangeTblEntry *) llast(result->rtable);
 		correctRTEAlias(rte);
 	}
@@ -436,7 +436,7 @@ addAnnotationAttrs (Query *query, ListCell **setPointers, List *whereInfos,
 			expr = (Node *) makeNullConst(TEXTOID, -1);
 
 		annAttr = makeTargetEntry((Expr *) expr, ++curResno,
-				appendIdToString("ann_attr", &i), false);
+				appendIdToStringPP("ann_attr", &i), false);
 
 		query->targetList = lappend(query->targetList, annAttr);
 

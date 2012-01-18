@@ -287,7 +287,7 @@ getAllNormalRels (void)
 				heapRel = heap_open(rel, AccessShareLock);
 
 				rte = addRangeTableEntryForRelation(NULL, heapRel,
-						makeAlias(appendIdToString("auxrel", &relNum), NIL), false,
+						makeAlias(appendIdToStringPP("auxrel", &relNum), NIL), false,
 						true);
 
 				heap_close(heapRel, NoLock);
@@ -727,7 +727,7 @@ makeTeNamesUnique (Query *query)
 	{
 		te = (TargetEntry *) lfirst(lc);
 
-		te->resname = appendIdToString("orig_attr_", &i);
+		te->resname = appendIdToStringPP("orig_attr_", &i);
 		i++;
 	}
 }

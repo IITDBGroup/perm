@@ -124,7 +124,7 @@ rewriteTransSet (Query *query, Node **parent, RangeTblEntry *queryRte)
 	SetSublinkRewritten(newTop, true);
 
 	/* add original query as first range table entry */
-	addSubqueryToRTWithParam (newTop, orig, "originalSet", false,
+	addSubqueryToRTWithParam (newTop, orig, "originalSet", true,
 			ACL_NO_RIGHTS, false);
 
 	/* rewrite RTEs of query */
@@ -187,7 +187,7 @@ rewriteStaticSetOp (Query *query, Node **parentInfo)
 	TransProvInfo *info;
 
 	newTop = makeQuery();
-	addSubqueryToRT(newTop, query, appendIdToString("originalSet",
+	addSubqueryToRT(newTop, query, appendIdToStringPP("originalSet",
 			&curUniqueRelNum));
 	addSubqueryTargetListToTargetList(query, 1);
 

@@ -84,7 +84,7 @@ rewriteCopySetQuery (Query *query)
 	createRangeTable(newTop, query);
 
 	/* add original query as first range table entry */
-	addSubqueryToRTWithParam (newTop, orig, "originalSet", false, ACL_NO_RIGHTS, false);
+	addSubqueryToRTWithParam (newTop, orig, "originalSet", true, ACL_NO_RIGHTS, false);
 
 	/* rewrite the subqueries used in the set operation */
 	numSubs = list_length(query->rtable);
