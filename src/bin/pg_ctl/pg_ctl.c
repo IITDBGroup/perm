@@ -52,7 +52,7 @@ typedef long pgpid_t;
 #define WHITESPACE "\f\n\r\t\v" /* as defined by isspace() */
 
 /* postgres version ident string */
-#define PM_VERSIONSTR "postgres (PostgreSQL) " PG_VERSION "\n"
+#define PM_VERSIONSTR "postgres (Perm) " PG_VERSION "\n"
 
 
 typedef enum

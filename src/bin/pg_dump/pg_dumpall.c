@@ -30,7 +30,7 @@ int			optreset;
 
 
 /* version string we expect back from pg_dump */
-#define PGDUMP_VERSIONSTR "pg_dump (PostgreSQL) " PG_VERSION "\n"
+#define PGDUMP_VERSIONSTR "pg_dump (Perm) " PG_VERSION "\n"
 
 
 static const char *progname;

@@ -9,7 +9,7 @@
 #
 #-------------------------------------------------------------------------
 
-PGFILEDESC = "psql - the PostgreSQL interactive terminal"
+PGFILEDESC = "psql - the Perm interactive terminal"
 PGAPPICON=win32
 subdir = src/bin/psql
 top_builddir = ../../..
