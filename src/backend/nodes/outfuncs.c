@@ -522,6 +522,29 @@ _outAgg(StringInfo str, Agg *node)
 }
 
 static void
+_outAggProj(StringInfo str, AggProj *node)
+{
+	int i;
+
+	WRITE_NODE_TYPE("AGGPROJ");
+
+	_outPlanInfo(str, (Plan *) node);
+
+	WRITE_ENUM_FIELD(aggstrategy, AggStrategy);
+	WRITE_INT_FIELD(numCols);
+
+	appendStringInfo(str, " :grpColIdx");
+	for (i = 0; i < node->numCols; i++)
+		appendStringInfo(str, " %d", node->grpColIdx[i]);
+
+	appendStringInfo(str, " :grpOperators");
+	for (i = 0; i < node->numCols; i++)
+		appendStringInfo(str, " %u", node->grpOperators[i]);
+
+	WRITE_LONG_FIELD(numGroups);
+}
+
+static void
 _outGroup(StringInfo str, Group *node)
 {
 	int			i;
@@ -1746,6 +1769,7 @@ _outQuery(StringInfo str, Query *node)
 	WRITE_NODE_FIELD(returningList);
 	WRITE_NODE_FIELD(groupClause);
 	WRITE_NODE_FIELD(havingQual);
+	WRITE_NODE_FIELD(aggprojectClause);
 	WRITE_NODE_FIELD(distinctClause);
 	WRITE_NODE_FIELD(sortClause);
 	WRITE_NODE_FIELD(limitOffset);
@@ -2140,6 +2164,9 @@ _outNode(StringInfo str, void *obj)
 				break;
 			case T_Agg:
 				_outAgg(str, obj);
+				break;
+			case T_AggProj:
+				_outAggProj(str, obj);
 				break;
 			case T_Group:
 				_outGroup(str, obj);

@@ -38,6 +38,7 @@ static const ScanKeyword ScanKeywords[] = {
 	{"add", ADD_P, UNRESERVED_KEYWORD},
 	{"admin", ADMIN, UNRESERVED_KEYWORD},
 	{"after", AFTER, UNRESERVED_KEYWORD},
+	{"aggproject", AGGPROJECT, RESERVED_KEYWORD},
 	{"aggregate", AGGREGATE, UNRESERVED_KEYWORD},
 	{"all", ALL, RESERVED_KEYWORD},
 	{"also", ALSO, UNRESERVED_KEYWORD},

@@ -177,6 +177,10 @@ ExecReScan(PlanState *node, ExprContext *exprCtxt)
 			ExecReScanAgg((AggState *) node, exprCtxt);
 			break;
 
+		case T_AggProjState:
+			ExecReScanAggProj((AggProjState *) node, exprCtxt);
+			break;
+
 		case T_UniqueState:
 			ExecReScanUnique((UniqueState *) node, exprCtxt);
 			break;

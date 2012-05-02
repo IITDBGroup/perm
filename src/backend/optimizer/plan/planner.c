@@ -76,6 +76,10 @@ static void locate_grouping_columns(PlannerInfo *root,
 						List *tlist,
 						List *sub_tlist,
 						AttrNumber *groupColIdx);
+static void locate_aggProj_columns(PlannerInfo *root,
+						List *tlist,
+						List *sub_tlist,
+						AttrNumber *groupColIdx);
 static List *postprocess_setop_tlist(List *new_tlist, List *orig_tlist);
 
 
@@ -824,6 +828,8 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 		long		numGroups = 0;
 		AggClauseCounts agg_counts;
 		int			numGroupCols = list_length(parse->groupClause);
+		int			numAggProjCols = list_length(parse->aggprojectClause);
+		AttrNumber *aggProjColIdx = NULL;
 		bool		use_hashed_grouping = false;
 
 		MemSet(&agg_counts, 0, sizeof(AggClauseCounts));
@@ -916,6 +922,12 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 			/* Also convert # groups to long int --- but 'ware overflow! */
 			numGroups = (long) Min(dNumGroups, (double) LONG_MAX);
 		}
+
+		/*
+		 *  if aggproject clause is present, use sorting
+		 */
+		if (parse->aggprojectClause)
+			use_hashed_grouping = false;
 
 		/*
 		 * Select the best path.  If we are doing hashed grouping, we will
@@ -1016,6 +1028,12 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 				 */
 				locate_grouping_columns(root, tlist, result_plan->targetlist,
 										groupColIdx);
+				if (parse->aggprojectClause)
+				{
+					aggProjColIdx = (AttrNumber *) palloc(sizeof(AttrNumber) * numAggProjCols);
+					locate_aggProj_columns(root, tlist, result_plan->targetlist,
+											aggProjColIdx);
+				}
 			}
 
 			/*
@@ -1039,6 +1057,42 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 												result_plan);
 				/* Hashed aggregation produces randomly-ordered results */
 				current_pathkeys = NIL;
+			}
+			else if (parse->aggprojectClause && parse->hasAggs)
+			{
+				/* if aggproject is present, force using sorting ... */
+				AggStrategy aggstrategy = AGG_SORTED;
+
+				if (parse->groupClause)
+				{
+					if (!pathkeys_contained_in(group_pathkeys,
+											   current_pathkeys))
+					{
+						result_plan = (Plan *)
+							make_sort_from_groupcols(root,
+													 parse->groupClause,
+													 groupColIdx,
+													 result_plan);
+						current_pathkeys = group_pathkeys;
+					}
+				}
+				else
+				{
+					current_pathkeys = NIL;
+				}
+
+				result_plan = (Plan *) make_aggproj(root,
+													tlist,
+													(List *) parse->havingQual,
+													aggstrategy,
+													numGroupCols,
+													groupColIdx,
+													numAggProjCols,
+													aggProjColIdx,
+													groupOperators,
+													numGroups,
+													agg_counts.numAggs,
+													result_plan);
 			}
 			else if (parse->hasAggs)
 			{
@@ -1764,6 +1818,48 @@ locate_grouping_columns(PlannerInfo *root,
 			elog(ERROR, "failed to locate grouping columns");
 
 		groupColIdx[keyno++] = te->resno;
+	}
+}
+
+/*
+ * locate_aggProj_columns
+ *		Locate aggProject columns in the tlist chosen by query_planner.
+ */
+static void
+locate_aggProj_columns(PlannerInfo *root,
+						List *tlist,
+						List *sub_tlist,
+						AttrNumber *aggProjColIdx)
+{
+	int			keyno = 0;
+	ListCell   *gl;
+
+	/*
+	 * No work unless grouping.
+	 */
+	if (!root->parse->aggprojectClause)
+	{
+		Assert(aggProjColIdx == NULL);
+		return;
+	}
+	//Assert(aggProjColIdx != NULL);
+
+	foreach(gl, root->parse->aggprojectClause)
+	{
+		TargetEntry *tle = lfirst(gl);
+		TargetEntry *te = NULL;
+		ListCell	*sl;
+
+		foreach(sl, tlist)
+		{
+			te = (TargetEntry *) lfirst(sl);
+			if (equal(tle->expr, te->expr))
+				break;
+		}
+		if (!sl)
+			elog(ERROR, "failed to locate aggProject colums");
+
+		aggProjColIdx[keyno++] = te->resno;
 	}
 }
 

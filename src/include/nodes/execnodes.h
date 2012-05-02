@@ -1381,6 +1381,40 @@ typedef struct AggState
 	TupleHashIterator hashiter; /* for iterating through hash table */
 } AggState;
 
+/*
+ * AggProjState information
+ */
+typedef struct AggProjState
+{
+	ScanState	ss;				/* its first field is NodeTag */
+	List	   *aggs;			/* all Aggref nodes in targetlist & quals */
+	int			numaggs;		/* length of list (could be zero!) */
+	FmgrInfo   *eqfunctions;	/* per-grouping-field equality fns */
+	FmgrInfo   *hashfunctions;	/* per-grouping-field hash fns */
+	AggStatePerAgg peragg;		/* per-Aggref information */
+	MemoryContext aggcontext;	/* memory context for long-lived data */
+	ExprContext *tmpcontext;	/* econtext for input expressions */
+	bool		agg_done;		/* indicates completion of Agg scan */
+	/* these fields are used in AGG_PLAIN and AGG_SORTED modes: */
+	AggStatePerGroup pergroup;	/* per-Aggref-per-group working state */
+	HeapTuple	grp_firstTuple; /* copy of first tuple of current group */
+	/* these fields are used in AGG_HASHED mode: */
+	TupleHashTable hashtable;	/* hash table with one entry per group */
+	TupleTableSlot *hashslot;	/* slot for loading hash table */
+	List	   *hash_needed;	/* list of columns needed in hash table */
+	bool		table_filled;	/* hash table filled yet? */
+	TupleHashIterator hashiter; /* for iterating through hash table */
+	//	Agg agg_state;
+		// TUPLESTORE
+		// current mode (create group, output group)
+		// current position in outputting group
+	bool		output;			/* if in output mode */
+	int 		count;
+	bool		newGroup;
+	Tuplestorestate *tuplestorestate;
+	TupleTableSlot 	*tempTupleTableSlot;
+} AggProjState;
+
 /* ----------------
  *	 UniqueState information
  *

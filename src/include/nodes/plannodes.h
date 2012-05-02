@@ -499,6 +499,23 @@ typedef struct Agg
 	long		numGroups;		/* estimated number of groups in input */
 } Agg;
 
+/*
+ *
+ *
+ */
+
+typedef struct AggProj
+{
+	Plan		plan;
+	AggStrategy aggstrategy;
+	int			numCols;		/* number of grouping columns */
+	AttrNumber *grpColIdx;		/* their indexes in the target list */
+	int			numAggPCols;	/* number of agg project columns */
+	AttrNumber *aggPColIdx;		/* indexes of the aggProj columns in the target list */
+	Oid		   *grpOperators;	/* equality operators to compare with */
+	long		numGroups;		/* estimated number of groups in input */
+} AggProj;
+
 /* ----------------
  *		unique node
  * ----------------

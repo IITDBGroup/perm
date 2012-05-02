@@ -39,6 +39,9 @@
 #define ORDER_CLAUSE 0
 #define GROUP_CLAUSE 1
 #define DISTINCT_ON_CLAUSE 2
+/* Macro for comparing string fields that might be NULL */
+#define equalstr(a, b)	\
+	(((a) != NULL && (b) != NULL) ? (strcmp(a, b) == 0) : (a) == (b))
 
 static char *clauseText[] = {"ORDER BY", "GROUP BY", "DISTINCT ON"};
 
@@ -1427,6 +1430,46 @@ transformGroupClause(ParseState *pstate, List *grouplist,
 	}
 
 	list_free(tle_list);
+	return result;
+}
+
+/*
+ *
+ */
+List *
+transformAggProjClause(ParseState *pstate,
+					   List *aggproj,
+					   List **targetlist)
+{
+	List *result;
+	ListCell *l, *pl;
+
+	result = transformTargetList(pstate, aggproj);
+
+	foreach(l, result)
+	{
+		TargetEntry *tle = lfirst(l);
+		bool found = false;
+
+		foreach(pl, *targetlist)
+		{
+			TargetEntry *projTle = lfirst(pl);
+
+			if (equal(tle->expr, projTle->expr) && equalstr(tle->resname, projTle->resname))
+			{
+				if (projTle->resjunk)
+					projTle->resjunk = false;
+				tle->resno = projTle->resno; //?
+				found = true;
+			}
+		}
+
+		if (!found)
+		{
+			(*targetlist) = lappend(*targetlist, tle);
+		}
+	}
+
 	return result;
 }
 

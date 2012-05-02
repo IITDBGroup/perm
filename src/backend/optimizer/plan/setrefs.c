@@ -373,6 +373,7 @@ set_plan_refs(PlannerGlobal *glob, Plan *plan, int rtoffset)
 			}
 			break;
 		case T_Agg:
+		case T_AggProj:
 		case T_Group:
 			set_upper_references(glob, plan, rtoffset);
 			break;

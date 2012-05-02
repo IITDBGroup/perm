@@ -3107,6 +3107,81 @@ make_agg(PlannerInfo *root, List *tlist, List *qual,
 	return node;
 }
 
+Agg *
+make_aggproj(PlannerInfo *root,
+			 List *tlist,
+			 List *qual,
+			 AggStrategy aggstrategy,
+			 int numGroupCols,
+			 AttrNumber *grpColIdx,
+			 int numAggProjCols,
+			 AttrNumber *aggProjColIdx,
+			 Oid *grpOperators,
+			 long numGroups,
+			 int numAggs,
+			 Plan *lefttree)
+{
+	AggProj *node = makeNode(AggProj);
+	Plan	   *plan = &node->plan;
+	Path		agg_path;		/* dummy for result of cost_agg */
+	QualCost	qual_cost;
+
+	node->aggstrategy = aggstrategy;
+	node->numCols = numGroupCols;
+	node->grpColIdx = grpColIdx;
+	node->numAggPCols = numAggProjCols;
+	node->aggPColIdx = aggProjColIdx;
+	node->grpOperators = grpOperators;
+	node->numGroups = numGroups;
+
+	copy_plan_costsize(plan, lefttree); /* only care about copying size */
+	cost_agg(&agg_path, root,
+			 aggstrategy, numAggs,
+			 numGroupCols, numGroups,
+			 lefttree->startup_cost,
+			 lefttree->total_cost,
+			 lefttree->plan_rows);
+	plan->startup_cost = agg_path.startup_cost;
+	plan->total_cost = agg_path.total_cost;
+
+	/*
+	 * We will produce a single output tuple if not grouping, and a tuple per
+	 * group otherwise.
+	 */
+	if (aggstrategy == AGG_PLAIN)
+		plan->plan_rows = 1;
+	else
+		plan->plan_rows = numGroups;
+
+	/*
+	 * We also need to account for the cost of evaluation of the qual (ie, the
+	 * HAVING clause) and the tlist.  Note that cost_qual_eval doesn't charge
+	 * anything for Aggref nodes; this is okay since they are really
+	 * comparable to Vars.
+	 *
+	 * See notes in grouping_planner about why this routine and make_group are
+	 * the only ones in this file that worry about tlist eval cost.
+	 */
+	if (qual)
+	{
+		cost_qual_eval(&qual_cost, qual, root);
+		plan->startup_cost += qual_cost.startup;
+		plan->total_cost += qual_cost.startup;
+		plan->total_cost += qual_cost.per_tuple * plan->plan_rows;
+	}
+	cost_qual_eval(&qual_cost, tlist, root);
+	plan->startup_cost += qual_cost.startup;
+	plan->total_cost += qual_cost.startup;
+	plan->total_cost += qual_cost.per_tuple * plan->plan_rows;
+
+	plan->qual = qual;
+	plan->targetlist = tlist;
+	plan->lefttree = lefttree;
+	plan->righttree = NULL;
+
+	return node;
+}
+
 Group *
 make_group(PlannerInfo *root,
 		   List *tlist,

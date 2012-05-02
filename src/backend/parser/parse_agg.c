@@ -28,12 +28,14 @@ typedef struct
 {
 	ParseState *pstate;
 	List	   *groupClauses;
+	List	   *aggPClauses;
 	bool		have_non_var_grouping;
+	bool		checkAggP;
 	int			sublevels_up;
 } check_ungrouped_columns_context;
 
 static void check_ungrouped_columns(Node *node, ParseState *pstate,
-						List *groupClauses, bool have_non_var_grouping);
+						List *groupClauses, bool have_non_var_grouping, List *aggPClause);
 static bool check_ungrouped_columns_walker(Node *node,
 							   check_ungrouped_columns_context *context);
 
@@ -102,6 +104,7 @@ parseCheckAggregates(ParseState *pstate, Query *qry)
 	bool		hasJoinRTEs;
 	PlannerInfo *root;
 	Node	   *clause;
+	bool 		hasAggPClause = qry->aggprojectClause;
 
 	/* This should only be called if we found aggregates or grouping */
 	Assert(pstate->p_hasAggs || qry->groupClause || qry->havingQual);
@@ -202,13 +205,13 @@ parseCheckAggregates(ParseState *pstate, Query *qry)
 	if (hasJoinRTEs)
 		clause = flatten_join_alias_vars(root, clause);
 	check_ungrouped_columns(clause, pstate,
-							groupClauses, have_non_var_grouping);
+							groupClauses, have_non_var_grouping, qry->aggprojectClause);
 
 	clause = (Node *) qry->havingQual;
 	if (hasJoinRTEs)
 		clause = flatten_join_alias_vars(root, clause);
 	check_ungrouped_columns(clause, pstate,
-							groupClauses, have_non_var_grouping);
+							groupClauses, have_non_var_grouping, qry->aggprojectClause);
 }
 
 
@@ -235,12 +238,15 @@ parseCheckAggregates(ParseState *pstate, Query *qry)
  */
 static void
 check_ungrouped_columns(Node *node, ParseState *pstate,
-						List *groupClauses, bool have_non_var_grouping)
+						List *groupClauses, bool have_non_var_grouping,
+						List *aggPClause)
 {
 	check_ungrouped_columns_context context;
 
 	context.pstate = pstate;
 	context.groupClauses = groupClauses;
+	context.aggPClauses = aggPClause;
+	context.checkAggP = (aggPClause == NIL);
 	context.have_non_var_grouping = have_non_var_grouping;
 	context.sublevels_up = 0;
 	check_ungrouped_columns_walker(node, &context);
@@ -283,6 +289,19 @@ check_ungrouped_columns_walker(Node *node,
 		{
 			if (equal(node, lfirst(gl)))
 				return false;	/* acceptable, do not descend more */
+		}
+	}
+
+	if (IsA(node,TargetEntry))
+	{
+		TargetEntry *te = (TargetEntry *) node;
+
+		foreach(gl, context->aggPClauses)
+		{
+			TargetEntry *aggTe = lfirst(gl);
+
+			if (equal(te, aggTe))
+				return false;
 		}
 	}
 

@@ -80,6 +80,7 @@
 #include "executor/executor.h"
 #include "executor/instrument.h"
 #include "executor/nodeAgg.h"
+#include "executor/nodeAggProj.h"
 #include "executor/nodeAppend.h"
 #include "executor/nodeBitmapAnd.h"
 #include "executor/nodeBitmapHeapscan.h"
@@ -241,6 +242,11 @@ ExecInitNode(Plan *node, EState *estate, int eflags)
 											   estate, eflags);
 			break;
 
+		case T_AggProj:
+			result = (PlanState *) ExecInitAggProj((AggProj *) node,
+												estate, eflags);
+			break;
+
 		case T_Unique:
 			result = (PlanState *) ExecInitUnique((Unique *) node,
 												  estate, eflags);
@@ -392,6 +398,10 @@ ExecProcNode(PlanState *node)
 
 		case T_AggState:
 			result = ExecAgg((AggState *) node);
+			break;
+
+		case T_AggProjState:
+			result = ExecAggProj((AggProjState *) node);
 			break;
 
 		case T_UniqueState:
@@ -561,6 +571,9 @@ ExecCountSlotsNode(Plan *node)
 		case T_Agg:
 			return ExecCountSlotsAgg((Agg *) node);
 
+		case T_AggProj:
+			return ExecCountSlotsAggProj((AggProj *) node);
+
 		case T_Unique:
 			return ExecCountSlotsUnique((Unique *) node);
 
@@ -695,6 +708,10 @@ ExecEndNode(PlanState *node)
 
 		case T_AggState:
 			ExecEndAgg((AggState *) node);
+			break;
+
+		case T_AggProjState:
+			ExecEndAggProj((AggProjState *) node);
 			break;
 
 		case T_UniqueState:

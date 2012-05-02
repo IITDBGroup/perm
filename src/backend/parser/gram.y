@@ -250,6 +250,7 @@ static Node *makeXmlExpr(XmlExprOp op, char *name, List *named_args, List *args)
 				prep_type_clause
 				execute_param_clause using_clause returning_clause
 				enum_val_list
+%type <list>	aggproject_clause
 
 %type <range>	OptTempTableName
 %type <into>	into_clause create_as_target
@@ -374,7 +375,7 @@ static Node *makeXmlExpr(XmlExprOp op, char *name, List *named_args, List *args)
  */
 
 /* ordinary key words in alphabetical order */
-%token <keyword> ABORT_P ABSOLUTE_P ACCESS ACTION ADD_P ADMIN AFTER
+%token <keyword> ABORT_P ABSOLUTE_P ACCESS ACTION ADD_P ADMIN AFTER AGGPROJECT
 	AGGREGATE ALL ALSO ALTER ALWAYS ANALYSE ANALYZE AND ANNOT ANY ARRAY AS ASC
 	ASSERTION ASSIGNMENT ASYMMETRIC AT AUTHORIZATION
 
@@ -6233,7 +6234,7 @@ select_clause:
 simple_select:
 			SELECT opt_annot opt_provenance opt_distinct target_list
 			into_clause from_clause where_clause
-			group_clause having_clause
+			group_clause having_clause aggproject_clause
 				{
 					SelectStmt *n = makeNode(SelectStmt);
 					n->provenanceClause = $3;
@@ -6245,6 +6246,7 @@ simple_select:
 					n->whereClause = $8;
 					n->groupClause = $9;
 					n->havingClause = $10;
+					n->aggprojectClause = $11;
 					$$ = (Node *)n;
 				}
 			| values_clause							{ $$ = $1; }
@@ -6540,7 +6542,12 @@ having_clause:
 			HAVING a_expr							{ $$ = $2; }
 			| /*EMPTY*/								{ $$ = NULL; }
 		;
-
+		
+aggproject_clause:
+			AGGPROJECT target_list					{ $$ = $2; }
+			| /*EMPTY*/								{ $$ = NIL; }
+		;
+		
 for_locking_clause:
 			for_locking_items						{ $$ = $1; }
 			| FOR READ ONLY							{ $$ = NIL; }
@@ -9544,7 +9551,8 @@ type_func_name_keyword:
  * forced to.
  */
 reserved_keyword:
-			  ALL
+			  AGGPROJECT
+			| ALL
 			| ANALYSE
 			| ANALYZE
 			| AND

@@ -3800,7 +3800,7 @@ ExecInitExpr(Expr *node, PlanState *parent)
 				AggrefExprState *astate = makeNode(AggrefExprState);
 
 				astate->xprstate.evalfunc = (ExprStateEvalFunc) ExecEvalAggref;
-				if (parent && IsA(parent, AggState))
+				if (parent && (IsA(parent, AggState) || IsA(parent, AggProjState)))
 				{
 					AggState   *aggstate = (AggState *) parent;
 					int			naggs;
