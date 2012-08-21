@@ -774,7 +774,7 @@ lookup_hash_entry(AggState *aggstate, TupleTableSlot *inputslot)
 TupleTableSlot *
 ExecAggProj(AggProjState *node)
 {
-	if (node->agg_done)
+	if (node->agg_done && !node->output)
 		return NULL;
 /*
 	if (((Agg *) node->ss.ps.plan)->aggstrategy == AGG_HASHED)
