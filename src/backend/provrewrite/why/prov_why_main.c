@@ -15,8 +15,9 @@
 #include "provrewrite/prov_util.h"
 #include "provrewrite/prov_why_main.h"
 #include "provrewrite/prov_how_main.h"
-#include "provrewrite/prov_how_set.h"
-#include "provrewrite/prov_how_spj.h"
+#include "provrewrite/prov_how_adt.h"
+//#include "provrewrite/prov_how_set.h"
+//#include "provrewrite/prov_how_spj.h"
 
 #include "fmgr.h"
 #include "parser/parse_expr.h"
@@ -27,7 +28,7 @@
 #include <stdio.h>
 /* function declarations */
 //static void addHWhy ( Query *query);
-
+static List *computeWhyOper(List *args, char op);
 
 Query *
 rewriteQueryWhy (Query *query)
@@ -48,52 +49,160 @@ rewriteWhyHowProv (Query *query)
 
 	//2. save the howprov target entry content into polish notation stack??
 	// or retreive the howprove polynomial output
-	te->expr = makeFuncExpr(F_HWHY, OIDARRAYOID, list_make1(te->expr), COERCE_EXPLICIT_CALL);
+	te->expr = (Expr *) makeFuncExpr(F_HWHY, OIDARRAYOID, list_make1(te->expr), COERCE_EXPLICIT_CALL);
 
 	return query;
 }
+
+
+#define GETBIT(result,ptr,mask) \
+		do { \
+			result = (*ptr & mask); \
+			mask >>= 1; \
+			if (!mask) \
+			{ \
+				mask = HIGHBIT; \
+				ptr++; \
+			} \
+		} while(0)
+
+#define POP(stack, ptr) \
+	do { \
+		ptr = linitial(stack); \
+		stack = list_delete_first(stack); \
+	} while(0)
+
+#define POP_INT(stack, val) \
+	do { \
+		val = linitial_int(stack); \
+		stack = list_delete_first(stack); \
+	} while(0)
 
 
 
 Datum
 hwhy (PG_FUNCTION_ARGS)   //user defined function?  process polynomial using stacks
 {
+	HowProv *howIn;
+	List *stack = NIL;
+	List *typeStack = NIL;
+	char *data;
+	bits8 *headPtr;
+	bits8 bitMask = HIGHBIT;
+	bool isOid;
+	int i;
+	List *listResult;
 
-	//is the input  how_prov_out?
+	if (PG_ARGISNULL(0))
+		PG_RETURN_NULL();
 
+	howIn = PG_GETARG_HOWPROV_P(0);
+	data = HOWDATA(howIn);
+	headPtr = HOWHEADER(howIn);
 
 	//3. process the howprov polish notation stack??
-	//   for (i=0; i<HOWNUMELEMS(PG_FUNCTION_ARGS); i++)
-	//   {
-	//      if (size == 1)
-	//          return originalPolynomial;  //  if the Oid is single we do no operations;
-	//
-	//      stack myStack;
-	//
-	//      ele = how_polynomial.pop;
-	//
-	//      if (ele is not "|")
-	//      {
-	//          myStack.push(ele);
-	//      }
-	//      else
-	//      {
-	//          ele1 = myStack.pop;
-	//          ele2 = myStack.pop;
-	//          operand = myStack.pop;
-	//          newele = whypolynomial(ele1,ele2,operand)
-	//          myStack.push(newele);
-	//       }
-	//    }
-	//
-	//
+	for (i=0; i<HOWNUMELEMS(howIn); i++)
+	{
+		GETBIT(isOid,headPtr,bitMask);
 
+		if (isOid)
+		{
+			Oid oid;
+			List *oidSet;
+			memcpy(&oid, data, sizeof(Oid));
+
+			oidSet = list_make1(list_make1_oid(oid));
+			stack = lcons(oidSet, stack);
+			typeStack = lcons_int(1, typeStack);
+
+			data += sizeof(Oid);
+		}
+		else
+		{
+			char *op = palloc(sizeof(char));
+			*op = *(data);
+
+			switch (*op)
+			{
+			case '+':
+			case '*':
+			{
+				stack = lcons(op, stack);
+				typeStack = lcons_int(0, typeStack);
+			}
+			break;
+			case '|':
+			{
+				List *args = NIL;
+				char *oper;
+				List *arg;
+				List *opRes;
+				int type;
+
+				POP_INT(typeStack, type);
+				while (type != 0) {
+					POP(stack, arg);
+					args = lappend(args, arg);
+					POP_INT(typeStack, type);
+				}
+				POP(stack, oper);
+
+				// compute result and push it back
+				opRes = computeWhyOper(args, *oper);
+				lcons(opRes, stack);
+				lcons_int(1, typeStack);
+
+				pfree(oper);
+				// free ptr
+			}
+			break;
+			}
+
+			data++;
+		}
+
+//		if (ele is not "|")
+//		{
+//			myStack.push(ele);
+//		}
+//
+//		else
+//		{
+//			ele1 = myStack.pop;
+//			ele2 = myStack.pop;
+//			operand = myStack.pop;
+//			newele = whypolynomial(ele1,ele2,operand)
+//	        		  myStack.push(newele);
+//		}
+	}
+	//
+	//
+	listResult = linitial(stack);
 	//  why_polynomial = myStack.pop;
 
 	//4. use how prov  function to translate polynomial into oids?
-	//target entry expression = oid_translation(why_polynomial);
+	{
+		int resSize; // compute number of elements
 
-	PG_RETURN_NULL();
+		Datum *oidarray = palloc(resSize * sizeof(Oid));
+		int *dims;
+		Datum result = (Datum) NULL; //= construct_md_array(oidarray, NULL, 2, dims, NULL, );
+
+		PG_RETURN_DATUM(result);
+	}
+}
+
+List *
+computeWhyOper(List *args, char op)
+{
+	List *result;
+	int size = list_length(args);
+	switch(op)
+	{
+
+	}
+
+	return result;
 }
 
 //OidList *

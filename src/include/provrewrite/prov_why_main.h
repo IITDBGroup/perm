@@ -20,5 +20,6 @@
 extern Query *rewriteQueryWhy (Query *query);
 extern Query *rewriteWhyHowProv (Query *query);
 
+extern Datum hwhy (PG_FUNCTION_ARGS);
 
 #endif /* PROV_WHY_MAIN_H_ */
