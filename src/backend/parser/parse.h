@@ -413,39 +413,40 @@
      WHEN = 629,
      WHERE = 630,
      WHITESPACE_P = 631,
-     WITH = 632,
-     WITHOUT = 633,
-     WORK = 634,
-     WRITE = 635,
-     XML_P = 636,
-     XMLATTRIBUTES = 637,
-     XMLCONCAT = 638,
-     XMLELEMENT = 639,
-     XMLFOREST = 640,
-     XMLPARSE = 641,
-     XMLPI = 642,
-     XMLROOT = 643,
-     XMLSERIALIZE = 644,
-     XSLT = 645,
-     YEAR_P = 646,
-     YES_P = 647,
-     ZONE = 648,
-     NULLS_FIRST = 649,
-     NULLS_LAST = 650,
-     WITH_CASCADED = 651,
-     WITH_LOCAL = 652,
-     WITH_CHECK = 653,
-     IDENT = 654,
-     FCONST = 655,
-     SCONST = 656,
-     BCONST = 657,
-     XCONST = 658,
-     Op = 659,
-     ICONST = 660,
-     PARAM = 661,
-     POSTFIXOP = 662,
-     UMINUS = 663,
-     TYPECAST = 664
+     WHY = 632,
+     WITH = 633,
+     WITHOUT = 634,
+     WORK = 635,
+     WRITE = 636,
+     XML_P = 637,
+     XMLATTRIBUTES = 638,
+     XMLCONCAT = 639,
+     XMLELEMENT = 640,
+     XMLFOREST = 641,
+     XMLPARSE = 642,
+     XMLPI = 643,
+     XMLROOT = 644,
+     XMLSERIALIZE = 645,
+     XSLT = 646,
+     YEAR_P = 647,
+     YES_P = 648,
+     ZONE = 649,
+     NULLS_FIRST = 650,
+     NULLS_LAST = 651,
+     WITH_CASCADED = 652,
+     WITH_LOCAL = 653,
+     WITH_CHECK = 654,
+     IDENT = 655,
+     FCONST = 656,
+     SCONST = 657,
+     BCONST = 658,
+     XCONST = 659,
+     Op = 660,
+     ICONST = 661,
+     PARAM = 662,
+     POSTFIXOP = 663,
+     UMINUS = 664,
+     TYPECAST = 665
    };
 #endif
 /* Tokens.  */
@@ -823,39 +824,40 @@
 #define WHEN 629
 #define WHERE 630
 #define WHITESPACE_P 631
-#define WITH 632
-#define WITHOUT 633
-#define WORK 634
-#define WRITE 635
-#define XML_P 636
-#define XMLATTRIBUTES 637
-#define XMLCONCAT 638
-#define XMLELEMENT 639
-#define XMLFOREST 640
-#define XMLPARSE 641
-#define XMLPI 642
-#define XMLROOT 643
-#define XMLSERIALIZE 644
-#define XSLT 645
-#define YEAR_P 646
-#define YES_P 647
-#define ZONE 648
-#define NULLS_FIRST 649
-#define NULLS_LAST 650
-#define WITH_CASCADED 651
-#define WITH_LOCAL 652
-#define WITH_CHECK 653
-#define IDENT 654
-#define FCONST 655
-#define SCONST 656
-#define BCONST 657
-#define XCONST 658
-#define Op 659
-#define ICONST 660
-#define PARAM 661
-#define POSTFIXOP 662
-#define UMINUS 663
-#define TYPECAST 664
+#define WHY 632
+#define WITH 633
+#define WITHOUT 634
+#define WORK 635
+#define WRITE 636
+#define XML_P 637
+#define XMLATTRIBUTES 638
+#define XMLCONCAT 639
+#define XMLELEMENT 640
+#define XMLFOREST 641
+#define XMLPARSE 642
+#define XMLPI 643
+#define XMLROOT 644
+#define XMLSERIALIZE 645
+#define XSLT 646
+#define YEAR_P 647
+#define YES_P 648
+#define ZONE 649
+#define NULLS_FIRST 650
+#define NULLS_LAST 651
+#define WITH_CASCADED 652
+#define WITH_LOCAL 653
+#define WITH_CHECK 654
+#define IDENT 655
+#define FCONST 656
+#define SCONST 657
+#define BCONST 658
+#define XCONST 659
+#define Op 660
+#define ICONST 661
+#define PARAM 662
+#define POSTFIXOP 663
+#define UMINUS 664
+#define TYPECAST 665
 
 
 
@@ -896,7 +898,7 @@ typedef union YYSTYPE
 	VariableSetStmt		*vsetstmt;
 }
 /* Line 1529 of yacc.c.  */
-#line 900 "y.tab.h"
+#line 902 "y.tab.h"
 	YYSTYPE;
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
 # define YYSTYPE_IS_DECLARED 1

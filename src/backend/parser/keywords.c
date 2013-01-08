@@ -405,6 +405,7 @@ static const ScanKeyword ScanKeywords[] = {
 	{"when", WHEN, RESERVED_KEYWORD},
 	{"where", WHERE, RESERVED_KEYWORD},
 	{"whitespace", WHITESPACE_P, UNRESERVED_KEYWORD},
+	{"why", WHY, RESERVED_KEYWORD},
 
 	/*
 	 * XXX we mark WITH as reserved to force it to be quoted in dumps, even

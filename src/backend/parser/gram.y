@@ -451,7 +451,7 @@ static Node *makeXmlExpr(XmlExprOp op, char *name, List *named_args, List *args)
 	VACUUM VALID VALIDATOR VALUE_P VALUES VARCHAR VARYING
 	VERBOSE VERSION_P VIEW VOLATILE
 
-	WHEN WHERE WHITESPACE_P WITH WITHOUT WORK WRITE
+	WHEN WHERE WHITESPACE_P WHY WITH WITHOUT WORK WRITE
 
 	XML_P XMLATTRIBUTES XMLCONCAT XMLELEMENT XMLFOREST XMLPARSE
 	XMLPI XMLROOT XMLSERIALIZE XSLT
@@ -6437,6 +6437,7 @@ contribution_type:
 			| INWHERE								{ $$ = CONTR_WHERE_INSEN_NOUNION; } 
 			| INWHERE WITH UNION					{ $$ = CONTR_WHERE_INSEN; }
 			| HOW									{ $$ = CONTR_HOW; }
+			| WHY  	                                { $$ = CONTR_WHY; }
 
 opt_copy_contribution_mod:
 			PARTIAL									{ $$ = TRUE; }
@@ -9628,6 +9629,7 @@ reserved_keyword:
 			| USING
 			| WHEN
 			| WHERE
+			| WHY
 			| XSLT
 		;
 

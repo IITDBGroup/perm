@@ -40,6 +40,7 @@
 		} while (0)
 
 extern void logNode (void *node, char *message);
+extern void logN (void *node);
 extern void logNodeXml (void *node);
 extern void logDebug (char *message);
 extern void logNotice (char *message);

@@ -4449,6 +4449,8 @@ DATA(insert OID = 3792 (  how_sum PGNSP PGUID 12 1 0 t f f f i 1 3786 "3786" _nu
 DESCR("Aggregate functions that sums up how-provenance inputs");
 DATA(insert OID = 3793 (  oid_to_howprov PGNSP PGUID 12 1 0 f f t f i 1 3786 "26" _null_ _null_ _null_ oid_to_howprov - _null_ _null_ ));
 DESCR("Interprets an oid as a how-CS value");
+DATA(insert OID = 3794 (  hwhy PGNSP PGUID 12 1 0 f f t f i 1 3786 "1028" _null_ _null_ _null_ hwhy - _null_ _null_ ));
+DESCR("Interprets an how-CS value as a why-CS value");
 
 /*
  * Symbolic values for provolatile column: these indicate whether the result

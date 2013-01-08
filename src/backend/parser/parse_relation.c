@@ -49,6 +49,8 @@ static void expandHowProvenanceRTE (RangeTblEntry *rte, List **colnames,
 		List **colvars, Index rtindex);
 static void expandWhereProvenanceRTE (RangeTblEntry *rte, List **colnames,
 		List **colvars, Index rtindex);
+static void expandWhyProvenanceRTE (RangeTblEntry *rte, List **colnames,
+		List **colvars, Index rtindex);
 static void expandProvenanceRTE (RangeTblEntry *rte, List **colnames,
 		List **colvars, Index rtindex);
 static void expandRelation(Oid relid, Alias *eref,
@@ -1477,6 +1479,8 @@ expandRTEWithParam (RangeTblEntry *rte, int rtindex, int sublevels_up,
 						case CONTR_TRANS_XML:
 						case CONTR_MAP:
 							expandTransProvenanceRTE(rte, colnames, colvars, rtindex);
+						//case CONTR_WHY:
+						//	expandTransProvenanceRTE(rte, colnames, colvars, rtindex);
 						break;
 						default:
 						break;
@@ -1707,6 +1711,9 @@ addProvenanceTEs (RangeTblEntry *rte) {
 		break;
 		case CONTR_HOW:
 			expandHowProvenanceRTE(rte, &names, &provVars, 1);
+		break;
+		case CONTR_WHY:
+			expandWhyProvenanceRTE(rte, &names, &provVars, 1);
 		break;
 		default:
 			//TODO error
@@ -2354,3 +2361,23 @@ warnAutoRange(ParseState *pstate, RangeVar *relation, int location)
 				 parser_errposition(pstate, location)));
 	}
 }
+
+static void
+expandWhyProvenanceRTE (RangeTblEntry *rte, List **colnames, List **colvars,
+		Index rtindex)
+{
+	Var *newVar;
+	Value *newName;
+
+	newName = makeString(pstrdup("whyprov"));
+	//newVar = makeVar(rtindex, list_length(*colvars) + 1, WHYPROVOID, -1, 0);
+
+	if (colnames)
+		*colnames = lappend(*colnames, newName);
+	if (colvars)
+		*colvars = lappend(*colvars, newVar);
+}
+
+/*
+ *
+ */

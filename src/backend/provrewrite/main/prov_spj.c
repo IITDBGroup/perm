@@ -10,7 +10,7 @@
  *	  $PostgreSQL: pgsql/src/backend/provrewrite/prov_spj.c,v 1.542 2008/01/26 19:55:08 bglav Exp $
  *
  * NOTES
- *
+ *XXX
  *
  *-------------------------------------------------------------------------
  */

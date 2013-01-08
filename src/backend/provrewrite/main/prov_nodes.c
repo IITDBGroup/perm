@@ -836,6 +836,9 @@ provNodesEquals(void *a, void *b)
 	case T_ThisExpr:
 		retval = _equalThisExpr(a,b);
 		break;
+	case T_WhyProvInfo:
+		//retval = _equalWhyProvInfo(a,b);
+		break;
 	default:
 		elog(ERROR, "unrecognized node type: %d",
 			 (int) nodeTag(a));

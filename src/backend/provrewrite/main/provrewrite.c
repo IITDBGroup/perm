@@ -60,6 +60,7 @@
 #include "provrewrite/prov_trans_bitset.h"
 #include "provrewrite/prov_where_main.h"
 #include "provrewrite/prov_how_main.h"
+#include "provrewrite/prov_why_main.h"
 #include "provrewrite/prov_sublink_util_search.h"
 
 /*
@@ -187,6 +188,9 @@ selectRewriteProvSemantics(Query *query, char *cursorName)
 			return rewriteQueryWhereInSenNoUnion (query);
 		case CONTR_HOW:
 			return rewriteQueryHow (query);
+		case CONTR_WHY:
+			//return rewriteQueryWhy (query);
+			return rewriteQueryWhy (query);
 		default:
 			elog(ERROR,
 					"unkown type of contribution semantics %d",

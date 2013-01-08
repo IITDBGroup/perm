@@ -40,6 +40,18 @@ logNode (void *node, char *message)
 }
 
 /*
+ * Log a node struct (deep print).
+ */
+void
+logN (void *node)
+{
+	if (Debug_print_rewritten && log_min_messages <= DEBUG1) {
+		elog_node_display(DEBUG1, "DEBUGGING is fun:", node, true);
+	}
+}
+
+
+/*
  * Logs a node as XML.
  */
 
