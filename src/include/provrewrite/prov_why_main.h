@@ -20,8 +20,5 @@
 extern Query *rewriteQueryWhy (Query *query);
 extern Query *rewriteWhyHowProv (Query *query);
 
-extern static void addHWhy ( Query *query);
-
-
 
 #endif /* PROV_WHY_MAIN_H_ */

@@ -6,17 +6,27 @@
  */
 
 #include "postgres.h"
+
 #include "nodes/parsenodes.h"
+#include "nodes/makefuncs.h"
+
+#include "catalog/pg_type.h"
+
 #include "provrewrite/prov_util.h"
 #include "provrewrite/prov_why_main.h"
 #include "provrewrite/prov_how_main.h"
 #include "provrewrite/prov_how_set.h"
 #include "provrewrite/prov_how_spj.h"
 
+#include "fmgr.h"
+#include "parser/parse_expr.h"
+#include "parser/parse_func.h"
+
+#include "utils/fmgroids.h"
+
 #include <stdio.h>
 /* function declarations */
-
-
+//static void addHWhy ( Query *query);
 
 
 Query *
@@ -33,20 +43,14 @@ rewriteWhyHowProv (Query *query)
 {
 	//1. retrieve the last target entry of the query tree: e.g.   the howprov
 	//
-	TargetEntry *te = (TargetEntry *) llast(query.targetList);
+	TargetEntry *te = (TargetEntry *) llast(query->targetList);
 
 
 	//2. save the howprov target entry content into polish notation stack??
 	// or retreive the howprove polynomial output
-	te->expr = makeFuncExpr(hwhy, 1028, list_make1(expr), COERCE_EXPLICT_CALL);
+	te->expr = makeFuncExpr(F_HWHY, OIDARRAYOID, list_make1(te->expr), COERCE_EXPLICIT_CALL);
 
 	return query;
-
-
-
-
-
-
 }
 
 
@@ -89,7 +93,7 @@ hwhy (PG_FUNCTION_ARGS)   //user defined function?  process polynomial using sta
 	//4. use how prov  function to translate polynomial into oids?
 	//target entry expression = oid_translation(why_polynomial);
 
-
+	PG_RETURN_NULL();
 }
 
 //OidList *
