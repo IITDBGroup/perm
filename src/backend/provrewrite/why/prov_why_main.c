@@ -16,8 +16,7 @@
 #include "provrewrite/prov_why_main.h"
 #include "provrewrite/prov_how_main.h"
 #include "provrewrite/prov_how_adt.h"
-//#include "provrewrite/prov_how_set.h"
-//#include "provrewrite/prov_how_spj.h"
+
 
 #include "fmgr.h"
 #include "parser/parse_expr.h"
@@ -25,6 +24,10 @@
 
 #include "utils/fmgroids.h"
 
+#include "nodes/pg_list.h"
+
+
+#include "utils/array.h"
 #include <stdio.h>
 /* function declarations */
 //static void addHWhy ( Query *query);
@@ -49,7 +52,17 @@ rewriteWhyHowProv (Query *query)
 
 	//2. save the howprov target entry content into polish notation stack??
 	// or retreive the howprove polynomial output
-	te->expr = (Expr *) makeFuncExpr(F_HWHY, OIDARRAYOID, list_make1(te->expr), COERCE_EXPLICIT_CALL);
+	//te->expr = (Expr *) makeFuncExpr(F_HWHY, OIDARRAYOID, list_make1(te->expr), COERCE_EXPLICIT_CALL);  //working
+
+
+	te = makeTargetEntry((Expr *) makeFuncExpr(F_HWHY, OIDARRAYOID, list_make1(te->expr), COERCE_EXPLICIT_CALL),
+			list_length(query->targetList)+1, "whyprov", false);
+
+
+	query->targetList = lappend(query->targetList, te); //working
+	//query->targetList = lappend(list_delete_cell(query->targetList, list_tail(query->targetList), NULL), te);  //need to test
+
+
 
 	return query;
 }
@@ -125,6 +138,11 @@ hwhy (PG_FUNCTION_ARGS)   //user defined function?  process polynomial using sta
 			switch (*op)
 			{
 			case '+':
+			{
+				stack = lcons(op, stack);
+				typeStack = lcons_int(0, typeStack);
+			}
+			break;
 			case '*':
 			{
 				stack = lcons(op, stack);
@@ -149,11 +167,13 @@ hwhy (PG_FUNCTION_ARGS)   //user defined function?  process polynomial using sta
 
 				// compute result and push it back
 				opRes = computeWhyOper(args, *oper);
-				lcons(opRes, stack);
-				lcons_int(1, typeStack);
+				stack = lcons(opRes, stack);
+				typeStack = lcons_int(1, typeStack);
 
+
+				// free pointer
 				pfree(oper);
-				// free ptr
+
 			}
 			break;
 			}
@@ -161,82 +181,95 @@ hwhy (PG_FUNCTION_ARGS)   //user defined function?  process polynomial using sta
 			data++;
 		}
 
-//		if (ele is not "|")
-//		{
-//			myStack.push(ele);
-//		}
-//
-//		else
-//		{
-//			ele1 = myStack.pop;
-//			ele2 = myStack.pop;
-//			operand = myStack.pop;
-//			newele = whypolynomial(ele1,ele2,operand)
-//	        		  myStack.push(newele);
-//		}
 	}
 	//
 	//
 	listResult = linitial(stack);
-	//  why_polynomial = myStack.pop;
+
+	logNode(listResult, "result of merging");
 
 	//4. use how prov  function to translate polynomial into oids?
 	{
 		int resSize; // compute number of elements
-
+		resSize = 1;
 		Datum *oidarray = palloc(resSize * sizeof(Oid));
 		int *dims;
 		Datum result = (Datum) NULL; //= construct_md_array(oidarray, NULL, 2, dims, NULL, );
 
-		PG_RETURN_DATUM(result);
+		//PG_RETURN_POINTER(listResult);
+		//PG_RETURN_NULL();
+
+		PG_RETURN_DATUM((char *) pretty_format_node_dump(nodeToString(listResult)));
+
+
+//		Datum data[1];
+//		int dim[1];
+//
+//		dim[0] = 1;
+//		data[0] = PG_GETARG_DATUM(1);
+//
+//		result = construct_md_array(data, NULL, 1, dim, dim, TEXTOID, -1,
+//				false, 'i');
+//		PG_RETURN_ARRAYTYPE_P(result);
 	}
 }
 
 List *
 computeWhyOper(List *args, char op)
 {
-	List *result;
-	int size = list_length(args);
+	List *result = NIL;
+	List *oidSet;
+	List *oidList;
+
+	int SetSize = list_length(args);
+	int SetIndex;
+	int OidSetIndex;
+	int OidSetSize;
+	int OidListSize;
+	int OidIndex;
+
+	List *operEle;
+
+
 	switch(op)
 	{
+	case '+':
+	{
 
+		for (SetIndex=0; SetIndex<SetSize; SetIndex++)
+		{
+			result = list_concat_unique(result,(List *) list_nth(args,SetIndex));
+		}
 	}
+	break;
+	case '*':
+	{
+		List *newResult = NIL;
+		result = copyObject(linitial(args));
 
+		for (SetIndex=1; SetIndex<SetSize; SetIndex++)
+		{
+			ListCell *li, *lj;
+			List *cur = (List *) list_nth(args,SetIndex);
+
+			foreach(li, cur)
+			{
+				foreach(lj, result)
+				{
+					List *wl, *wr, *merge;
+					wl = lfirst(li);
+					wr = lfirst(lj);
+					merge = list_concat_unique_oid(wl, wr);
+					newResult = lappend(newResult, merge);
+				}
+			}
+			//list_concat_unique_oid(List *list1, List *list2)
+
+			result = newResult;
+		}
+	}
+	break;
+	}
+	//logNode(result, "result of merging");
 	return result;
 }
-
-//OidList *
-//whypolynomial(ele1,ele2,operand)
-//{
-//	if (operand == "+")
-//  {
-//     // h_(Why) (x+y):   {{a}, {c, d}} + {{b}, {e}} = {{a}, {c,d}, {b}, {e}}
-//      OidList ele;
-//      for (i=0; i<sizeof(ele1); i++)
-//      {
-//              ele.append(ele1[i]);
-//      }
-//      for (j=0; j<sizeof(ele2); j++)
-//      {
-//              ele.append(ele2[j]);
-//      }
-//
-//
-//  }
-//  elseif (operand == "*")
-//  {
-//      //h_(Why) (x*y): {{a}, {c, d}} * {{b}, {e}} = {{a, b}, {a, e}, {c, d, b}, {c, d, e}}
-//      OidList ele;
-//      for (i=0; i<sizeof(ele1); i++)
-//      {
-//          for (j=0; j<sizeof(ele2); j++)
-//          {
-//				OidList newList;
-//              newList = oidmerge(ele1[i],ele2[j]);
-//              ele.append(newList);
-//          }
-//      }
-//  }
-//
-//   return ele;
-//}
