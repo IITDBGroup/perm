@@ -13,6 +13,7 @@
 #include "catalog/pg_type.h"
 
 #include "provrewrite/prov_util.h"
+#include "provrewrite/provlog.h"
 #include "provrewrite/prov_why_main.h"
 #include "provrewrite/prov_how_main.h"
 #include "provrewrite/prov_how_adt.h"
@@ -194,29 +195,29 @@ hwhy (PG_FUNCTION_ARGS)   //user defined function?  process polynomial using sta
 	//4. use how prov  function to translate polynomial into oids?
 	{
 		int setofsetSize; // compute number of elements
-		setofsetSize = list_length(listResult);
 		int count = 0;
 		List *k = NIL;
 		List *nm = NIL;
 		List *nthOidSet;
-
 		int setSize = 0;
+
+		setofsetSize = list_length(listResult);
 
 		//int *dims;
 
 
 		for (count=0; count<setofsetSize; count++)
 		{
-
+			Datum tempArrayNode;
+			Datum *oidarray;
 
 			nthOidSet = linitial(listResult);
 			listResult = list_delete_first(listResult);
 			setSize = list_length(nthOidSet);
 
 
-			Datum tempArrayNode = (Datum) NULL;
-
-			Datum *oidarray = palloc(setSize * sizeof(Oid));
+			tempArrayNode = (Datum) NULL;
+			oidarray = palloc(setSize * sizeof(Datum));
 
 
 
