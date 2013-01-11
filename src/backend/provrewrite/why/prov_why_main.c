@@ -274,7 +274,7 @@ hwhy (PG_FUNCTION_ARGS)   //user defined function?  process polynomial using sta
 		// 1) the second parameter is a array of booleans indicating for each element whether it is null or not. Allocate an bool array: bool *nullMap = palloc(setofsetSize * coldim *sizeof(bool))
 		// then you can access this thing like an array nullMap[0] = true; nullMap[1] = false;
 		// 2) similar the dims parameter is an array storing the size of each dimension. Allocate: int *dims = palloc(2 * sizeof(int));
-		// 3) lbs is also an array
+		// 3) lbs is also an array of int. It should contain only 1's.
 
 		Datum result = (Datum) construct_md_array(myResult, true, setofsetSize, coldim, NULL, 1028, -1, false, 'i' );
 		PG_RETURN_ARRAYTYPE_P(result);
