@@ -186,14 +186,13 @@ hwhy (PG_FUNCTION_ARGS)   //user defined function?  process polynomial using sta
 	}
 	//
 	//the listResult is the set of set output, e.g. final output of why provenance
-	listResult = linitial(stack);
+	listResult = (List *) linitial(stack);
 	logNode(listResult, "result of merging");
 
 	//logNode(pretty_format_node_dump(nodeToString(listResult)), "testeststst");
 
 	//4. use how prov  function to translate polynomial into oids?
 	{
-		List *cpyListResult = list_copy(listResult);
 		int setofsetSize; // compute number of elements
 		int count = 0;
 		List *nthOidSet;
@@ -201,21 +200,20 @@ hwhy (PG_FUNCTION_ARGS)   //user defined function?  process polynomial using sta
 		int coldim = 0;
 		int totalElem = 0; // total number of Oids in the set of sets.
 		int j = 0;
+		ListCell *lc;
 
-
-		setofsetSize = list_length(cpyListResult);
+		setofsetSize = list_length(listResult);
 
 		//int *dims;
 
 
 
 		//compute max col dimension
-		for (count=0; count<setofsetSize; count++)
+		foreach(lc, listResult)
 		{
-			setSize = list_length(linitial(cpyListResult));
+			setSize = list_length((List *) lfirst(lc));
 			totalElem += setSize;
-			listResult = list_delete_first(cpyListResult);
-			if (setSize > coldim)  coldim = setSize;
+			if (setSize > coldim) coldim = setSize;
 		}
 
 		//now we have row count = setofsetSize, col amount = coldim, and a set of set in ListResult
@@ -287,7 +285,7 @@ hwhy (PG_FUNCTION_ARGS)   //user defined function?  process polynomial using sta
 		dims[0] = setofsetSize;
 		dims[1] = coldim;
 
-		Datum result = (Datum) construct_md_array(myResult, nullMap, setofsetSize, dims, lbs, 1028, -1, false, 'i' );
+		Datum result = (Datum) construct_md_array(myResult, nullMap, 2, dims, lbs, OIDOID, 4, true, 'i' );
 		PG_RETURN_ARRAYTYPE_P(result);
 
 	}
