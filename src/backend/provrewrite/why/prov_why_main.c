@@ -105,6 +105,7 @@ hwhy (PG_FUNCTION_ARGS)   //user defined function?  process polynomial using sta
 	bool isOid;
 	int i;
 	List *listResult;
+	Datum result = (Datum) NULL;
 
 	if (PG_ARGISNULL(0))
 		PG_RETURN_NULL();
@@ -183,23 +184,67 @@ hwhy (PG_FUNCTION_ARGS)   //user defined function?  process polynomial using sta
 
 	}
 	//
-	//
+	//the listResult is the set of set output, e.g. final output of why provenance
 	listResult = linitial(stack);
 
 	logNode(listResult, "result of merging");
 
+	//logNode(pretty_format_node_dump(nodeToString(listResult)), "testeststst");
+
 	//4. use how prov  function to translate polynomial into oids?
 	{
-		int resSize; // compute number of elements
-		resSize = 1;
-		Datum *oidarray = palloc(resSize * sizeof(Oid));
-		int *dims;
-		Datum result = (Datum) NULL; //= construct_md_array(oidarray, NULL, 2, dims, NULL, );
+		int setofsetSize; // compute number of elements
+		setofsetSize = list_length(listResult);
+		int count = 0;
+		List *k = NIL;
+		List *nm = NIL;
+		List *nthOidSet;
+
+		int setSize = 0;
+
+		//int *dims;
+
+
+		for (count=0; count<setofsetSize; count++)
+		{
+
+
+			nthOidSet = linitial(listResult);
+			listResult = list_delete_first(listResult);
+			setSize = list_length(nthOidSet);
+
+
+			Datum tempArrayNode = (Datum) NULL;
+
+			Datum *oidarray = palloc(setSize * sizeof(Oid));
+
+
+
+			nm = list_make1_int(setSize);
+
+			k = list_make1_int(setofsetSize);
+			logNode(k,"setofsetSize k:");
+			logNode(nm,"setofsetSize nm:");
+
+			//the fetal error occurs here, before the following construct array function.
+			//the nthOidSet can correctly catch OidSet in SetofSet and the setSize stores its oid count
+			//my idea is to create fix dimensional array for each member OID Set and then create another array of array for these fix-dimension arrays, though their dimensions may vary
+			//i saw a function accumArrayResult - accumulate one (more) Datum for an array result   in arrayfuncs.c  but I dont know how to call  that function
+			result = (Datum) construct_array(nthOidSet, setSize, 1028, -1, false, 'i');
+
+			//result = (Datum) makeMdArrayResult(list_nth(listResult,i), 1, list_length(list_nth(listResult,i)), 1028, -1, false, 'i');
+			//tempArrayNode = (Datum) construct_array(list_nth(listResult,i), list_length(list_nth(listResult,i)), 1028, -1, false, 'i');
+//			DATA(insert OID = 1028 (  _oid		 PGNSP PGUID -1 f b t \054 0	26 0 array_in array_out array_recv array_send - - - i x f 0 -1 0 _null_ _null_ ));
+//			#define OIDARRAYOID			1028
+
+		}
+
+		//Datum result = (Datum) NULL; //= construct_md_array(oidarray, NULL, 2, dims, NULL, );
 
 		//PG_RETURN_POINTER(listResult);
 		//PG_RETURN_NULL();
 
-		PG_RETURN_DATUM((char *) pretty_format_node_dump(nodeToString(listResult)));
+		//PG_RETURN_DATUM((char *) pretty_format_node_dump(nodeToString(listResult)));
 
 
 //		Datum data[1];
@@ -210,7 +255,7 @@ hwhy (PG_FUNCTION_ARGS)   //user defined function?  process polynomial using sta
 //
 //		result = construct_md_array(data, NULL, 1, dim, dim, TEXTOID, -1,
 //				false, 'i');
-//		PG_RETURN_ARRAYTYPE_P(result);
+		PG_RETURN_ARRAYTYPE_P(result);
 	}
 }
 
