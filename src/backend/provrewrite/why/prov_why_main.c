@@ -187,10 +187,6 @@ hwhy (PG_FUNCTION_ARGS)   //user defined function?  process polynomial using sta
 	//
 	//the listResult is the set of set output, e.g. final output of why provenance
 	listResult = linitial(stack);
-
-
-
-
 	logNode(listResult, "result of merging");
 
 	//logNode(pretty_format_node_dump(nodeToString(listResult)), "testeststst");
@@ -225,44 +221,39 @@ hwhy (PG_FUNCTION_ARGS)   //user defined function?  process polynomial using sta
 		//now we have row count = setofsetSize, col amount = coldim, and a set of set in ListResult
 		//
 
-//		Oid myResult[setofsetSize][coldim];
-//		construct_md_array needs a Datum * as input that is a dynamically allocated array.
+		//		Oid myResult[setofsetSize][coldim];
+		//		construct_md_array needs a Datum * as input that is a dynamically allocated array.
 		Datum *myResult = palloc(totalElem * sizeof(Datum));
 		Oid nthOID;
 
 		ListCell *SetofOids;
 		bool *nullMap = palloc(setofsetSize * coldim *sizeof(bool));
-		int *dims = palloc(2 * sizeof(int));
 
 		int myResultOIDIndex = 0;
+		int nullIndex = 0;
 
 		// here I would loop through the lists using foreach and manually update a position pointer. Plus set the nullMap (see below)
 		foreach(SetofOids, listResult)
 		{
 			List *currentOIDSet;
-			currentOIDSet = SetofOids;
-
-			int currentSetSize;
-			currentSetSize = list_length(currentOIDSet);
-			int differ = coldim - currentSetSize;
 			int loopdiffer = 0;
-
+			int currentSetSize;
+			int differ;
 			ListCell *oidinset;
+
+			currentOIDSet = (List *) lfirst(SetofOids);
+			currentSetSize = list_length(currentOIDSet);
+			differ = coldim - currentSetSize;
+
 			foreach (oidinset, currentOIDSet)
 			{
 				//manually update a position pointer. Plus set the nullMap (see below)
-				myResult[myResultOIDIndex] =(Datum *) oidinset;
-				nullMap[myResultOIDIndex] = false;
-				dims[myResultOIDIndex] = 1;
-				myResultOIDIndex++;
+				myResult[myResultOIDIndex++] = ObjectIdGetDatum(lfirst_oid(oidinset));
+				nullMap[nullIndex++] = false;
 			}
 
 			for (loopdiffer = 0; loopdiffer < differ; loopdiffer ++)
-			{
-				nullMap[myResultOIDIndex] = true;
-				dims[myResultOIDIndex] = 0;
-				myResultOIDIndex++;
-			}
+				nullMap[nullIndex++] = true;
 		}
 
 		//after getting the OID matrix, create multi-dimensional arrays;
@@ -290,17 +281,16 @@ hwhy (PG_FUNCTION_ARGS)   //user defined function?  process polynomial using sta
 		int arraysize = totalElem * coldim;
 
 		int *lbs = palloc(2 * sizeof(int));
-
-		for (i=0; i<arraysize; i++)
-		{
-			lbs[i] = 0;
-		}
+		int *dims = palloc(2 * sizeof(int));
+		lbs[0] = 1;
+		lbs[1] = 1;
+		dims[0] = setofsetSize;
+		dims[1] = coldim;
 
 		Datum result = (Datum) construct_md_array(myResult, nullMap, setofsetSize, dims, lbs, 1028, -1, false, 'i' );
 		PG_RETURN_ARRAYTYPE_P(result);
 
-
-		}
+	}
 
 }
 
