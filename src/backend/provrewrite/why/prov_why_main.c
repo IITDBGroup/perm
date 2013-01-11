@@ -205,6 +205,7 @@ hwhy (PG_FUNCTION_ARGS)   //user defined function?  process polynomial using sta
 		List *nthOidSet;
 		int setSize = 0;
 		int coldim = 0;
+		int totalElem = 0; // total number of Oids in the set of sets.
 		int j = 0;
 
 
@@ -218,6 +219,7 @@ hwhy (PG_FUNCTION_ARGS)   //user defined function?  process polynomial using sta
 		for (count=0; count<setofsetSize; count++)
 		{
 			setSize = list_length(linitial(cpyListResult));
+			totalElem += setSize;
 			listResult = list_delete_first(cpyListResult);
 			if (setSize > coldim)  coldim = setSize;
 		}
@@ -225,9 +227,12 @@ hwhy (PG_FUNCTION_ARGS)   //user defined function?  process polynomial using sta
 		//now we have row count = setofsetSize, col amount = coldim, and a set of set in ListResult
 		//
 
-		Oid myResult[setofsetSize][coldim];
-		Oid nthOID = NULL;
+//		Oid myResult[setofsetSize][coldim];
+//		construct_md_array needs a Datum * as input that is a dynamically allocated array.
+		Datum *myResult = palloc(totalElem * sizeof(Datum));
+		Oid nthOID;
 
+		// here I would loop through the lists using foreach and manually update a position pointer. Plus set the nullMap (see below)
 		for (count=0; count<setofsetSize; count++)
 		{
 			Datum tempArrayNode;
@@ -264,6 +269,13 @@ hwhy (PG_FUNCTION_ARGS)   //user defined function?  process polynomial using sta
 		/* make sure data is not toasted */
 		//i dont know what to put in lbs, elmtype, elmlen, elmbyval, and elmalign
 		//
+
+		// serveral errors here:
+		// 1) the second parameter is a array of booleans indicating for each element whether it is null or not. Allocate an bool array: bool *nullMap = palloc(setofsetSize * coldim *sizeof(bool))
+		// then you can access this thing like an array nullMap[0] = true; nullMap[1] = false;
+		// 2) similar the dims parameter is an array storing the size of each dimension. Allocate: int *dims = palloc(2 * sizeof(int));
+		// 3) lbs is also an array
+
 		Datum result = (Datum) construct_md_array(myResult, true, setofsetSize, coldim, NULL, 1028, -1, false, 'i' );
 		PG_RETURN_ARRAYTYPE_P(result);
 
