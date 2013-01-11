@@ -200,8 +200,6 @@ hwhy (PG_FUNCTION_ARGS)   //user defined function?  process polynomial using sta
 		List *cpyListResult = list_copy(listResult);
 		int setofsetSize; // compute number of elements
 		int count = 0;
-//		List *k = NIL;
-//		List *nm = NIL;
 		List *nthOidSet;
 		int setSize = 0;
 		int coldim = 0;
@@ -232,27 +230,40 @@ hwhy (PG_FUNCTION_ARGS)   //user defined function?  process polynomial using sta
 		Datum *myResult = palloc(totalElem * sizeof(Datum));
 		Oid nthOID;
 
+		ListCell *SetofOids;
+		bool *nullMap = palloc(setofsetSize * coldim *sizeof(bool));
+		int *dims = palloc(2 * sizeof(int));
+
+		int myResultOIDIndex = 0;
+
 		// here I would loop through the lists using foreach and manually update a position pointer. Plus set the nullMap (see below)
-		for (count=0; count<setofsetSize; count++)
+		foreach(SetofOids, listResult)
 		{
-			Datum tempArrayNode;
-			Datum *oidarray;
+			List *currentOIDSet;
+			currentOIDSet = SetofOids;
 
-			nthOidSet = linitial(cpyListResult);
-			listResult = list_delete_first(cpyListResult);
+			int currentSetSize;
+			currentSetSize = list_length(currentOIDSet);
+			int differ = coldim - currentSetSize;
+			int loopdiffer = 0;
 
-			for (j = 0; j < coldim; j++)
+			ListCell *oidinset;
+			foreach (oidinset, currentOIDSet)
 			{
-
-				nthOID = linitial_oid(nthOidSet);
-				nthOidSet = list_delete_first(nthOidSet);
-
-				myResult[i][j] = nthOID;  //the myResult OID matrix stores all OIDs in order, I'm not sure if the linitial_oid method will also return NIL if the nthOidSet is smaller than coldim
-
+				//manually update a position pointer. Plus set the nullMap (see below)
+				myResult[myResultOIDIndex] =(Datum *) oidinset;
+				nullMap[myResultOIDIndex] = false;
+				dims[myResultOIDIndex] = 1;
+				myResultOIDIndex++;
 			}
 
+			for (loopdiffer = 0; loopdiffer < differ; loopdiffer ++)
+			{
+				nullMap[myResultOIDIndex] = true;
+				dims[myResultOIDIndex] = 0;
+				myResultOIDIndex++;
+			}
 		}
-
 
 		//after getting the OID matrix, create multi-dimensional arrays;
 		//
@@ -276,57 +287,20 @@ hwhy (PG_FUNCTION_ARGS)   //user defined function?  process polynomial using sta
 		// 2) similar the dims parameter is an array storing the size of each dimension. Allocate: int *dims = palloc(2 * sizeof(int));
 		// 3) lbs is also an array of int. It should contain only 1's.
 
-		Datum result = (Datum) construct_md_array(myResult, true, setofsetSize, coldim, NULL, 1028, -1, false, 'i' );
+		int arraysize = totalElem * coldim;
+
+		int *lbs = palloc(2 * sizeof(int));
+
+		for (i=0; i<arraysize; i++)
+		{
+			lbs[i] = 0;
+		}
+
+		Datum result = (Datum) construct_md_array(myResult, nullMap, setofsetSize, dims, lbs, 1028, -1, false, 'i' );
 		PG_RETURN_ARRAYTYPE_P(result);
 
 
-
-
-//		if (elmlen == -1)
-//			elems[i] = PointerGetDatum(PG_DETOAST_DATUM(elems[i]));
-//		nbytes = att_addlength_datum(nbytes, elmlen, elems[i]);
-//		nbytes = att_align_nominal(nbytes, elmalign);
-//
-
-//			nm = list_make1_int(setSize);
-//
-//			k = list_make1_int(setofsetSize);
-//			logNode(k,"setofsetSize k:");
-//			logNode(nm,"setofsetSize nm:");
-
-			//the fetal error occurs here, before the following construct array function.
-			//the nthOidSet can correctly catch OidSet in SetofSet and the setSize stores its oid count
-			//my idea is to create fix dimensional array for each member OID Set and then create another array of array for these fix-dimension arrays, though their dimensions may vary
-			//i saw a function accumArrayResult - accumulate one (more) Datum for an array result   in arrayfuncs.c  but I dont know how to call  that function
-			//result = (Datum) construct_array(nthOidSet, setSize, 1028, -1, false, 'i');
-
-			//result = (Datum) makeMdArrayResult(list_nth(listResult,i), 1, list_length(list_nth(listResult,i)), 1028, -1, false, 'i');
-			//tempArrayNode = (Datum) construct_array(list_nth(listResult,i), list_length(list_nth(listResult,i)), 1028, -1, false, 'i');
-//			DATA(insert OID = 1028 (  _oid		 PGNSP PGUID -1 f b t \054 0	26 0 array_in array_out array_recv array_send - - - i x f 0 -1 0 _null_ _null_ ));
-//			#define OIDARRAYOID			1028
-
 		}
-
-//		ArrayType *
-
-//
-		//Datum result = (Datum) NULL; //= construct_md_array(oidarray, NULL, 2, dims, NULL, );
-
-		//PG_RETURN_POINTER(listResult);
-	//	PG_RETURN_NULL();
-
-		//PG_RETURN_DATUM((char *) pretty_format_node_dump(nodeToString(listResult)));
-
-
-//		Datum data[1];
-//		int dim[1];
-//
-//		dim[0] = 1;
-//		data[0] = PG_GETARG_DATUM(1);
-//
-//		result = construct_md_array(data, NULL, 1, dim, dim, TEXTOID, -1,
-//				false, 'i');
-		//PG_RETURN_ARRAYTYPE_P(result);
 
 }
 
