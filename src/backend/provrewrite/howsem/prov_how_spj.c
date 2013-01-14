@@ -35,7 +35,7 @@
 	do { \
 		if (left) \
 			result = (Node *) makeFuncExpr(F_HOWPROV_MULTIPLY, HOWPROVOID, \
-					list_make2(left,right), COERCE_EXPLICIT_CALL); \
+					list_make2(left,right), COERCE_IMPLICIT_CAST); \
 		else \
 			result = right; \
 	} while (0)

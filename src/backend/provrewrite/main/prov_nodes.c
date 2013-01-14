@@ -100,7 +100,6 @@
 
 /* Read Datum Varbit field */
 #define READ_BITSET_FIELD(fldname) \
-	token = pg_strtok(&length);    /* skip :fldname */ \
 	(local_node->fldname = readDatum(false))
 
 /* Routine exit */

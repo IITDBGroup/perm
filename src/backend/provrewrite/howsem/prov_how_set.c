@@ -21,7 +21,7 @@
 #include "nodes/makefuncs.h"
 #include "nodes/parsenodes.h"
 
-#include "provrewrite/prov_set_util.h"
+#include "provrewrite/prov_set.h"
 #include "provrewrite/prov_nodes.h"
 #include "provrewrite/prov_util.h"
 #include "provrewrite/prov_how_main.h"

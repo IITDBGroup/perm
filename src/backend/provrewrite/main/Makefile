@@ -1,10 +1,10 @@
 #-------------------------------------------------------------------------
 #
 # Makefile--
-#    Makefile for backend/provrewrite/main
+#    Makefile for backend/provrewrite
 #
 # IDENTIFICATION
-#    $PostgreSQL: pgsql/src/backend/provrewrite/main/Makefile,v 1.19 2008/04/22 21:34:11 bglav Exp $
+#    $PostgreSQL: pgsql/src/backend/provrewrite/Makefile,v 1.19 2008/04/22 21:34:11 bglav Exp $
 #
 #-------------------------------------------------------------------------
 

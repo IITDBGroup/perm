@@ -4498,5 +4498,4 @@ extern Oid ProcedureCreate(const char *procedureName,
 
 extern bool function_parse_error_transpose(const char *prosrc);
 
-
 #endif   /* PG_PROC_H */

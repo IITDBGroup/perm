@@ -16,34 +16,23 @@
  */
 
 #include "postgres.h"
-
 #include "nodes/nodes.h"
-#include "nodes/makefuncs.h"			// needed to create new nodes
-#include "parser/parse_expr.h"			// expression transformation used for expression type calculation
+#include "utils/guc.h"
 #include "parser/parsetree.h"
 #include "optimizer/clauses.h"
-#include "utils/guc.h"
 
 #include "provrewrite/provlog.h"
 #include "provrewrite/prov_nodes.h"
 #include "provrewrite/provstack.h"
 #include "provrewrite/prov_util.h"
-#include "provrewrite/prov_set_util.h"
+#include "provrewrite/prov_set.h"
 #include "provrewrite/prov_sublink_util_mutate.h"
 #include "provrewrite/prov_copy_set.h"
 #include "provrewrite/prov_copy_map.h"
 #include "provrewrite/prov_copy_util.h"
 #include "provrewrite/provrewrite.h"
 
-/* macro defs */
-#define GET_SETOP(query) \
-	(((SetOperationStmt *) query->setOperations)->op)
-
 /* prototypes */
-static void rewriteCopyUnionWithWLCS (Query *query);
-static void adaptSetProvenanceAttrs (Query *query);
-static void addDummyProvAttrs (RangeTblEntry *rte, List *subProv, int pos);
-
 static void rewriteSetRTEs (Query *newTop, List **subList);
 static void createRangeTable (Query *top, Query *query);
 static void restructureSetOperationQueryNode (Query *top);
@@ -86,14 +75,6 @@ rewriteCopySetQuery (Query *query)
 	/* restructure set operation query if necessary */
 	restructureSetOperationQueryNode (query);
 
-	/* rewriting a union query for WL semantics */
-	if (prov_use_wl_union_semantics && GET_SETOP(query) == SETOP_UNION)
-	{
-		rewriteCopyUnionWithWLCS(query);
-
-		return query;
-	}
-
 	/* create new top node */
 	newTop = makeQuery();
 	newTop->targetList = copyObject(query->targetList);
@@ -125,157 +106,6 @@ rewriteCopySetQuery (Query *query)
 	pfree(context);
 
 	return newTop;
-}
-
-
-
-/*
- *
- */
-
-static void
-rewriteCopyUnionWithWLCS (Query *query)
-{
-	List *subProvs = NIL;
-	List *pList = NIL;
-	CopyMap *map;
-	RangeTblEntry *rte;
-	ListCell *lc;
-	int i;
-
-	map = GET_COPY_MAP(query);
-
-	// rewrite the range table entries and fetch their provenance attrs
-	foreachi(lc, i, query->rtable)
-	{
-		rte = (RangeTblEntry *) lfirst(lc);
-
-		/* rewritte rte if necessary */
-		if(shouldRewriteRTEforMap(map, i + 1))
-			rte->subquery = rewriteQueryNodeCopy(rte->subquery);
-	}
-
-
-//	foreach(lc, query->rtable)
-//	{
-//		rte = (RangeTblEntry *) lfirst(lc);
-//		rte->subquery = rewriteQueryNodeCopy(rte->subquery);
-//		subProvs = lappend(subProvs, linitial(pStack));
-//	}
-
-	// add projections on NULL to each subquery to generate
-	// the same schema for each subquery.
-	foreachi(lc, i, query->rtable)
-	{
-		rte = (RangeTblEntry *) lfirst(lc);
-		addDummyProvAttrs(rte, subProvs, i);
-	}
-
-	correctSubQueryAlias(query);
-
-	// push provenance list on stack and add provenance attrs to query
-	pList = addProvenanceAttrsForRange(query, 1, list_length(query->rtable) + 1, pList);
-	push(&pStack, pList);
-
-	// adapt set operation query provenance attributes
-	adaptSetProvenanceAttrs(query);
-}
-
-/*
- *
- */
-
-static void
-adaptSetProvenanceAttrs (Query *query)
-{
-	TargetEntry *te;
-	Var *var;
-	ListCell *lc;
-	int curAttno = 1;
-	List *colTypes = NIL;
-	List *colTypmods = NIL;
-
-	foreach(lc, query->targetList)
-	{
-		te = (TargetEntry *) lfirst(lc);
-		var = (Var *) te->expr;
-		var->varno = 1;
-		var->varattno = curAttno++;
-		colTypes = lappend_oid(colTypes, var->vartype);
-		colTypmods = lappend_int(colTypmods, var->vartypmod);
-	}
-
-	adaptSetStmtCols((SetOperationStmt *) query->setOperations,
-			colTypes, colTypmods);
-}
-
-
-
-/*
- *
- */
-
-static void
-addDummyProvAttrs (RangeTblEntry *rte, List *subProv, int pos)
-{
-	List *result = NIL;
-	Query *query;
-	int i;
-	ListCell *lc;
-	ListCell *innerLc;
-	List *curProvList;
-	List *ownProv;
-	TargetEntry *newTe;
-	TargetEntry *te;
-	Expr *newExpr;
-	int numSelfProvAttrs;
-	int curResno;
-
-	query = rte->subquery;
-
-	// get number of provenance attributes for the rte
-	// and remove the provenance attributes from target list
-	curProvList = (List *) list_nth(subProv, pos);
-	numSelfProvAttrs = list_length(curProvList);
-	ownProv = list_copy_tail(query->targetList,
-							list_length(query->targetList) - numSelfProvAttrs);
-	removeAfterPos(query->targetList, list_length(query->targetList) - numSelfProvAttrs);
-	result = query->targetList;
-	curResno = list_length(result) + 1;
-
-	foreachi(lc,i,subProv)
-	{
-		curProvList = (List *) lfirst(lc);
-
-		// for own provenance use the original provenance attrs
-		if (i == pos)
-		{
-			foreach(innerLc, ownProv)
-			{
-				te = (TargetEntry *) lfirst(innerLc);
-				te->resno = curResno++;
-				result = lappend(result, te);
-			}
-		}
-		// create null constants for provenance of other subqueries
-		else
-		{
-			foreach(innerLc, curProvList)
-			{
-				te = (TargetEntry *) lfirst(innerLc);
-
-				newExpr = (Expr *) makeNullConst (exprType ((Node *) te->expr),
-						exprTypmod ((Node *) te->expr));
-				newTe = makeTargetEntry(newExpr, curResno++, te->resname, false);
-
-				result = lappend(result, newTe);
-			}
-		}
-	}
-
-	query->targetList = result;
-
-	list_free(ownProv);
 }
 
 
@@ -421,6 +251,7 @@ setRelMapsAttrno (List *relMaps, int newVarno)
 	CopyMapEntry *attr;
 	AttrInclusions *attIncl, *innerIncl;
 	InclusionCond *cond, *innerCond;
+//	Var *var;
 
 	foreach(lc, relMaps)
 	{
