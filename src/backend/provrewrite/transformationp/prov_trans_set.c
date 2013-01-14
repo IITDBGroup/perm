@@ -26,7 +26,7 @@
 #include "provrewrite/provlog.h"
 #include "provrewrite/prov_trans_util.h"
 #include "provrewrite/prov_trans_main.h"
-#include "provrewrite/prov_set.h"
+#include "provrewrite/prov_set_util.h"
 #include "provrewrite/prov_nodes.h"
 #include "provrewrite/prov_util.h"
 #include "provrewrite/provstack.h"

@@ -46,6 +46,7 @@ typedef enum ContributionType
 	CONTR_WHERE_INSEN,
 	CONTR_WHERE_INSEN_NOUNION,
 	CONTR_HOW,
+	CONTR_WHY,
 	CONTR_NONE
 } ContributionType;
 
