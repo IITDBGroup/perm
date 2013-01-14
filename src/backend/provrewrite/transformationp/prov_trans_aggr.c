@@ -72,7 +72,7 @@ rewriteTransAgg (Query *query, Node **parentPointer)
 	checkOrderClause(newTopQuery, query);
 
 	/* add original query to rtable of new top query */
-	addSubqueryToRT (newTopQuery, query, appendIdToString("originalAggr", &curUniqueRelNum));
+	addSubqueryToRT (newTopQuery, query, appendIdToStringPP("originalAggr", &curUniqueRelNum));
 
 	/* add result attributes of original query to targetList */
 	rtIndex = 1;
@@ -84,7 +84,7 @@ rewriteTransAgg (Query *query, Node **parentPointer)
 	/* rewrite new subquery without aggregation */
 	newRewriteQuery = rewriteQueryNodeTrans (newRewriteQuery, NULL, (Node **) &(list_head(aggInfo->children)->data.ptr_value));
 
-	addSubqueryToRT (newTopQuery, newRewriteQuery, appendIdToString("rewrittenAggrSubquery", &curUniqueRelNum));
+	addSubqueryToRT (newTopQuery, newRewriteQuery, appendIdToStringPP("rewrittenAggrSubquery", &curUniqueRelNum));
 
 	/* correct eref for sub query entries */
 	correctSubQueryAlias (newTopQuery);

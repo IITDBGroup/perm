@@ -18,19 +18,16 @@ GNU make
      _________________________________________________________________
 
                                Short Version
+to install everything under INSTALLDIR and create a cluster at CLUSTERDIR do:
 
-./configure --with-libxml --with-libxslt
-gmake
-su
-gmake install
-adduser postgres
-mkdir /usr/local/pgsql/data
-chown postgres /usr/local/pgsql/data
-su - postgres
-/usr/local/pgsql/bin/initdb -D /usr/local/pgsql/data
-/usr/local/pgsql/bin/postgres -D /usr/local/pgsql/data >logfile 2>&1 &
-/usr/local/pgsql/bin/createdb test
-/usr/local/pgsql/bin/psql test
+./configure --with-libxml --with-libxslt --prefix=INSTALLDIR
+make
+make install
+mkdir CLUSTERDIR
+INSTALLDIR/bin/initdb -D /usr/local/pgsql/data
+INSTALLDIR/bin/postgres -D /usr/local/pgsql/data >logfile 2>&1 &
+INSTALLDIR/bin/createdb test
+INSTALLDIR/bin/psql test
 test=# CREATE LANGUAGE plpgsql;
 test=# \i /pathToPermCode/contrib/xml2/pgxml.sql
 

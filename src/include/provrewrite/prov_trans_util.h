@@ -35,7 +35,7 @@ typedef enum TransProjType
 		(makeTargetEntry( \
 			((Expr *) bitComp), \
 			list_length(query->targetList) + 1, \
-			appendIdToString("trans_prov", &curUniqueAttrNum), \
+			appendIdToStringPP("trans_prov", &curUniqueAttrNum), \
 			false))
 
 #define MAKE_VARBIT_CONST(varbitset) \

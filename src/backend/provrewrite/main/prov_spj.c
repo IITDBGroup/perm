@@ -104,7 +104,7 @@ rewriteSPJrestrict (Query *query, List **subList, Index maxRtindex)
 	correctJoinRTEs (query, subList);
 
 	/* add provenance attributes of sub queries to targetlist */
-	pList = addProvenanceAttrs (query, *subList, pList);
+	pList = addProvenanceAttrs (query, *subList, pList, true);
 
 	/* push list of provenance attributes to pStack */
 	push(&pStack, pList);

@@ -144,7 +144,7 @@ rewriteGenSublinkQuery (Query *query)
 	 */
 	result = makeQuery();
 	addSubqueryToRT(result, query,
-			appendIdToString("orig_with_limit", &curUniqueRelNum));
+			appendIdToStringPP("orig_with_limit", &curUniqueRelNum));
 
 	foreachi(lc, i, query->targetList)
 	{
@@ -235,7 +235,7 @@ addJoinWithBaseRelations (Query *query, List *baseRels)
 		baseRel = createBaseRelUnionNull (rte, query, provAttrs);
 
 		addSubqueryToRT (query, baseRel,
-				appendIdToString("base_rel_union_null",&curUniqueRelNum));
+				appendIdToStringPP("base_rel_union_null",&curUniqueRelNum));
 		correctRTEAlias (llast(query->rtable));
 		rtIndex++;
 	}
@@ -398,7 +398,7 @@ createBaseRelUnionNull (RangeTblEntry *rte, Query *query, List *provAttrs)
 	/* add base table to range table */
 	subQuery = generateBaseRelQuery (rte, provAttrs);
 	addSubqueryToRT (unionQuery, subQuery,
-			appendIdToString("base_rel", &curUniqueRelNum));
+			appendIdToStringPP("base_rel", &curUniqueRelNum));
 	correctRTEAlias((RangeTblEntry *) lfirst(unionQuery->rtable->tail));
 
 	/* create target list from base relation query target list */
@@ -407,7 +407,7 @@ createBaseRelUnionNull (RangeTblEntry *rte, Query *query, List *provAttrs)
 	/* add null tuple to range table */
 	subQuery = generateNullQuery (rte);
 	addSubqueryToRT (unionQuery, subQuery,
-			appendIdToString("null_constructor", &curUniqueRelNum));
+			appendIdToStringPP("null_constructor", &curUniqueRelNum));
 	correctRTEAlias((RangeTblEntry *) lfirst(unionQuery->rtable->tail));
 
 	/* create union */

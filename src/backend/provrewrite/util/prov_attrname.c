@@ -22,7 +22,9 @@
 
 /* prefix for provenance attributes */
 const char ProvPraefix[] = "prov_";
+const char AnnotPraefix[] = "annot_";
 const char TransProvName[] = "trans_prov";
+const char HowProvName[] = "howprov";
 
 /* list of counters for references to relations */
 static List *relRefCount;
@@ -66,6 +68,31 @@ createProvAttrName (RangeTblEntry *rte, char *name)
 	attrName = strcat(attrName, escapedName);
 
 	pfree(provRelName);
+	pfree(escapedName);
+
+	return attrName;
+}
+
+/*
+ * Generate a name for a annotation attribute used by WHERE-CS.
+ */
+
+char *
+getWhereAnnotName (char *name)
+{
+	char *escapedName;
+	char *attrName;
+	int newLength;
+
+	escapedName = escapeAttrName (name);
+
+	newLength = strlen(AnnotPraefix) + strlen(escapedName) + 1;
+
+	attrName = (char *) palloc(newLength);
+
+	attrName = strcpy(attrName, AnnotPraefix);
+	attrName = strcat(attrName, escapedName);
+
 	pfree(escapedName);
 
 	return attrName;
@@ -344,14 +371,17 @@ resetRelReferences (void)
 bool
 isProvAttr (TargetEntry *te)
 {
-  int nameLen;
+	int nameLen;
+
 	if (te->resname == NULL || (nameLen = strlen(te->resname)) < 5)
 		return false;
 
-	if (!strncmp(te->resname, ProvPraefix, 5))
+	if (!strncmp(te->resname, ProvPraefix, 5)
+			|| !strncmp(te->resname, AnnotPraefix, 6))
 		return true;
 
-	if (STR_LEN_CMP(TransProvName,10))
+	if (STR_LEN_CMP(TransProvName,10)
+			|| STR_LEN_CMP(HowProvName, 7))
 		return true;
 
 	return false;

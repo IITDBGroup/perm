@@ -58,6 +58,8 @@
 #include "provrewrite/prov_copy_inclattr.h"
 #include "provrewrite/prov_trans_main.h"
 #include "provrewrite/prov_trans_bitset.h"
+#include "provrewrite/prov_where_main.h"
+#include "provrewrite/prov_how_main.h"
 #include "provrewrite/prov_sublink_util_search.h"
 
 /*
@@ -145,7 +147,7 @@ provenanceRewriteQuery (Query *query)
 	return query;
 }
 
- /*
+/*
  * Call the rewrite method for the selected contribution semantics.
  */
 
@@ -177,6 +179,14 @@ selectRewriteProvSemantics(Query *query, char *cursorName)
 		case CONTR_TRANS_XML_SIMPLE:
 		case CONTR_MAP:
 			return rewriteQueryTransProv (query, cursorName);
+		case CONTR_WHERE:
+			return rewriteQueryWhere (query);
+		case CONTR_WHERE_INSEN:
+			return rewriteQueryWhereInSen (query);
+		case CONTR_WHERE_INSEN_NOUNION:
+			return rewriteQueryWhereInSenNoUnion (query);
+		case CONTR_HOW:
+			return rewriteQueryHow (query);
 		default:
 			elog(ERROR,
 					"unkown type of contribution semantics %d",
@@ -224,9 +234,9 @@ traverseQueryTree (RangeTblEntry *rteQuery, Query *query, char *cursorName)
 		}
 
 		/* rewrite according to the selected contribution semantics */
-		query = selectRewriteProvSemantics(query, cursorName);		
-		
-		/* reset into and utiltiy and set rewritten query in RTE if present */
+	    query = selectRewriteProvSemantics(query, cursorName);
+
+	    /* reset into and utiltiy and set rewritten query in RTE if present */
 		if (rteQuery != NULL)
 			rteQuery->subquery = query;
 
@@ -242,7 +252,7 @@ traverseQueryTree (RangeTblEntry *rteQuery, Query *query, char *cursorName)
 	}
 	else
 	{
-	        // if not, test if one of the sublinks or subqueries is marked for provenance rewrite
+		// if not, test if one of the sublinks or subqueries is marked for provenance rewrite
 		if (hasProvenanceSublink(query))
 		{
 			List *provSublinks;
@@ -258,7 +268,6 @@ traverseQueryTree (RangeTblEntry *rteQuery, Query *query, char *cursorName)
 						cursorName);
 			}
 		}
-
 
 		foreach (lc, query->rtable)
 		{

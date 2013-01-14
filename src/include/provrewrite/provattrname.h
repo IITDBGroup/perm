@@ -30,6 +30,7 @@ typedef struct RTEref {
 } RTEref;
 
 extern char *createProvAttrName (RangeTblEntry *rte, char *name);
+extern char *getWhereAnnotName (char *name);
 extern char *getRelationName (Oid relid);
 extern char *getRelationNameUnqualified (Oid relid);
 extern char *getQueryName (RangeTblEntry *rte);

@@ -90,7 +90,7 @@ rewriteUnnStrategy (Query *query, SublinkInfo *info,  Index *subList,
 	sublinkQuery = (Query *) copyObject(info->sublink->subselect);
 	info->rewrittenSublinkQuery = rewriteQueryNode(sublinkQuery);
 	addSubqueryToRT(query, info->rewrittenSublinkQuery,
-			appendIdToString("rewrittenSublink",&curUniqueRelNum));
+			appendIdToStringPP("rewrittenSublink",&curUniqueRelNum));
 	correctRTEAlias((RangeTblEntry *) lfirst(query->rtable->tail));
 	IGNORE_RTE_INDEX (query, list_length(query->rtable));
 
@@ -159,7 +159,7 @@ rewriteUnnNotStrategy (Query *query, SublinkInfo *info, Index *subList,
 	addDummyAttr(adaptedSublinkQuery);
 
 	addSubqueryToRT(query, adaptedSublinkQuery,
-					appendIdToString("sublinkForNotAny", &curUniqueRelNum));
+					appendIdToStringPP("sublinkForNotAny", &curUniqueRelNum));
 	correctRTEAlias((RangeTblEntry *) lfirst(query->rtable->tail));
 
 	MAKE_RTREF(rtRef, list_length(query->rtable));
@@ -178,7 +178,7 @@ rewriteUnnNotStrategy (Query *query, SublinkInfo *info, Index *subList,
 			rewriteQueryNode(info->rewrittenSublinkQuery);
 
 	addSubqueryToRT(query, info->rewrittenSublinkQuery,
-					appendIdToString("rewrittenSublink", &curUniqueRelNum));
+					appendIdToStringPP("rewrittenSublink", &curUniqueRelNum));
 	correctRTEAlias((RangeTblEntry *) lfirst(query->rtable->tail));
 
 	sublinkIndex = list_length(query->rtable);

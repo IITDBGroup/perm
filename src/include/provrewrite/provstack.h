@@ -21,7 +21,8 @@ extern List *pStack;
 extern List *rewriteMethodStack;
 
 /* prototypes */
-extern char *appendIdToString (char *string, int *id);
+extern char *appendIdToStringPP (char *string, int *id);
+extern char *appendIdToString (char *string, int id);
 extern void deactiveBaseRelStack (void);
 extern void resetUniqueNameGens (void);
 
@@ -52,6 +53,7 @@ extern List *reverseList (List *list);
 extern void reverseCellsInPlace (List *list);
 extern List *generateDuplicatesList (void *elem, int count);
 extern List *listNthFirstInts (int numElems, int offset);
+extern List *createIntList (int start, int length, int incr);
 
 /* helpers to record the rewrite method used */
 extern void addUsedMethod (char *method);

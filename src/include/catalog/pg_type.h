@@ -427,6 +427,7 @@ DATA(insert OID = 1007 (  _int4		 PGNSP PGUID -1 f b t \054 0	23 0 array_in arra
 #define INT4ARRAYOID		1007
 DATA(insert OID = 1008 (  _regproc	 PGNSP PGUID -1 f b t \054 0	24 0 array_in array_out array_recv array_send - - - i x f 0 -1 0 _null_ _null_ ));
 DATA(insert OID = 1009 (  _text		 PGNSP PGUID -1 f b t \054 0	25 0 array_in array_out array_recv array_send - - - i x f 0 -1 0 _null_ _null_ ));
+#define TEXTARRAYOID		1009
 DATA(insert OID = 1028 (  _oid		 PGNSP PGUID -1 f b t \054 0	26 0 array_in array_out array_recv array_send - - - i x f 0 -1 0 _null_ _null_ ));
 DATA(insert OID = 1010 (  _tid		 PGNSP PGUID -1 f b t \054 0	27 0 array_in array_out array_recv array_send - - - i x f 0 -1 0 _null_ _null_ ));
 DATA(insert OID = 1011 (  _xid		 PGNSP PGUID -1 f b t \054 0	28 0 array_in array_out array_recv array_send - - - i x f 0 -1 0 _null_ _null_ ));
@@ -613,6 +614,8 @@ DATA(insert OID = 2776 ( anynonarray	PGNSP PGUID  4 t p t \054 0 0 0 anynonarray
 #define ANYNONARRAYOID	2776
 DATA(insert OID = 3500 ( anyenum		PGNSP PGUID  4 t p t \054 0 0 0 anyenum_in anyenum_out - - - - - i p f 0 -1 0 _null_ _null_ ));
 #define ANYENUMOID		3500
+DATA(insert OID = 3786 ( howprov		PGNSP PGUID  -1 f b t \054 0 0 0 howprov_in howprov_out - - - - - i x f 0 -1 0 _null_ _null_ ));
+#define HOWPROVOID		3786
 
 
 /*

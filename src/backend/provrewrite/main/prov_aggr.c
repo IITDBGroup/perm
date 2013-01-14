@@ -96,7 +96,7 @@ rewriteAggregateQuery (Query *query)
 	checkOrderClause(newTopQuery, query);
 
 	/* add original query to rtable of new top query */
-	addSubqueryToRT (newTopQuery, query, appendIdToString("originalAggr", &curUniqueRelNum));
+	addSubqueryToRT (newTopQuery, query, appendIdToStringPP("originalAggr", &curUniqueRelNum));
 
 	/* add result attributes of original query to targetList */
 	rtIndex = 1;
@@ -108,7 +108,7 @@ rewriteAggregateQuery (Query *query)
 	/* rewrite new subquery without aggregation */
 	newRewriteQuery = rewriteQueryNode (newRewriteQuery);
 
-	addSubqueryToRT (newTopQuery, newRewriteQuery, appendIdToString("rewrittenAggrSubquery", &curUniqueRelNum));
+	addSubqueryToRT (newTopQuery, newRewriteQuery, appendIdToStringPP("rewrittenAggrSubquery", &curUniqueRelNum));
 
 	/* correct eref for sub query entries */
 	correctSubQueryAlias (newTopQuery);
@@ -123,7 +123,7 @@ rewriteAggregateQuery (Query *query)
 	adaptRTEsForJoins(list_make1(linitial(newTopQuery->jointree->fromlist)), newTopQuery, "joinAggAndRewrite");
 
 	/* add provenance attributes of sub queries to targetlist */
-	pList = addProvenanceAttrs (newTopQuery, list_make1_int (2), pList);
+	pList = addProvenanceAttrs (newTopQuery, list_make1_int (2), pList, true);
 
 
 	/* push list of provenance attributes to pStack */
@@ -174,7 +174,7 @@ rewriteAggrSubqueryForRewrite (Query *query, bool returnMapping)
 
 			te->resno = curResno;
 			if (te->resjunk)
-				te->resname = appendIdToString("skippedGroupBy", &curUniqueAttrNum);
+				te->resname = appendIdToStringPP("skippedGroupBy", &curUniqueAttrNum);
 			te->resjunk = false;
 
 			newTargetList = lappend(newTargetList, te);
@@ -282,7 +282,7 @@ addSubqueryTargetListToTargetList (Query *query, Index rtindex)
 		else
 		{
 			subTe->resjunk = false;
-			subTe->resname = appendIdToString("skippedGroupBy", &curUniqueAttrNum);
+			subTe->resname = appendIdToStringPP("skippedGroupBy", &curUniqueAttrNum);
 		}
 	}
 

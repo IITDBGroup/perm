@@ -100,6 +100,7 @@
 
 /* Read Datum Varbit field */
 #define READ_BITSET_FIELD(fldname) \
+	token = pg_strtok(&length);    /* skip :fldname */ \
 	(local_node->fldname = readDatum(false))
 
 /* Routine exit */
@@ -278,6 +279,8 @@ static CopyMapRelEntry *_copyCopyMapRelEntry(CopyMapRelEntry *from);
 static CopyMapEntry *_copyCopyMapEntry(CopyMapEntry *from);
 static CopyProvAttrInfo *_copyCopyProvAttrInfo(CopyProvAttrInfo *from);
 static AttrInclusions *_copyAttrInclusions(AttrInclusions *from);
+static WhereProvInfo *_copyWhereProvInfo(WhereProvInfo *from);
+static WhereAttrInfo *_copyWhereAttrInfo(WhereAttrInfo *from);
 static InclusionCond *_copyInclusionCond(InclusionCond *from);
 static TransProvInfo *_copyTransProvInfo(TransProvInfo *from);
 static TransSubInfo *_copyTransSubInfo(TransSubInfo *from);
@@ -306,6 +309,8 @@ static CopyMap *_readCopyMap(void);
 static CopyMapRelEntry *_readCopyMapRelEntry(void);
 static CopyMapEntry *_readCopyMapEntry(void);
 static CopyProvAttrInfo *_readCopyProvAttrInfo(void);
+static WhereProvInfo *_readWhereProvInfo(void);
+static WhereAttrInfo *_readWhereAttrInfo(void);
 static AttrInclusions *_readAttrInclusions(void);
 static InclusionCond *_readInclusionCond(void);
 static TransProvInfo *_readTransProvInfo(void);
@@ -329,6 +334,8 @@ static void _outCopyMapEntry (StringInfo str, CopyMapEntry *node);
 static void _outAttrInclusions (StringInfo str, AttrInclusions *node);
 static void _outInclusionCond (StringInfo str, InclusionCond *node);
 static void _outCopyProvAttrInfo (StringInfo str, CopyProvAttrInfo *node);
+static void _outWhereProvInfo (StringInfo str, WhereProvInfo *node);
+static void _outWhereAttrInfo (StringInfo str, WhereAttrInfo *node);
 static void _outSelScope(StringInfo str, SelScope *node);
 static void _outTransProvInfo(StringInfo str, TransProvInfo *node);
 static void _outTransSubInfo(StringInfo str, TransSubInfo *node);
@@ -356,6 +363,8 @@ static bool _equalCopyMapEntry (CopyMapEntry *a, CopyMapEntry *b);
 static bool _equalAttrInclusions (AttrInclusions *a, AttrInclusions *b);
 static bool _equalInclusionCond (InclusionCond *a, InclusionCond *b);
 static bool _equalCopyProvAttrInfo (CopyProvAttrInfo *a, CopyProvAttrInfo *b);
+static bool _equalWhereProvInfo (WhereProvInfo *a, WhereProvInfo *b);
+static bool _equalWhereAttrInfo (WhereAttrInfo *a, WhereAttrInfo *b);
 static bool _equalVarLengthIntArray (int *a, int *b, int numA, int numB);
 static bool _equalTransProvInfo (TransProvInfo *a, TransProvInfo *b);
 static bool _equalTransSubInfo (TransSubInfo *a, TransSubInfo *b);
@@ -809,6 +818,12 @@ provNodesEquals(void *a, void *b)
 	case T_InclusionCond:
 		retval = _equalInclusionCond(a,b);
 		break;
+	case T_WhereProvInfo:
+		retval = _equalWhereProvInfo(a,b);
+		break;
+	case T_WhereAttrInfo:
+		retval = _equalWhereAttrInfo(a,b);
+		break;
 	case T_TransProvInfo:
 		retval = _equalTransProvInfo(a,b);
 		break;
@@ -1057,6 +1072,24 @@ _equalCopyProvAttrInfo (CopyProvAttrInfo *a, CopyProvAttrInfo *b)
 }
 
 static bool
+_equalWhereProvInfo (WhereProvInfo *a, WhereProvInfo *b)
+{
+	COMPARE_NODE_FIELD(attrInfos);
+
+	return true;
+}
+
+static bool
+_equalWhereAttrInfo (WhereAttrInfo *a, WhereAttrInfo *b)
+{
+	COMPARE_NODE_FIELD(outVar);
+	COMPARE_NODE_FIELD(inVars);
+	COMPARE_NODE_FIELD(annotVars);
+
+	return true;
+}
+
+static bool
 _equalVarLengthIntArray (int *a, int *b, int numA, int numB)
 {
 	int i;
@@ -1177,6 +1210,12 @@ outProvNode(StringInfo str, void *obj)
 		break;
 	case T_CopyProvAttrInfo:
 		_outCopyProvAttrInfo(str, obj);
+		break;
+	case T_WhereProvInfo:
+		_outWhereProvInfo(str, obj);
+		break;
+	case T_WhereAttrInfo:
+		_outWhereAttrInfo(str, obj);
 		break;
 	case T_TransProvInfo:
 		_outTransProvInfo(str, obj);
@@ -1451,6 +1490,24 @@ _outCopyProvAttrInfo (StringInfo str, CopyProvAttrInfo *node)
 }
 
 static void
+_outWhereProvInfo (StringInfo str, WhereProvInfo *node)
+{
+	WRITE_NODE_TYPE("WHEREPROVINFO");
+
+	WRITE_NODE_FIELD(attrInfos);
+}
+
+static void
+_outWhereAttrInfo (StringInfo str, WhereAttrInfo *node)
+{
+	WRITE_NODE_TYPE("WHEREATTRINFO");
+
+	WRITE_NODE_FIELD(outVar);
+	WRITE_NODE_FIELD(inVars);
+	WRITE_NODE_FIELD(annotVars);
+}
+
+static void
 _outXsltFuncExpr (StringInfo str, XsltFuncExpr *node)
 {
 	WRITE_NODE_TYPE("XSLTFUNCEXPR");
@@ -1565,6 +1622,10 @@ parseProvNodeString(char *token, int length)
 		retval = _readCopyProvAttrInfo();
 	else if (MATCH("COPYMAPENTRY", 12))
 		retval = _readCopyMapEntry();
+	else if (MATCH("WHEREPROVINFO", 13))
+		retval = _readWhereProvInfo();
+	else if (MATCH("WHEREATTRINFO", 13))
+		retval = _readWhereAttrInfo();
 	else if (MATCH("TRANSPROVINFO", 13))
 		retval = _readTransProvInfo();
 	else if (MATCH("TRANSSUBINFO", 12))
@@ -1759,6 +1820,28 @@ _readCopyProvAttrInfo(void)
 	READ_DONE();
 }
 
+static WhereProvInfo *
+_readWhereProvInfo(void)
+{
+	READ_LOCALS(WhereProvInfo);
+
+	READ_NODE_FIELD(attrInfos);
+
+	READ_DONE();
+}
+
+static WhereAttrInfo *
+_readWhereAttrInfo(void)
+{
+	READ_LOCALS(WhereAttrInfo);
+
+	READ_NODE_FIELD(outVar);
+	READ_NODE_FIELD(inVars);
+	READ_NODE_FIELD(annotVars);
+
+	READ_DONE();
+}
+
 static AttrInclusions *
 _readAttrInclusions(void)
 {
@@ -1891,6 +1974,12 @@ void *copyProvNode (void *from)
 			break;
 		case T_CopyProvAttrInfo:
 			retval = _copyCopyProvAttrInfo(from);
+			break;
+		case T_WhereProvInfo:
+			retval = _copyWhereProvInfo(from);
+			break;
+		case T_WhereAttrInfo:
+			retval = _copyWhereAttrInfo(from);
 			break;
 		case T_TransProvInfo:
 			retval = _copyTransProvInfo(from);
@@ -2207,6 +2296,28 @@ _copyAttrInclusions(AttrInclusions *from)
 	COPY_NODE_FIELD(attr);
 	COPY_NODE_FIELD(inclConds);
 	COPY_SCALAR_FIELD(isStatic);
+
+	return newnode;
+}
+
+static WhereProvInfo *
+_copyWhereProvInfo(WhereProvInfo *from)
+{
+	WhereProvInfo *newnode = makeNode(WhereProvInfo);
+
+	COPY_NODE_FIELD(attrInfos);
+
+	return newnode;
+}
+
+static WhereAttrInfo *
+_copyWhereAttrInfo(WhereAttrInfo *from)
+{
+	WhereAttrInfo *newnode = makeNode(WhereAttrInfo);
+
+	COPY_NODE_FIELD(outVar);
+	COPY_NODE_FIELD(inVars);
+	COPY_NODE_FIELD(annotVars);
 
 	return newnode;
 }

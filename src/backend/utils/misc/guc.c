@@ -275,7 +275,7 @@ char	   *session_authorization_string;
 
 /* provenance module configuration parameters */
 bool prov_use_set_optimization = true;
-bool prov_use_wl_union_semantics = false;
+bool prov_use_wl_union_semantics = true;
 bool prov_use_sublink_optimization_left_join = true;
 bool prov_use_sublink_move_to_target = false;
 bool prov_use_sublink_transfrom_top_level_any_to_join = true;
@@ -1129,7 +1129,7 @@ static struct config_bool ConfigureNamesBool[] =
 						 "For target list sublinks the left join rewrite method is more efficient."),
 		},
 		&prov_use_sublink_move_to_target,
-		true, NULL, NULL
+		false, NULL, NULL
 	},
 
 	{
@@ -1195,7 +1195,7 @@ static struct config_bool ConfigureNamesBool[] =
 					"of (t,r,s)"),
 		},
 		&prov_use_wl_union_semantics,
-		false, NULL, NULL
+		true, NULL, NULL
 	},
 
 

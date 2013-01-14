@@ -49,6 +49,7 @@
 #include "utils/xml.h"
 
 #include "provrewrite/parse_back_db2.h"
+#include "provrewrite/prov_parse_back_replace_unnamed.h"
 #include "provrewrite/prov_util.h"
 
 /* ----------

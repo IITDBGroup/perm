@@ -696,7 +696,7 @@ transformSelectStmt(ParseState *pstate, SelectStmt *stmt)
 	qry->targetList = transformTargetList(pstate, stmt->targetList);
 
 	/* mark column origins */
-	markTargetListOrigins(pstate, qry->targetList);
+//	markTargetListOrigins(pstate, qry->targetList);
 
 	/* transform WHERE */
 	qual = transformWhereClause(pstate, stmt->whereClause, "WHERE");
@@ -1168,7 +1168,7 @@ transformSetOperationStmt(ParseState *pstate, SelectStmt *stmt)
 	}
 
 	/* add dummy provInfo */
-	qry->provInfo = makeProvInfo();
+	qry->provInfo = (Node *) makeProvInfo();
 //	SetProvRewrite(qry, false);
 
 	return qry;
@@ -1584,7 +1584,7 @@ transformReturningList(ParseState *pstate, List *returningList)
 		  errmsg("RETURNING cannot contain references to other relations")));
 
 	/* mark column origins */
-	markTargetListOrigins(pstate, rlist);
+//	markTargetListOrigins(pstate, rlist);
 
 	/* restore state */
 	pstate->p_next_resno = save_next_resno;

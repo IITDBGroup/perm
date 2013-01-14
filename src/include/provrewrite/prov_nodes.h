@@ -42,6 +42,11 @@ typedef enum ContributionType
 	CONTR_TRANS_XML,
 	CONTR_TRANS_XML_SIMPLE,
 	CONTR_MAP,
+	CONTR_WHERE,
+	CONTR_WHERE_INSEN,
+	CONTR_WHERE_INSEN_NOUNION,
+	CONTR_HOW,
+	CONTR_WHY,
 	CONTR_NONE
 } ContributionType;
 
@@ -133,7 +138,7 @@ typedef struct InclusionCond {
 	NodeTag type;
 	InclCondType inclType;
 	Node *existsAttr;	// used in all condition types
-	List *eqVars;			// for INCL_EQUAL the Y attribut
+	List *eqVars;		// for INCL_EQUAL the Y attribut
 	Node *cond;			// for INCL_EQUAL
 } InclusionCond;
 
@@ -148,6 +153,23 @@ struct CopyProvAttrInfo
 	Node *bitSetComposition;
 	int outAttrNum;
 };
+
+/*
+ * Datastructures for Where-CS provenance computation.
+ */
+
+typedef struct WhereProvInfo
+{
+	NodeTag type;
+	List *attrInfos;
+} WhereProvInfo;
+
+typedef struct WhereAttrInfo {
+	NodeTag type;
+	Var *outVar;
+	List *inVars;
+	List *annotVars;
+} WhereAttrInfo;
 
 /*
  * Datastructure that stores information for a query node that is needed for
@@ -525,7 +547,6 @@ extern bool provNodesEquals(void *a, void *b);
 #define RTE_IS_BASE_OR_PROV(rte) \
 	((((RangeTblEntry *) rte)->provAttrs != NIL) || (((RangeTblEntry *) rte)->isProvBase))
 
-
 /* mark or unmark a query for provenance rewrite */
 #define SetProvRewrite(query,value) \
 	do { \
@@ -609,6 +630,14 @@ extern bool provNodesEquals(void *a, void *b);
 		result->cond = condition; \
 	} while (0)
 
+/* return the where-cs provenance info for the query */
+#define GET_WHERE_PROVINFO(query) \
+	((WhereProvInfo *) ((ProvInfo *) (((Query *) query)->provInfo))->copyInfo)
+
+/* return the list of where-cs attribute infos for the query */
+#define GET_WHERE_ATTRINFOS(query) \
+	((WhereProvInfo *) ((ProvInfo *) (((Query *) query)->provInfo))->copyInfo)->attrInfos
+
 /* true if the sublinks of a query have been rewritten */
 #define IsSublinkRewritten(query) \
 	((((Query *) (query))->provInfo != NULL) && ((ProvInfo *) ((Query *) query)->provInfo)->provSublinkRewritten)
@@ -660,7 +689,7 @@ extern bool provNodesEquals(void *a, void *b);
 
 #define DO_SET_TRANS_INFO(query) \
 	do { \
-		SET_TRANS_INFO(query); \
+		TransProvInfo *dummy = SET_TRANS_INFO(query); \
 	} while (0)
 
 #define SET_TRANS_INFO_TO(query,newInfo) \

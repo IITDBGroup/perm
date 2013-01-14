@@ -248,7 +248,7 @@ generateCopyMapAttributes (Query *query, int numQAttrs)
 			i++;
 			te = makeTargetEntry((Expr *)
 					copyObject(attrInfo->bitSetComposition),
-					copyAttrPos, appendIdToString("copymap_", &i) ,false);
+					copyAttrPos, appendIdToStringPP("copymap_", &i) ,false);
 			query->targetList = lappend(query->targetList, te);
 		}
 	}

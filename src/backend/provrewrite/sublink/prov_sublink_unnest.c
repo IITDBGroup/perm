@@ -372,7 +372,7 @@ rewriteNotToLeftJoin(Query *query, SublinkInfo *info, Index *subList,
 			query->rtable) + 1);
 
 	/* add rewriten sublink to RT */
-	addSubqueryToRT(query, info->rewrittenSublinkQuery, appendIdToString(
+	addSubqueryToRT(query, info->rewrittenSublinkQuery, appendIdToStringPP(
 			"rewrittenSublink", &curUniqueRelNum));
 	correctRTEAlias((RangeTblEntry *) lfirst(query->rtable->tail));
 
@@ -429,7 +429,7 @@ rewriteAggregateSublinkQuery(Query *query, SublinkInfo *info, Index *subList,
 	addDummyAttr(info->rewrittenSublinkQuery);
 
 	/* add rewriten sublink to RT */
-	addSubqueryToRT(query, info->rewrittenSublinkQuery, appendIdToString(
+	addSubqueryToRT(query, info->rewrittenSublinkQuery, appendIdToStringPP(
 			"rewrittenSublink", &curUniqueRelNum));
 	correctRTEAlias((RangeTblEntry *) lfirst(query->rtable->tail));
 
@@ -459,7 +459,7 @@ rewriteExistsSublinkQuery(Query *query, SublinkInfo *info, Index *subList)
 		rewriteExistsWithoutInject(query, info);
 
 	/* add rewriten sublink to RT */
-	addSubqueryToRT(query, info->rewrittenSublinkQuery, appendIdToString(
+	addSubqueryToRT(query, info->rewrittenSublinkQuery, appendIdToStringPP(
 			"rewrittenSublink", &curUniqueRelNum));
 	correctRTEAlias((RangeTblEntry *) lfirst(query->rtable->tail));
 
@@ -595,7 +595,7 @@ addJoinForCorrelationPredicates(Query *query, SublinkInfo *info)
 		if (!list_member(joinAddedQueries, varQuery))
 		{
 			joinQueryRTEs(varQuery);
-			addSubqueryToRT(varQuery, rewritten, appendIdToString(
+			addSubqueryToRT(varQuery, rewritten, appendIdToStringPP(
 					"topForCorrelatedVar", &curUniqueRelNum));
 			setIgnoreRTE(
 					rt_fetch(list_length(varQuery->rtable), varQuery->rtable));
@@ -706,7 +706,7 @@ generateInjectQuery(Query *query, SublinkInfo *info, Index *newCorrVarnos,
 		if (!te)
 		{
 			te = makeTargetEntry((Expr *) var, list_length(result->targetList)
-					+ 1, appendIdToString("newCorrAttr", &curUniqueAttrNum),
+					+ 1, appendIdToStringPP("newCorrAttr", &curUniqueAttrNum),
 					false);
 			result->targetList = lappend(result->targetList, te);
 		}
@@ -887,7 +887,7 @@ generateGroupByForExists(SublinkInfo *info)
 			curResno++;
 			var = (Var *) lfirst(innerLc);
 
-			te = makeTargetEntry((Expr *) var, curResno, appendIdToString(
+			te = makeTargetEntry((Expr *) var, curResno, appendIdToStringPP(
 					"groupForDecorr", &curUniqueAttrNum), false);
 			query->targetList = lappend(query->targetList, te);
 
@@ -935,7 +935,7 @@ generateGroupByForExistsInject(SublinkInfo *info, List *predVars)
 
 		curResno++;
 
-		te = makeTargetEntry((Expr *) var, curResno, appendIdToString(
+		te = makeTargetEntry((Expr *) var, curResno, appendIdToStringPP(
 				"groupForDecorr", &curUniqueAttrNum), false);
 		query->targetList = lappend(query->targetList, te);
 
@@ -993,7 +993,7 @@ generateGroupBy(SublinkInfo *info)
 			curRessortref++;
 			var = (Var *) lfirst(innerLc);
 
-			te = makeTargetEntry((Expr *) var, curResno, appendIdToString(
+			te = makeTargetEntry((Expr *) var, curResno, appendIdToStringPP(
 					"groupForDecorr", &curUniqueAttrNum), false);
 			te->ressortgroupref = curRessortref;
 			query->targetList = lappend(query->targetList, te);
@@ -1089,7 +1089,7 @@ generateGroupByForInject(SublinkInfo *info, List *predVars)
 		curResno++;
 		curRessortref++;
 
-		te = makeTargetEntry((Expr *) var, curResno, appendIdToString(
+		te = makeTargetEntry((Expr *) var, curResno, appendIdToStringPP(
 				"groupForDecorr", &curUniqueAttrNum), false);
 		te->ressortgroupref = curRessortref;
 		query->targetList = lappend(query->targetList, te);

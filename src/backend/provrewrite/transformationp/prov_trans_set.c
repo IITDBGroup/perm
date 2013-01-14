@@ -26,7 +26,7 @@
 #include "provrewrite/provlog.h"
 #include "provrewrite/prov_trans_util.h"
 #include "provrewrite/prov_trans_main.h"
-#include "provrewrite/prov_set.h"
+#include "provrewrite/prov_set_util.h"
 #include "provrewrite/prov_nodes.h"
 #include "provrewrite/prov_util.h"
 #include "provrewrite/provstack.h"
@@ -124,7 +124,7 @@ rewriteTransSet (Query *query, Node **parent, RangeTblEntry *queryRte)
 	SetSublinkRewritten(newTop, true);
 
 	/* add original query as first range table entry */
-	addSubqueryToRTWithParam (newTop, orig, "originalSet", false,
+	addSubqueryToRTWithParam (newTop, orig, "originalSet", true,
 			ACL_NO_RIGHTS, false);
 
 	/* rewrite RTEs of query */
@@ -187,7 +187,7 @@ rewriteStaticSetOp (Query *query, Node **parentInfo)
 	TransProvInfo *info;
 
 	newTop = makeQuery();
-	addSubqueryToRT(newTop, query, appendIdToString("originalSet",
+	addSubqueryToRT(newTop, query, appendIdToStringPP("originalSet",
 			&curUniqueRelNum));
 	addSubqueryTargetListToTargetList(query, 1);
 

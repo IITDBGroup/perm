@@ -51,7 +51,7 @@ resetUniqueNameGens (void)
  *
  */
 char *
-appendIdToString (char *string, int *id)
+appendIdToStringPP (char *string, int *id)
 {
 	char *result;
 	char *numString;
@@ -70,6 +70,29 @@ appendIdToString (char *string, int *id)
 
 	return result;
 }
+
+/*
+ * Append a number to a string
+ */
+char *
+appendIdToString (char *string, int id) {
+	char *result;
+	char *numString;
+	int newLen;
+
+	numString = palloc((sizeof(int)) * 8 + 1);
+	sprintf(numString, "%i", id);
+	newLen = strlen(string) + strlen(numString) + 1;
+
+	result = palloc(newLen);
+	result = strcpy(result, string);
+	result = strcat(result, numString);
+
+	pfree(numString);
+
+	return result;
+}
+
 
 /*
  * Deactives the baseRelStack by removing all elements from the stack and set baseRelStackActive to false.
@@ -276,9 +299,7 @@ popListAndReverse (List **stack, int numElem)
 
 	result = NIL;
 	for (i = 0; i < numElem; i++)
-	{
 		result = lcons(pop(stack),result);
-	}
 
 	logPList(result);
 
@@ -767,6 +788,21 @@ listNthFirstInts (int numElems, int offset)
 
 	while(numElems-- > 0)
 		result = lcons_int(numElems + offset, result);
+
+	return result;
+}
+
+/*
+ * Create a list of integers of length "length" starting with "start", using increment "incr".
+ */
+
+List *
+createIntList (int start, int length, int incr)
+{
+	List *result = NIL;
+
+	for (; length > 0; length--, start += incr)
+		result = lappend_int(result, start);
 
 	return result;
 }

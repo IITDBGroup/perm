@@ -96,11 +96,9 @@ addProvenanceAttrsForRange (Query *query, int min, int max, List *pList)
 
 	subList = NIL;
 	for(i = min; i < max; i++)
-	{
 		subList = lappend_int(subList, i);
-	}
 
-	return addProvenanceAttrs (query, subList, pList);
+	return addProvenanceAttrs (query, subList, pList, true);
 }
 
 /*
@@ -110,7 +108,7 @@ addProvenanceAttrsForRange (Query *query, int min, int max, List *pList)
  */
 
 List *
-addProvenanceAttrs (Query *query, List *subList, List *pList)
+addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
 {
 	ListCell *subqLc;
 	ListCell *pTeLc;
@@ -151,7 +149,8 @@ addProvenanceAttrs (Query *query, List *subList, List *pList)
 			newTe = makeTargetEntry(expr, curResno, te->resname, false);
 
 			/* adapt varno und varattno if referenced rte is used in a join-RTE */
-			getRTindexForProvTE (query, (Var *) expr);
+			if (adaptToJoins)
+				getRTindexForProvTE (query, (Var *) expr);
 
 			/* append to targetList and pList */
 			targetList = lappend (targetList, newTe);
@@ -294,7 +293,7 @@ correctRTEAlias (RangeTblEntry *rte)
 		foreach (lc, subQuery->targetList)
 		{
 			te = (TargetEntry *) lfirst(lc);
-			colnames = lappend(colnames, makeString(te->resname)); //TODO copy String
+			colnames = lappend(colnames, makeString(pstrdup(te->resname)));
 		}
 
 		rte->eref->colnames = colnames;
@@ -880,6 +879,11 @@ createComparison (Node *left, Node *right, ComparisonType type)
 						false, -1);
 			break;
 			default:
+				ereport(ERROR,
+						(errcode(ERRCODE_INTERNAL_ERROR),
+				 				 errmsg("Can only create <,<=,>=,> and = operators "
+				 						 "and not %s",
+				 						 strVal(((Value *) linitial(opName))))));
 			break;
 		}
 
@@ -1079,14 +1083,12 @@ isUsedInOrderBy (Query *query, TargetEntry *te)
 	GroupClause *groupClause;
 		ListCell *lc;
 
-		foreach(lc, query->sortClause)//TODO extract method to iterate over group or sort clause
+		foreach(lc, query->sortClause)
 		{
 			groupClause = (GroupClause *) lfirst(lc);
 
 			if (groupClause->tleSortGroupRef == te->ressortgroupref)
-			{
 				return true;
-			}
 		}
 		return false;
 }
@@ -1107,9 +1109,7 @@ isUsedInGroupBy(Query *query, TargetEntry *te)
 		groupClause = (GroupClause *) lfirst(lc);
 
 		if (groupClause->tleSortGroupRef == te->ressortgroupref)
-		{
 			return true;
-		}
 	}
 	return false;
 }
@@ -1256,7 +1256,7 @@ createJoinExpr (Query *query, JoinType joinType)
  * true NOT DISTINCT conditions are used to compare the attributes. Otherwise
  * simple equality is used.
  */
-//TODO currently only for subquery rtes!
+//NOTE currently only for subquery rtes!
 JoinExpr *
 createJoinOnAttrs (Query *query, JoinType joinType, Index leftRT,
 		Index rightRT, List *leftAttrs, List *rightAttrs, bool useNotDistinct)

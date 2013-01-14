@@ -4431,7 +4431,24 @@ DATA(insert OID = 3781 (  bitset_contains	PGNSP PGUID 12 1  0 f f f f i 2 16 "15
 DESCR("Checks for two varbit parameters if the bitset represented by the right parameter is contained in the bitset represented by the left parameter");
 DATA(insert OID = 3782 (  bitset_nonzero_repeat	PGNSP PGUID 12 1  0 f f f f i 2 16 "1562 23" _null_ _null_ _null_ bitset_nonzero_repeat - _null_ _null_ ));
 DESCR("Checks for a varbit parameter if each consecutive group of bits contains has at least one bit set to 1. The length of the groups is given as the second parameter");
-
+DATA(insert OID = 3784 (  textarray_unique_concat	PGNSP PGUID 12 1  0 f f f f i 2 1009 "1009 25" _null_ _null_ _null_ textarray_unique_concat - _null_ _null_ ));
+DESCR("Add a text parameter to an text array if it is not already included in the array");
+DATA(insert OID = 3785 (  tarr_conc	PGNSP PGUID 12 1  0 t f f f i 1 1009 "25" _null_ _null_ _null_ aggregate_dummy - _null_ _null_ ));
+DESCR("Aggregate function that creates an text array out of text input (no duplicates).");
+DATA(insert OID = 3787 (  howprov_in PGNSP PGUID 12 1 0 f f t f i 3 3786 "2275 26 23" _null_ _null_ _null_ howprov_in - _null_ _null_ ));
+DESCR("I/O");
+DATA(insert OID = 3788 (  howprov_out PGNSP PGUID 12 1 0 f f t f i 1 2275 "3786" _null_ _null_ _null_ howprov_out - _null_ _null_ ));
+DESCR("I/O");
+DATA(insert OID = 3789 (  how_to_human PGNSP PGUID 12 1 0 f f t f i 1 25 "3786" _null_ _null_ _null_ howprov_out_human - _null_ _null_ ));
+DESCR("Translates the polish how-CS notation into infix notation");
+DATA(insert OID = 3790 (  how_pl PGNSP PGUID 12 1 0 f f f f i 2 3786 "3786 3786" _null_ _null_ _null_ howprov_add - _null_ _null_ ));
+DESCR("Adds two how-provenance expressions");
+DATA(insert OID = 3791 (  how_mul PGNSP PGUID 12 1 0 f f f f i 2 3786 "3786 3786" _null_ _null_ _null_ howprov_multiply - _null_ _null_ ));
+DESCR("Multiplies two how-provenance expressions");
+DATA(insert OID = 3792 (  how_sum PGNSP PGUID 12 1 0 t f f f i 1 3786 "3786" _null_ _null_ _null_ aggregate_dummy - _null_ _null_ ));
+DESCR("Aggregate functions that sums up how-provenance inputs");
+DATA(insert OID = 3793 (  oid_to_howprov PGNSP PGUID 12 1 0 f f t f i 1 3786 "26" _null_ _null_ _null_ oid_to_howprov - _null_ _null_ ));
+DESCR("Interprets an oid as a how-CS value");
 
 /*
  * Symbolic values for provolatile column: these indicate whether the result
@@ -4480,5 +4497,6 @@ extern Oid ProcedureCreate(const char *procedureName,
 				float4 prorows);
 
 extern bool function_parse_error_transpose(const char *prosrc);
+
 
 #endif   /* PG_PROC_H */

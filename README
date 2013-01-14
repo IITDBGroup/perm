@@ -3,7 +3,8 @@ Perm Provenance Enhanced Database Management System
 
 This directory contains the source code distribution of the Perm 
 provenance enhanced database management system. Perm is a modified
-version of PostgreSQL (see below) that extends the SQL 
+version of PostgreSQL (see below) that extends the SQL dialect of PostgreSQL
+ with constructs to retrieve the provenance of a query.
 
 For more information look at our web site located at 
 http://permdbms.sourceforge.net/.
