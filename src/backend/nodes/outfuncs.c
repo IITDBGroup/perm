@@ -1620,6 +1620,7 @@ _outSelectStmt(StringInfo str, SelectStmt *node)
 	WRITE_NODE_FIELD(whereClause);
 	WRITE_NODE_FIELD(groupClause);
 	WRITE_NODE_FIELD(havingClause);
+	WRITE_NODE_FIELD(aggprojectClause);
 	WRITE_NODE_FIELD(valuesLists);
 	WRITE_NODE_FIELD(sortClause);
 	WRITE_NODE_FIELD(limitOffset);
@@ -1769,7 +1770,6 @@ _outQuery(StringInfo str, Query *node)
 	WRITE_NODE_FIELD(returningList);
 	WRITE_NODE_FIELD(groupClause);
 	WRITE_NODE_FIELD(havingQual);
-	WRITE_NODE_FIELD(aggprojectClause);
 	WRITE_NODE_FIELD(distinctClause);
 	WRITE_NODE_FIELD(sortClause);
 	WRITE_NODE_FIELD(limitOffset);
@@ -1777,6 +1777,7 @@ _outQuery(StringInfo str, Query *node)
 	WRITE_NODE_FIELD(rowMarks);
 	WRITE_NODE_FIELD(setOperations);
 	WRITE_NODE_FIELD(provInfo);
+	WRITE_NODE_FIELD(aggprojectClause);
 }
 
 static void

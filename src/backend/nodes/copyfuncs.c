@@ -1879,6 +1879,7 @@ _copyQuery(Query *from)
 	COPY_NODE_FIELD(rowMarks);
 	COPY_NODE_FIELD(setOperations);
 	COPY_NODE_FIELD(provInfo);
+	COPY_NODE_FIELD(aggprojectClause);
 
 	return newnode;
 }
@@ -1935,6 +1936,7 @@ _copySelectStmt(SelectStmt *from)
 	COPY_NODE_FIELD(whereClause);
 	COPY_NODE_FIELD(groupClause);
 	COPY_NODE_FIELD(havingClause);
+	COPY_NODE_FIELD(aggprojectClause);
 	COPY_NODE_FIELD(valuesLists);
 	COPY_NODE_FIELD(sortClause);
 	COPY_NODE_FIELD(limitOffset);

@@ -772,8 +772,7 @@ _equalQuery(Query *a, Query *b)
 	COMPARE_NODE_FIELD(rowMarks);
 	COMPARE_NODE_FIELD(setOperations);
 	COMPARE_NODE_FIELD(provInfo);
-//	COMPARE_SCALAR_FIELD(provRewrite);
-//	COMPARE_SCALAR_FIELD(provSublinksRewritten);
+	COMPARE_NODE_FIELD(aggprojectClause);
 
 	return true;
 }
@@ -822,6 +821,7 @@ _equalSelectStmt(SelectStmt *a, SelectStmt *b)
 	COMPARE_NODE_FIELD(whereClause);
 	COMPARE_NODE_FIELD(groupClause);
 	COMPARE_NODE_FIELD(havingClause);
+	COMPARE_NODE_FIELD(aggprojectClause);
 	COMPARE_NODE_FIELD(valuesLists);
 	COMPARE_NODE_FIELD(sortClause);
 	COMPARE_NODE_FIELD(limitOffset);
