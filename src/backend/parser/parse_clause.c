@@ -1445,29 +1445,10 @@ transformAggProjClause(ParseState *pstate,
 	ListCell *l, *pl;
 
 	result = transformTargetList(pstate, aggproj);
-
-	foreach(l, result)
-	{
-		TargetEntry *tle = lfirst(l);
-		bool found = false;
-
-		foreach(pl, *targetlist)
-		{
-			TargetEntry *projTle = lfirst(pl);
-
-			if (equal(tle->expr, projTle->expr) && equalstr(tle->resname, projTle->resname))
-			{
-				if (projTle->resjunk)
-					projTle->resjunk = false;
-				tle->resno = projTle->resno; //?
-				found = true;
-			}
-		}
-
-		if (!found)
-		{
-			(*targetlist) = lappend(*targetlist, tle);
-		}
+    foreach(l, result)
+    {
+	  TargetEntry *tle = lfirst(l);
+	  (*targetlist) = lappend(*targetlist, tle);
 	}
 
 	return result;
