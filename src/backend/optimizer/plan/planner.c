@@ -76,10 +76,6 @@ static void locate_grouping_columns(PlannerInfo *root,
 						List *tlist,
 						List *sub_tlist,
 						AttrNumber *groupColIdx);
-static void locate_aggProj_columns(PlannerInfo *root,
-						List *tlist,
-						List *sub_tlist,
-						AttrNumber *groupColIdx);
 static List *postprocess_setop_tlist(List *new_tlist, List *orig_tlist);
 
 
@@ -1028,12 +1024,6 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 				 */
 				locate_grouping_columns(root, tlist, result_plan->targetlist,
 										groupColIdx);
-				if (parse->aggprojectClause)
-				{
-					aggProjColIdx = (AttrNumber *) palloc(sizeof(AttrNumber) * numAggProjCols);
-					locate_aggProj_columns(root, tlist, result_plan->targetlist,
-											aggProjColIdx);
-				}
 			}
 
 			/*
@@ -1818,48 +1808,6 @@ locate_grouping_columns(PlannerInfo *root,
 			elog(ERROR, "failed to locate grouping columns");
 
 		groupColIdx[keyno++] = te->resno;
-	}
-}
-
-/*
- * locate_aggProj_columns
- *		Locate aggProject columns in the tlist chosen by query_planner.
- */
-static void
-locate_aggProj_columns(PlannerInfo *root,
-						List *tlist,
-						List *sub_tlist,
-						AttrNumber *aggProjColIdx)
-{
-	int			keyno = 0;
-	ListCell   *gl;
-
-	/*
-	 * No work unless grouping.
-	 */
-	if (!root->parse->aggprojectClause)
-	{
-		Assert(aggProjColIdx == NULL);
-		return;
-	}
-	//Assert(aggProjColIdx != NULL);
-
-	foreach(gl, root->parse->aggprojectClause)
-	{
-		TargetEntry *tle = lfirst(gl);
-		TargetEntry *te = NULL;
-		ListCell	*sl;
-
-		foreach(sl, tlist)
-		{
-			te = (TargetEntry *) lfirst(sl);
-			if (equal(tle->expr, te->expr))
-				break;
-		}
-		if (!sl)
-			elog(ERROR, "failed to locate aggProject colums");
-
-		aggProjColIdx[keyno++] = te->resno;
 	}
 }
 
