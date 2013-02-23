@@ -289,16 +289,20 @@ traverseQueryTree (RangeTblEntry *rteQuery, Query *query, char *cursorName)
 Query *
 rewriteQueryNode (Query * query)
 {
-	/* is an aggregate query? */
-	if (query->hasAggs)
-		query = rewriteAggregateQuery (query);
-
 	/* is a set operation? */
-	else if (query->setOperations != NULL)
+	if (query->setOperations != NULL)
 		query = rewriteSetQuery (query);
 
-	/* SPJ */
+	/* is an aggregate query? */
+	else if (query->hasAggs && !prov_use_aggproject)
+      query = rewriteAggregateQuery (query);
+
 	else
+        /* This rewrite also handle aggregate queries,
+         * when prov_use_aggproject GUC is ON.
+         * All the new provenance columns are added as
+         * AGGPROJECT columns to query->aggprojectClause in this case.
+         */
 		query = rewriteSPJQuery (query);
 
 	LOGNODE(query, "rewritten query tree (influence contribution)");

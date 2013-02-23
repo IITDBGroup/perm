@@ -281,6 +281,7 @@ bool prov_use_sublink_move_to_target = false;
 bool prov_use_sublink_transfrom_top_level_any_to_join = true;
 bool prov_use_unnest_JA = true;
 bool prov_use_optimizer = false;
+bool prov_use_aggproject = true;
 bool prov_use_selection_pushdown = false;
 bool prov_xml_whitespace = false;
 
@@ -1161,6 +1162,17 @@ static struct config_bool ConfigureNamesBool[] =
 		},
 		&prov_use_optimizer,
 		false, NULL, NULL
+	},
+
+	{
+		{"prov_use_aggproject", PGC_USERSET, QUERY_TUNING,
+			gettext_noop("Use AGGPROJECT clause when rewriting aggregate quries"),
+			gettext_noop("If actived aggregate queries use AGGPROJECT provenance extension"
+						 " to rewrite a incoming query. This is alternate approach to rewrites"
+                         " that is originally based on JOIN, which could be costly."),
+		},
+		&prov_use_aggproject,
+		true, NULL, NULL
 	},
 
 	{

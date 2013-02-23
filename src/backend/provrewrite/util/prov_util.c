@@ -148,6 +148,28 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
 						0);
 			newTe = makeTargetEntry(expr, curResno, te->resname, false);
 
+            /* if this is a aggregate query, then add provenance columns
+             * as AGGPROJECT columns
+             *
+             * TODO: aggprojectClause is use only to get the count
+             *       by planner when creating AggProj node. We can
+             *       avoid preparing list for aggprojectClause and
+             *       just keep a flag stating there were new AGGPROJECT
+             *       columns appended to targetlist. This should serve
+             *       the purpose. aggprojectClause is used only when
+             *       use explicitly uses AGGPROJECT keyword in the
+             *       queries.
+             */
+            if (query->hasAggs && prov_use_aggproject)
+            {
+              TargetEntry *agg_te= flatCopyTargetEntry(te);
+
+              if (query->aggprojectClause)
+                lappend(query->aggprojectClause, agg_te);
+              else
+                query->aggprojectClause= list_make1(agg_te);
+            }
+
 			/* adapt varno und varattno if referenced rte is used in a join-RTE */
 			if (adaptToJoins)
 				getRTindexForProvTE (query, (Var *) expr);
