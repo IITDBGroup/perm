@@ -2154,6 +2154,14 @@ get_basic_select_query(Query *query, deparse_context *context,
 		}
 	}
 
+	/* Add the AGGPROJECT clause if given */
+	if (query->aggprojectClause != NULL)
+    {
+		appendContextKeyword(context, " AGGPROJECT",
+							 -PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
+	    get_target_list(query->aggprojectClause, context, NULL);
+    }
+
 	/* Add the HAVING clause if given */
 	if (query->havingQual != NULL)
 	{
