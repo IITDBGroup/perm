@@ -822,6 +822,8 @@ _equalSelectStmt(SelectStmt *a, SelectStmt *b)
 	COMPARE_NODE_FIELD(groupClause);
 	COMPARE_NODE_FIELD(havingClause);
 	COMPARE_NODE_FIELD(aggprojectClause);
+	COMPARE_NODE_FIELD(isProvRowAttrs);
+	COMPARE_SCALAR_FIELD(genIsProvRowAttr);
 	COMPARE_NODE_FIELD(valuesLists);
 	COMPARE_NODE_FIELD(sortClause);
 	COMPARE_NODE_FIELD(limitOffset);
@@ -1917,6 +1919,16 @@ _equalXmlSerialize(XmlSerialize *a, XmlSerialize *b)
 	return true;
 }
 
+static bool
+_equalAggProjectClause(AggProjectClause *a, AggProjectClause *b)
+{
+	COMPARE_NODE_FIELD(projAttrs);
+	COMPARE_NODE_FIELD(isProvRowAttrs);
+	COMPARE_SCALAR_FIELD(createIsProvRowAttr);
+
+	return true;
+}
+
 /*
  * Stuff from pg_list.h
  */
@@ -2516,6 +2528,9 @@ equal(void *a, void *b)
 			break;
 		case T_XmlSerialize:
 			retval = _equalXmlSerialize(a, b);
+			break;
+		case T_AggProjectClause:
+			retval = _equalAggProjectClause(a, b);
 			break;
 		default:
 			retval = provNodesEquals(a,b);

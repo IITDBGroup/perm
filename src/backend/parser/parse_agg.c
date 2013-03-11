@@ -104,7 +104,7 @@ parseCheckAggregates(ParseState *pstate, Query *qry)
 	bool		hasJoinRTEs;
 	PlannerInfo *root;
 	Node	   *clause;
-	bool 		hasAggPClause = qry->aggprojectClause;
+	List       *aggProjClauses = NIL;
 
 	/* This should only be called if we found aggregates or grouping */
 	Assert(pstate->p_hasAggs || qry->groupClause || qry->havingQual);
@@ -201,17 +201,20 @@ parseCheckAggregates(ParseState *pstate, Query *qry)
 	/*
 	 * Check the targetlist and HAVING clause for ungrouped variables.
 	 */
+	if (qry->aggprojectClause != NULL)
+		aggProjClauses = ((AggProjectClause *) qry->aggprojectClause)->projAttrs;
+
 	clause = (Node *) qry->targetList;
 	if (hasJoinRTEs)
 		clause = flatten_join_alias_vars(root, clause);
 	check_ungrouped_columns(clause, pstate,
-							groupClauses, have_non_var_grouping, qry->aggprojectClause);
+							groupClauses, have_non_var_grouping, aggProjClauses);
 
 	clause = (Node *) qry->havingQual;
 	if (hasJoinRTEs)
 		clause = flatten_join_alias_vars(root, clause);
 	check_ungrouped_columns(clause, pstate,
-							groupClauses, have_non_var_grouping, qry->aggprojectClause);
+							groupClauses, have_non_var_grouping, aggProjClauses);
 }
 
 

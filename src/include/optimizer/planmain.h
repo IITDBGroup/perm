@@ -49,6 +49,11 @@ extern Agg *make_agg(PlannerInfo *root, List *tlist, List *qual,
 		 int numGroupCols, AttrNumber *grpColIdx, Oid *grpOperators,
 		 long numGroups, int numAggs,
 		 Plan *lefttree);
+extern AggProj *make_aggproj(PlannerInfo *root, List *tlist, List *qual,
+		AggStrategy aggstrategy, int numGroupCols, AttrNumber *grpColIdx,
+		int numAggProjCols, AttrNumber *aggProjColIdx, Oid *grpOperators,
+		long numGroups, int numAggs, AggProjectClause *aggProj,
+		Plan *lefttree);
 extern Group *make_group(PlannerInfo *root, List *tlist, List *qual,
 		   int numGroupCols, AttrNumber *grpColIdx, Oid *grpOperators,
 		   double numGroups,

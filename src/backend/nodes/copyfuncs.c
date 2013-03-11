@@ -597,6 +597,38 @@ _copyAgg(Agg *from)
 }
 
 /*
+ * _copyAggProj
+ */
+static AggProj *
+_copyAggProj(AggProj *from)
+{
+	AggProj	   *newnode = makeNode(AggProj);
+
+	CopyPlanFields((Plan *) from, (Plan *) newnode);
+
+	COPY_SCALAR_FIELD(aggstrategy);
+	COPY_SCALAR_FIELD(numCols);
+	if (from->numCols > 0)
+	{
+		COPY_POINTER_FIELD(grpColIdx, from->numCols * sizeof(AttrNumber));
+		COPY_POINTER_FIELD(grpOperators, from->numCols * sizeof(Oid));
+	}
+	COPY_SCALAR_FIELD(numGroups);
+
+	COPY_SCALAR_FIELD(numAggPCols);
+	if (from->numAggPCols > 0)
+		COPY_POINTER_FIELD(aggPColIdx, from->numAggPCols * sizeof(AttrNumber));
+
+	COPY_SCALAR_FIELD(numIsProvRowCols);
+	if (from->numIsProvRowCols > 0)
+		COPY_POINTER_FIELD(isProvRowColIdx, from->numIsProvRowCols * sizeof(AttrNumber));
+
+	COPY_SCALAR_FIELD(genProvRowIdx);
+
+	return newnode;
+}
+
+/*
  * _copyUnique
  */
 static Unique *
@@ -1853,6 +1885,18 @@ _copyXmlSerialize(XmlSerialize *from)
 	return newnode;
 }
 
+static AggProjectClause *
+_copyAggProjectClause(AggProjectClause *from)
+{
+	AggProjectClause *newnode = makeNode(AggProjectClause);
+
+	COPY_NODE_FIELD(projAttrs);
+	COPY_NODE_FIELD(isProvRowAttrs);
+	COPY_SCALAR_FIELD(createIsProvRowAttr);
+
+	return newnode;
+}
+
 static Query *
 _copyQuery(Query *from)
 {
@@ -1937,6 +1981,8 @@ _copySelectStmt(SelectStmt *from)
 	COPY_NODE_FIELD(groupClause);
 	COPY_NODE_FIELD(havingClause);
 	COPY_NODE_FIELD(aggprojectClause);
+	COPY_NODE_FIELD(isProvRowAttrs);
+	COPY_SCALAR_FIELD(genIsProvRowAttr);
 	COPY_NODE_FIELD(valuesLists);
 	COPY_NODE_FIELD(sortClause);
 	COPY_NODE_FIELD(limitOffset);
@@ -3076,6 +3122,9 @@ copyObject(void *from)
 		case T_Agg:
 			retval = _copyAgg(from);
 			break;
+		case T_AggProj:
+			retval = _copyAggProj(from);
+			break;
 		case T_Unique:
 			retval = _copyUnique(from);
 			break;
@@ -3583,6 +3632,9 @@ copyObject(void *from)
 			break;
 		case T_XmlSerialize:
 			retval = _copyXmlSerialize(from);
+			break;
+		case T_AggProjectClause:
+			retval = _copyAggProjectClause(from);
 			break;
 		default:
 			retval = copyProvNode(from);

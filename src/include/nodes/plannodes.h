@@ -510,10 +510,13 @@ typedef struct AggProj
 	AggStrategy aggstrategy;
 	int			numCols;		/* number of grouping columns */
 	AttrNumber *grpColIdx;		/* their indexes in the target list */
-	int			numAggPCols;	/* number of agg project columns */
-	AttrNumber *aggPColIdx;		/* indexes of the aggProj columns in the target list */
 	Oid		   *grpOperators;	/* equality operators to compare with */
 	long		numGroups;		/* estimated number of groups in input */
+	int			numAggPCols;	/* number of agg project columns */
+	AttrNumber *aggPColIdx;		/* indexes of the aggProj columns in the target list */
+	int			numIsProvRowCols; /* number of attributes that indicate original aggregation outputs */
+    AttrNumber *isProvRowColIdx; /* attributes used to determine which rows are actual aggregation outputs of duplicates produced by aggproject operator */
+    AttrNumber	genProvRowIdx;   /* result attribute number of the isprovrow attribute if any, - 1 otherwise */
 } AggProj;
 
 /* ----------------

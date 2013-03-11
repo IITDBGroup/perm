@@ -2155,12 +2155,31 @@ get_basic_select_query(Query *query, deparse_context *context,
 	}
 
 	/* Add the AGGPROJECT clause if given */
-	if (query->aggprojectClause != NULL)
-    {
-		appendContextKeyword(context, " AGGPROJECT",
-							 -PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
-	    get_target_list(query->aggprojectClause, context, NULL);
-    }
+	if (query->aggprojectClause)
+	{
+		AggProjectClause *aggP = (AggProjectClause *) query->aggprojectClause;
+		if (aggP->projAttrs != NULL)
+		{
+			appendContextKeyword(context, " AGGPROJECT",
+								 -PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
+			get_target_list(aggP->projAttrs, context, NULL);
+		}
+
+		/* Show columns adding for aggregate queries with PROVENANCE enabled */
+		if (aggP->isProvRowAttrs != NULL)
+		{
+			appendContextKeyword(context, " ISPROVROWATTRS",
+								 -PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
+			get_target_list(aggP->isProvRowAttrs, context, NULL);
+		}
+
+		/* is generation of isprovrow attribute activated? */
+		if (aggP->createIsProvRowAttr)
+		{
+			appendContextKeyword(context, " GENISPROVROW",
+								-PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
+		}
+	}
 
 	/* Add the HAVING clause if given */
 	if (query->havingQual != NULL)

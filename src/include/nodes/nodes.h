@@ -389,7 +389,8 @@ typedef enum NodeTag
 	T_InclusionCond,
 	T_CopyProvAttrInfo,
 	T_WhereProvInfo,
-	T_WhereAttrInfo
+	T_WhereAttrInfo,
+	T_AggProjectClause
 } NodeTag;
 
 /*

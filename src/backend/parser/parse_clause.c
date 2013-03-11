@@ -1436,22 +1436,40 @@ transformGroupClause(ParseState *pstate, List *grouplist,
 /*
  *
  */
-List *
+Node *
 transformAggProjClause(ParseState *pstate,
-					   List *aggproj,
-					   List **targetlist)
+					   SelectStmt *sel,
+					   Query *qry)
 {
-	List *result;
-	ListCell *l, *pl;
+	List **targetlist = &(qry->targetList);
+	AggProjectClause *result;
+	ListCell *l;
+	int curResno;
 
-	result = transformTargetList(pstate, aggproj);
-    foreach(l, result)
+	if (!sel->aggprojectClause && !sel->isProvRowAttrs)
+		return NULL;
+
+	result = (AggProjectClause *) makeNode(AggProjectClause);
+	result->projAttrs = transformTargetList(pstate, sel->aggprojectClause);
+    foreach(l, result->projAttrs)
     {
 	  TargetEntry *tle = lfirst(l);
 	  (*targetlist) = lappend(*targetlist, tle);
 	}
 
-	return result;
+    curResno = pstate->p_next_resno;
+    result->isProvRowAttrs = transformTargetList(pstate, sel->isProvRowAttrs);
+    pstate->p_next_resno = curResno;
+
+    // add a target entry for the isprovrow attribute
+    result->createIsProvRowAttr = sel->genIsProvRowAttr;
+    if (result->createIsProvRowAttr)
+    	(*targetlist) = lappend(*targetlist,
+    			makeTargetEntry((Expr *) makeBoolConst(false, false),
+    					list_length(qry->targetList) + 1, "is_prov_row_attr",
+    					false));
+
+	return (Node *) result;
 }
 
 /*

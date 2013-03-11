@@ -824,7 +824,8 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 		long		numGroups = 0;
 		AggClauseCounts agg_counts;
 		int			numGroupCols = list_length(parse->groupClause);
-		int			numAggProjCols = list_length(parse->aggprojectClause);
+		int			numAggProjCols = (parse->aggprojectClause) ? list_length((
+							(AggProjectClause *) parse->aggprojectClause)->projAttrs) : 0;
 		AttrNumber *aggProjColIdx = NULL;
 		bool		use_hashed_grouping = false;
 
@@ -1052,7 +1053,22 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 			{
 				/* if aggproject is present, force using sorting ... */
 				AggStrategy aggstrategy = AGG_SORTED;
+				AggProjectClause *aggP = (AggProjectClause *) parse->aggprojectClause;
+				numAggProjCols = list_length(aggP->projAttrs);
 
+				if (numAggProjCols > 0)
+				{
+					ListCell *lc;
+					int i = 0;
+					TargetEntry *te;
+					aggProjColIdx = (AttrNumber *) palloc(sizeof(AttrNumber) * numAggProjCols);
+
+					foreach(lc, aggP->projAttrs)
+					{
+						te = (TargetEntry *) lfirst(lc);
+						aggProjColIdx[i++] = (AttrNumber) te->resno;
+					}
+				}
 				if (parse->groupClause)
 				{
 					if (!pathkeys_contained_in(group_pathkeys,
@@ -1082,6 +1098,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 													groupOperators,
 													numGroups,
 													agg_counts.numAggs,
+                                                    (AggProjectClause *) parse->aggprojectClause,
 													result_plan);
 			}
 			else if (parse->hasAggs)

@@ -693,6 +693,9 @@ explain_outNode(StringInfo str,
 					break;
 			}
 			break;
+		case T_AggProj:
+			pname = "AggProject";
+			break;
 		case T_Unique:
 			pname = "Unique";
 			break;

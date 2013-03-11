@@ -716,14 +716,14 @@ transformSelectStmt(ParseState *pstate, SelectStmt *stmt)
 										  &qry->targetList,
 										  true /* fix unknowns */ );
 
+	qry->aggprojectClause = transformAggProjClause(pstate,
+												   stmt,
+												   qry);
+
 	qry->groupClause = transformGroupClause(pstate,
 											stmt->groupClause,
 											&qry->targetList,
 											qry->sortClause);
-
-	qry->aggprojectClause = transformAggProjClause(pstate,
-												   stmt->aggprojectClause,
-												   &qry->targetList);
 
 	qry->distinctClause = transformDistinctClause(pstate,
 												  stmt->distinctClause,

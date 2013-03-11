@@ -542,6 +542,18 @@ _outAggProj(StringInfo str, AggProj *node)
 		appendStringInfo(str, " %u", node->grpOperators[i]);
 
 	WRITE_LONG_FIELD(numGroups);
+
+	WRITE_INT_FIELD(numAggPCols);
+	appendStringInfo(str, " :aggPColIdx");
+	for (i = 0; i < node->numAggPCols; i++)
+		appendStringInfo(str, " %u", node->aggPColIdx[i]);
+
+	WRITE_INT_FIELD(numIsProvRowCols);
+	appendStringInfo(str, " :isProvRowColIdx");
+	for (i = 0; i < node->numIsProvRowCols; i++)
+		appendStringInfo(str, " %u", node->isProvRowColIdx[i]);
+
+	WRITE_INT_FIELD(genProvRowIdx);
 }
 
 static void
@@ -1621,6 +1633,8 @@ _outSelectStmt(StringInfo str, SelectStmt *node)
 	WRITE_NODE_FIELD(groupClause);
 	WRITE_NODE_FIELD(havingClause);
 	WRITE_NODE_FIELD(aggprojectClause);
+	WRITE_NODE_FIELD(isProvRowAttrs);
+	WRITE_BOOL_FIELD(genIsProvRowAttr);
 	WRITE_NODE_FIELD(valuesLists);
 	WRITE_NODE_FIELD(sortClause);
 	WRITE_NODE_FIELD(limitOffset);
@@ -2078,7 +2092,15 @@ _outFkConstraint(StringInfo str, FkConstraint *node)
 	WRITE_BOOL_FIELD(skip_validation);
 }
 
+static void
+_outAggProjectClause(StringInfo str, AggProjectClause *node)
+{
+	WRITE_NODE_TYPE("AGGPROJECTCLAUSE");
 
+	WRITE_NODE_FIELD(projAttrs);
+	WRITE_NODE_FIELD(isProvRowAttrs);
+	WRITE_BOOL_FIELD(createIsProvRowAttr);
+}
 
 
 
@@ -2476,6 +2498,9 @@ _outNode(StringInfo str, void *obj)
 				break;
 			case T_XmlSerialize:
 				_outXmlSerialize(str, obj);
+				break;
+			case T_AggProjectClause:
+				_outAggProjectClause(str, obj);
 				break;
 			default:
 				outProvNode(str, obj);

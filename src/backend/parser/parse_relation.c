@@ -801,7 +801,8 @@ addRangeTableEntryForSubquery(ParseState *pstate,
 		if (te->resjunk)
 			continue;
 		varattno++;
-		Assert(varattno == te->resno);
+		// not with aggproject Assert(varattno == te->resno);
+		//TODO check that resjunk column in middle of target list does not cause problems
 		if (varattno > numaliases)
 		{
 			char	   *attrname;
@@ -1431,7 +1432,8 @@ expandRTEWithParam (RangeTblEntry *rte, int rtindex, int sublevels_up,
 					if (te->resjunk)
 						continue;
 					varattno++;
-					Assert(varattno == te->resno);
+					//TODO check that it's ok to have resjunk attrs not at the end of target list
+					// Assert(varattno == te->resno);
 
 					if (colnames)
 					{

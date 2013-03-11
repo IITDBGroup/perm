@@ -186,6 +186,21 @@ _readDeclareCursorStmt(void)
 }
 
 /*
+ * _readAggProjectClause
+ */
+static AggProjectClause *
+_readAggProjectClause(void)
+{
+	READ_LOCALS(AggProjectClause);
+
+	READ_NODE_FIELD(projAttrs);
+	READ_NODE_FIELD(isProvRowAttrs);
+	READ_BOOL_FIELD(createIsProvRowAttr);
+
+	READ_DONE();
+}
+
+/*
  * _readSortClause
  */
 static SortClause *
@@ -1189,6 +1204,8 @@ parseNodeString(void)
 		return_value = _readNotifyStmt();
 	else if (MATCH("DECLARECURSOR", 13))
 		return_value = _readDeclareCursorStmt();
+	else if (MATCH("AGGPROJECTCLAUSE",16))
+		return_value = _readAggProjectClause();
 	else
 	{
 		return_value = parseProvNodeString(token, length);

@@ -212,29 +212,29 @@ typedef struct AggHashEntryData
 } AggHashEntryData;				/* VARIABLE LENGTH STRUCT */
 
 
-static void initialize_aggregates(AggState *aggstate,
+static void initialize_aggregates(AggProjState *aggstate,
 					  AggStatePerAgg peragg,
 					  AggStatePerGroup pergroup);
-static void advance_transition_function(AggState *aggstate,
+static void advance_transition_function(AggProjState *aggstate,
 							AggStatePerAgg peraggstate,
 							AggStatePerGroup pergroupstate,
 							FunctionCallInfoData *fcinfo);
-static void advance_aggregates(AggState *aggstate, AggStatePerGroup pergroup);
-static void process_sorted_aggregate(AggState *aggstate,
+static void advance_aggregates(AggProjState *aggstate, AggStatePerGroup pergroup);
+static void process_sorted_aggregate(AggProjState *aggstate,
 						 AggStatePerAgg peraggstate,
 						 AggStatePerGroup pergroupstate);
-static void finalize_aggregate(AggState *aggstate,
+static void finalize_aggregate(AggProjState *aggstate,
 				   AggStatePerAgg peraggstate,
 				   AggStatePerGroup pergroupstate,
 				   Datum *resultVal, bool *resultIsNull);
-static Bitmapset *find_unaggregated_cols(AggState *aggstate);
+static Bitmapset *find_unaggregated_cols(AggProjState *aggstate);
 static bool find_unaggregated_cols_walker(Node *node, Bitmapset **colnos);
-static void build_hash_table(AggState *aggstate);
-static AggHashEntry lookup_hash_entry(AggState *aggstate,
+static void build_hash_table(AggProjState *aggstate);
+static AggHashEntry lookup_hash_entry(AggProjState *aggstate,
 				  TupleTableSlot *inputslot);
 static TupleTableSlot *aggProj_retrieve_direct(AggProjState *aggstate);
-static void agg_fill_hash_table(AggState *aggstate);
-static TupleTableSlot *agg_retrieve_hash_table(AggState *aggstate);
+static void agg_fill_hash_table(AggProjState *aggstate);
+static TupleTableSlot *agg_retrieve_hash_table(AggProjState *aggstate);
 static Datum GetAggInitVal(Datum textInitVal, Oid transtype);
 
 
@@ -244,7 +244,7 @@ static Datum GetAggInitVal(Datum textInitVal, Oid transtype);
  * When called, CurrentMemoryContext should be the per-query context.
  */
 static void
-initialize_aggregates(AggState *aggstate,
+initialize_aggregates(AggProjState *aggstate,
 					  AggStatePerAgg peragg,
 					  AggStatePerGroup pergroup)
 {
@@ -327,7 +327,7 @@ initialize_aggregates(AggState *aggstate,
  * It doesn't matter which memory context this is called in.
  */
 static void
-advance_transition_function(AggState *aggstate,
+advance_transition_function(AggProjState *aggstate,
 							AggStatePerAgg peraggstate,
 							AggStatePerGroup pergroupstate,
 							FunctionCallInfoData *fcinfo)
@@ -428,7 +428,7 @@ advance_transition_function(AggState *aggstate,
  * When called, CurrentMemoryContext should be the per-query context.
  */
 static void
-advance_aggregates(AggState *aggstate, AggStatePerGroup pergroup)
+advance_aggregates(AggProjState *aggstate, AggStatePerGroup pergroup)
 {
 	ExprContext *econtext = aggstate->tmpcontext;
 	int			aggno;
@@ -488,7 +488,7 @@ advance_aggregates(AggState *aggstate, AggStatePerGroup pergroup)
  * When called, CurrentMemoryContext should be the per-query context.
  */
 static void
-process_sorted_aggregate(AggState *aggstate,
+process_sorted_aggregate(AggProjState *aggstate,
 						 AggStatePerAgg peraggstate,
 						 AggStatePerGroup pergroupstate)
 {
@@ -565,7 +565,7 @@ process_sorted_aggregate(AggState *aggstate,
  * output-tuple context; caller's CurrentMemoryContext does not matter.
  */
 static void
-finalize_aggregate(AggState *aggstate,
+finalize_aggregate(AggProjState *aggstate,
 				   AggStatePerAgg peraggstate,
 				   AggStatePerGroup pergroupstate,
 				   Datum *resultVal, bool *resultIsNull)
@@ -622,7 +622,7 @@ finalize_aggregate(AggState *aggstate,
  *	  appearing in our targetlist and qual (HAVING clause)
  */
 static Bitmapset *
-find_unaggregated_cols(AggState *aggstate)
+find_unaggregated_cols(AggProjState *aggstate)
 {
 	Agg		   *node = (Agg *) aggstate->ss.ps.plan;
 	Bitmapset  *colnos;
@@ -662,7 +662,7 @@ find_unaggregated_cols_walker(Node *node, Bitmapset **colnos)
  * The hash table always lives in the aggcontext memory context.
  */
 static void
-build_hash_table(AggState *aggstate)
+build_hash_table(AggProjState *aggstate)
 {
 	Agg		   *node = (Agg *) aggstate->ss.ps.plan;
 	MemoryContext tmpmem = aggstate->tmpcontext->ecxt_per_tuple_memory;
@@ -729,7 +729,7 @@ build_hash_table(AggState *aggstate)
  * When called, CurrentMemoryContext should be the per-query context.
  */
 static AggHashEntry
-lookup_hash_entry(AggState *aggstate, TupleTableSlot *inputslot)
+lookup_hash_entry(AggProjState *aggstate, TupleTableSlot *inputslot)
 {
 	TupleTableSlot *hashslot = aggstate->hashslot;
 	ListCell   *l;
@@ -762,7 +762,7 @@ lookup_hash_entry(AggState *aggstate, TupleTableSlot *inputslot)
 	if (isnew)
 	{
 		/* initialize aggregates for new tuple group */
-		initialize_aggregates(aggstate, aggstate->peragg, entry->pergroup);
+		initialize_aggregates((AggProjState *) aggstate, aggstate->peragg, entry->pergroup);
 	}
 
 	return entry;
@@ -807,7 +807,7 @@ aggProj_retrieve_direct(AggProjState *aggstate)
 	TupleTableSlot *firstSlot;
 	int			aggno;
 	Tuplestorestate *tuplestorestate;
-	TupleTableSlot *tempSlot;
+//	TupleTableSlot *tempSlot;
 
 	/*
 	 * get state info from node
@@ -866,7 +866,7 @@ aggProj_retrieve_direct(AggProjState *aggstate)
 		/*
 		 * Initialize working state for a new input tuple group
 		 */
-		initialize_aggregates(aggstate, peragg, pergroup);
+		initialize_aggregates((AggProjState *) aggstate, peragg, pergroup);
 
 		if (aggstate->grp_firstTuple != NULL)
 		{
@@ -909,7 +909,27 @@ aggProj_retrieve_direct(AggProjState *aggstate)
 						tuplestore_puttupleslot(tuplestorestate, outerslot);
 				}
 
-				advance_aggregates(aggstate, pergroup);
+				// If we are processing input with isprovrow attribute then
+				// only advance aggregation functions is all these attributes are set to true
+				if (aggstate->numIsProvRowCols != 0)
+				{
+					bool result = true;
+					bool isnull = false;
+					int i;
+
+					// check that all input isprovrow attribute values are "true"
+					for(i = 0; i  < aggstate->numIsProvRowCols && result; i++)
+					{
+						result = (result == DatumGetBool(slot_getattr(outerslot,
+								aggstate->isprovrowInputs[i], &isnull)));
+					}
+
+					if (result)
+						advance_aggregates((AggProjState *) aggstate, pergroup);
+				}
+				// no input isprovrow attributes, advance aggregation functions
+				else
+					advance_aggregates((AggProjState *) aggstate, pergroup);
 
 				/* Reset per-input-tuple context after each tuple */
 				ResetExprContext(tmpcontext);
@@ -965,9 +985,9 @@ aggProj_retrieve_direct(AggProjState *aggstate)
 			AggStatePerGroup pergroupstate = &pergroup[aggno];
 
 			if (peraggstate->aggref->aggdistinct)
-				process_sorted_aggregate(aggstate, peraggstate, pergroupstate);
+				process_sorted_aggregate((AggProjState *) aggstate, peraggstate, pergroupstate);
 
-			finalize_aggregate(aggstate, peraggstate, pergroupstate,
+			finalize_aggregate((AggProjState *) aggstate, peraggstate, pergroupstate,
 							   &aggvalues[aggno], &aggnulls[aggno]);
 		}
 
@@ -1002,14 +1022,18 @@ aggProj_retrieve_direct(AggProjState *aggstate)
 		}
 	}
 
-	// CHECK if you can directly output then project
+	//CHECK if you can directly output then project
 
 	// RETRIEVE FROM STORE and set expr context tuple to the new one
 	// CALL ExecProject
+	// if we need to generate values for a isprovrow attribute we either
+	// have to set this attribute to true only for the first output produced from a group (no input isprovrow attributes)
 	if (aggstate->output)
 	{
 		if (aggstate->count > 0)
 		{
+			TupleTableSlot *projResult;
+
 			if (tuplestorestate != NULL && !tuplestore_ateof(tuplestorestate))
 			{
 				//tuplestore_advance(tuplestorestate, 1);
@@ -1026,6 +1050,18 @@ aggProj_retrieve_direct(AggProjState *aggstate)
 
 			aggstate->count--;
 
+			projResult = ExecProject(projInfo, NULL);
+
+			// if we have to generate a value for the
+			if (aggstate->isprovrowAttr != 0)
+			{
+				// only set to true on the last tuple (could also do the first but easier this way)
+				if (aggstate->count == 0)
+					projResult->tts_values[aggstate->isprovrowAttr - 1] = BoolGetDatum(true);
+				else
+					projResult->tts_values[aggstate->isprovrowAttr - 1] = BoolGetDatum(false);
+			}
+
 			if (aggstate->count == 0)
 			{
 				//Assert(tuplestorestate == NULL);
@@ -1034,7 +1070,7 @@ aggProj_retrieve_direct(AggProjState *aggstate)
 				aggstate->tuplestorestate = NULL;
 			}
 
-			return ExecProject(projInfo, NULL);
+			return projResult;
 		}
 		else
 			aggstate->output = FALSE;
@@ -1049,7 +1085,7 @@ aggProj_retrieve_direct(AggProjState *aggstate)
  * ExecAgg for hashed case: phase 1, read input and build hash table
  */
 static void
-agg_fill_hash_table(AggState *aggstate)
+agg_fill_hash_table(AggProjState *aggstate)
 {
 	PlanState  *outerPlan;
 	ExprContext *tmpcontext;
@@ -1094,7 +1130,7 @@ agg_fill_hash_table(AggState *aggstate)
  * ExecAgg for hashed case: phase 2, retrieving groups from hash table
  */
 static TupleTableSlot *
-agg_retrieve_hash_table(AggState *aggstate)
+agg_retrieve_hash_table(AggProjState *aggstate)
 {
 	ExprContext *econtext;
 	ProjectionInfo *projInfo;
@@ -1229,6 +1265,9 @@ ExecInitAggProj(AggProj *node, EState *estate, int eflags)
 	aggstate->output = FALSE;
 	aggstate->count = 0;
 	aggstate->newGroup = FALSE;
+	aggstate->isprovrowAttr = node->genProvRowIdx;
+	aggstate->isprovrowInputs = node->isProvRowColIdx;
+	aggstate->numIsProvRowCols = node->numIsProvRowCols;
 
 	/*
 	 * Create expression contexts.	We need two, one for per-input-tuple
@@ -1296,9 +1335,11 @@ ExecInitAggProj(AggProj *node, EState *estate, int eflags)
 
 	/*
 	 * Initialize result tuple type and projection info.
+	 * If this aggproject node is generating a isprovrow attribute we have to account for that.
 	 */
 	ExecAssignResultTypeFromTL(&aggstate->ss.ps);
 	ExecAssignProjectionInfo(&aggstate->ss.ps, NULL);
+
 
 	/*
 	 * get the count of aggregates in targetlist and quals
@@ -1348,7 +1389,7 @@ ExecInitAggProj(AggProj *node, EState *estate, int eflags)
 
 	if (node->aggstrategy == AGG_HASHED)
 	{
-		build_hash_table(aggstate);
+		build_hash_table((AggProjState *) aggstate);
 		aggstate->table_filled = false;
 	}
 	else
@@ -1716,7 +1757,7 @@ ExecReScanAggProj(AggProjState *node, ExprContext *exprCtxt)
 	if (((Agg *) node->ss.ps.plan)->aggstrategy == AGG_HASHED)
 	{
 		/* Rebuild an empty hash table */
-		build_hash_table(node);
+		build_hash_table((AggProjState *) node);
 		node->table_filled = false;
 	}
 	else

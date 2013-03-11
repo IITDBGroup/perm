@@ -3107,7 +3107,7 @@ make_agg(PlannerInfo *root, List *tlist, List *qual,
 	return node;
 }
 
-Agg *
+AggProj *
 make_aggproj(PlannerInfo *root,
 			 List *tlist,
 			 List *qual,
@@ -3119,6 +3119,7 @@ make_aggproj(PlannerInfo *root,
 			 Oid *grpOperators,
 			 long numGroups,
 			 int numAggs,
+			 AggProjectClause *aggProj,
 			 Plan *lefttree)
 {
 	AggProj *node = makeNode(AggProj);
@@ -3129,11 +3130,39 @@ make_aggproj(PlannerInfo *root,
 	node->aggstrategy = aggstrategy;
 	node->numCols = numGroupCols;
 	node->grpColIdx = grpColIdx;
-	node->numAggPCols = numAggProjCols;
-	node->aggPColIdx = aggProjColIdx;
 	node->grpOperators = grpOperators;
 	node->numGroups = numGroups;
+	node->numAggPCols = numAggProjCols;
+	node->aggPColIdx = aggProjColIdx;
+	node->numIsProvRowCols = list_length(aggProj->isProvRowAttrs);
+	// if we have to generate the isprovrow attribute then use store its index.
+	if (aggProj->createIsProvRowAttr)
+		node->genProvRowIdx = ((TargetEntry *)
+				llast(aggProj->projAttrs))->resno + 1;
+	else
+		node->genProvRowIdx = 0;
 
+
+    // create indices for isprovrow attributes of subqueries
+    node->isProvRowColIdx = NULL;
+    if (node->numIsProvRowCols > 0)
+    {
+    	ListCell *lc;
+    	TargetEntry *te;
+    	Var *teVar;
+    	int i = 0;
+    	node->isProvRowColIdx = (AttrNumber *) palloc(sizeof(AttrNumber)
+    			* node->numIsProvRowCols);
+
+    	foreach(lc, aggProj->isProvRowAttrs)
+    	{
+    		te = (TargetEntry *) lfirst(lc);
+    		teVar = (Var *) te->expr;
+    		node->isProvRowColIdx[i++] = teVar->varattno;
+    	}
+    }
+
+    // determine cost
 	copy_plan_costsize(plan, lefttree); /* only care about copying size */
 	cost_agg(&agg_path, root,
 			 aggstrategy, numAggs,

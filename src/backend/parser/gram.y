@@ -250,7 +250,8 @@ static Node *makeXmlExpr(XmlExprOp op, char *name, List *named_args, List *args)
 				prep_type_clause
 				execute_param_clause using_clause returning_clause
 				enum_val_list
-%type <list>	aggproject_clause
+%type <list>	aggproject_clause opt_isprovrow_attr
+%type <boolean> opt_gen_isprovrow_attr
 
 %type <range>	OptTempTableName
 %type <into>	into_clause create_as_target
@@ -400,14 +401,14 @@ static Node *makeXmlExpr(XmlExprOp op, char *name, List *named_args, List *args)
 	FALSE_P FAMILY FETCH FIRST_P FLOAT_P FOR FORCE FOREIGN FORWARD
 	FREEZE FROM FULL FUNCTION
 
-	GLOBAL GRANT GRANTED GRAPH GREATEST GROUP_P
+	GENISPROVROW GLOBAL GRANT GRANTED GRAPH GREATEST GROUP_P
 
 	HANDLER HAVING HEADER_P HOLD HOUR_P HOW
 
 	IF_P ILIKE IMMEDIATE IMMUTABLE IMPLICIT_P IN_P INCLUDING INCREMENT
 	INDEX INDEXES INFLUENCE INHERIT INHERITS INITIALLY INNER_P INOUT INPUT_P
 	INSENSITIVE INSERT INSTEAD INT_P INTEGER INTERSECT
-	INTERVAL INTO INVOKER INWHERE IS ISNULL ISOLATION
+	INTERVAL INTO INVOKER INWHERE IS ISNULL ISPROVROWATTRS ISOLATION
 
 	JOIN
 
@@ -6234,7 +6235,7 @@ select_clause:
 simple_select:
 			SELECT opt_annot opt_provenance opt_distinct target_list
 			into_clause from_clause where_clause
-			group_clause having_clause aggproject_clause
+			group_clause having_clause aggproject_clause opt_isprovrow_attr opt_gen_isprovrow_attr
 				{
 					SelectStmt *n = makeNode(SelectStmt);
 					n->provenanceClause = $3;
@@ -6247,6 +6248,8 @@ simple_select:
 					n->groupClause = $9;
 					n->havingClause = $10;
 					n->aggprojectClause = $11;
+					n->isProvRowAttrs = $12;
+					n->genIsProvRowAttr = $13;					
 					$$ = (Node *)n;
 				}
 			| values_clause							{ $$ = $1; }
@@ -6546,6 +6549,16 @@ having_clause:
 aggproject_clause:
 			AGGPROJECT target_list					{ $$ = $2; }
 			| /*EMPTY*/								{ $$ = NIL; }
+		;
+
+opt_isprovrow_attr:
+			ISPROVROWATTRS target_list			    { $$ = $2; }
+			| /* EMPTY */							{ $$ = NIL; }
+		;
+		
+opt_gen_isprovrow_attr:
+			GENISPROVROW							{ $$ = true; }
+			| /* EMPTY */							{ $$ = false; }
 		;
 		
 for_locking_clause:
@@ -9588,6 +9601,7 @@ reserved_keyword:
 			| FOR
 			| FOREIGN
 			| FROM
+			| GENISPROVROW
 			| GRANT
 			| GROUP_P
 			| HAVING
@@ -9597,6 +9611,7 @@ reserved_keyword:
 			| INTERSECT
 			| INTO
 			| INWHERE
+			| ISPROVROWATTRS
 			| LEADING
 			| LIMIT
 			| LOCALTIME

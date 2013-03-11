@@ -1411,6 +1411,9 @@ typedef struct AggProjState
 	bool		output;			/* if in output mode */
 	int 		count;
 	bool		newGroup;
+	AttrNumber  isprovrowAttr;
+	AttrNumber *isprovrowInputs;
+	int 	   	numIsProvRowCols;
 	Tuplestorestate *tuplestorestate;
 	TupleTableSlot 	*tempTupleTableSlot;
 } AggProjState;
