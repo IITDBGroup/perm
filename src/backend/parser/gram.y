@@ -251,7 +251,7 @@ static Node *makeXmlExpr(XmlExprOp op, char *name, List *named_args, List *args)
 				execute_param_clause using_clause returning_clause
 				enum_val_list
 %type <list>	aggproject_clause opt_isprovrow_attr
-%type <boolean> opt_gen_isprovrow_attr
+%type <list>    opt_gen_isprovrow_attr
 
 %type <range>	OptTempTableName
 %type <into>	into_clause create_as_target
@@ -6249,7 +6249,7 @@ simple_select:
 					n->havingClause = $10;
 					n->aggprojectClause = $11;
 					n->isProvRowAttrs = $12;
-					n->genIsProvRowAttr = $13;					
+					n->genIsProvRowAttr = $13;
 					$$ = (Node *)n;
 				}
 			| values_clause							{ $$ = $1; }
@@ -6557,8 +6557,19 @@ opt_isprovrow_attr:
 		;
 		
 opt_gen_isprovrow_attr:
-			GENISPROVROW							{ $$ = true; }
-			| /* EMPTY */							{ $$ = false; }
+			GENISPROVROW attr_name                  
+            {
+					A_Const *n = makeNode(A_Const);
+					n->val.type = T_Integer;
+					n->val.val.ival = 0;
+					ResTarget *r = makeNode(ResTarget);
+					r->name = $2;
+					r->indirection = NULL;
+					r->val = (Node *) n;
+					r->location = @1;
+                    $$ = list_make1(r);
+            }
+			| /* EMPTY */							{ $$ = NIL; }
 		;
 		
 for_locking_clause:

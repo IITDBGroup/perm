@@ -1892,7 +1892,7 @@ _copyAggProjectClause(AggProjectClause *from)
 
 	COPY_NODE_FIELD(projAttrs);
 	COPY_NODE_FIELD(isProvRowAttrs);
-	COPY_SCALAR_FIELD(createIsProvRowAttr);
+	COPY_NODE_FIELD(genIsProvRowAttr);
 
 	return newnode;
 }
@@ -1982,7 +1982,7 @@ _copySelectStmt(SelectStmt *from)
 	COPY_NODE_FIELD(havingClause);
 	COPY_NODE_FIELD(aggprojectClause);
 	COPY_NODE_FIELD(isProvRowAttrs);
-	COPY_SCALAR_FIELD(genIsProvRowAttr);
+	COPY_NODE_FIELD(genIsProvRowAttr);
 	COPY_NODE_FIELD(valuesLists);
 	COPY_NODE_FIELD(sortClause);
 	COPY_NODE_FIELD(limitOffset);

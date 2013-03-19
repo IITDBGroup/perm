@@ -1462,12 +1462,13 @@ transformAggProjClause(ParseState *pstate,
     pstate->p_next_resno = curResno;
 
     // add a target entry for the isprovrow attribute
-    result->createIsProvRowAttr = sel->genIsProvRowAttr;
-    if (result->createIsProvRowAttr)
-    	(*targetlist) = lappend(*targetlist,
-    			makeTargetEntry((Expr *) makeBoolConst(false, false),
-    					list_length(qry->targetList) + 1, "is_prov_row_attr",
-    					false));
+    if (sel->genIsProvRowAttr)
+    {
+      curResno = pstate->p_next_resno;
+      result->genIsProvRowAttr = transformTargetList(pstate, sel->genIsProvRowAttr);
+      pstate->p_next_resno = curResno;
+      (*targetlist) = lappend(*targetlist, lfirst((ListCell*)result->isProvRowAttrs));
+    }
 
 	return (Node *) result;
 }

@@ -3136,7 +3136,7 @@ make_aggproj(PlannerInfo *root,
 	node->aggPColIdx = aggProjColIdx;
 	node->numIsProvRowCols = list_length(aggProj->isProvRowAttrs);
 	// if we have to generate the isprovrow attribute then use store its index.
-	if (aggProj->createIsProvRowAttr)
+	if (aggProj->genIsProvRowAttr)
 		node->genProvRowIdx = ((TargetEntry *)
 				llast(aggProj->projAttrs))->resno + 1;
 	else

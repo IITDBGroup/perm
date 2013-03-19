@@ -2174,9 +2174,12 @@ get_basic_select_query(Query *query, deparse_context *context,
 		}
 
 		/* is generation of isprovrow attribute activated? */
-		if (aggP->createIsProvRowAttr)
+		if (aggP->genIsProvRowAttr)
 		{
+            TargetEntry *te= lfirst(list_head(aggP->genIsProvRowAttr));
 			appendContextKeyword(context, " GENISPROVROW",
+								-PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
+			appendContextKeyword(context, te->resname,
 								-PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
 		}
 	}

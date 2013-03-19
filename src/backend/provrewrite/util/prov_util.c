@@ -183,7 +183,7 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
                 	query->aggprojectClause = (Node *) new;
                 	new->projAttrs = list_make1(agg_te);
                 	new->isProvRowAttrs = NIL;
-                	new->createIsProvRowAttr = false;
+                	new->genIsProvRowAttr = NIL;
 
                 }
               }
@@ -202,7 +202,8 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
                * all elements point to var node of child queries
                *
                */
-              if (!strncmp("is_prov_row", te->resname, strlen("is_prov_row")))
+              if (!strncmp("is_prov_row_attr", te->resname, 
+                           strlen("is_prov_row_attr")))
               {
                 bool alreadyReferredByQuery= false;
                 if (nodeTag(te->expr) == T_Var)
@@ -221,7 +222,7 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
                     if (curIsProvRow) 
                     {
                         pfree(newTe->resname);
-                        sprintf(col_name, "is_prov_row_%d", curIsProvRow);
+                        sprintf(col_name, "is_prov_row_attr%d", curIsProvRow);
                         newTe->resname= pstrdup(col_name);
                     }
                 }
@@ -239,7 +240,7 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
                 	  query->aggprojectClause = (Node *) new;
                 	  new->projAttrs = NIL;
                 	  new->isProvRowAttrs = list_make1(newTe);
-                	  new->createIsProvRowAttr = false;
+                	  new->genIsProvRowAttr = NIL;
                   }
                   varNode->varnoold= -3; // Mark that a Query referred
                 }
@@ -264,7 +265,7 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
           v.val.ival = 0;
 
 		  expr = (Expr *) make_const(&v);
-          sprintf(col_name, "is_prov_row_%d", curIsProvRow+1);
+          sprintf(col_name, "is_prov_row_attr%d", curIsProvRow+1);
           newTe= makeTargetEntry((Expr *) expr, curResno, pstrdup(col_name), false);
 
           // Append it to aggprojectClause also, so that
@@ -274,31 +275,15 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
 		  {
         	  AggProjectClause *aggP = (AggProjectClause *) query->aggprojectClause;
         	  aggP->projAttrs = lappend(aggP->projAttrs, agg_te);
+              aggP->genIsProvRowAttr = list_make1(agg_te);
 		  }
           else
           {
         	  AggProjectClause *new = (AggProjectClause *) makeNode(AggProjectClause);
         	  query->aggprojectClause = (Node *) new;
         	  new->projAttrs = list_make1(agg_te);
+              new->genIsProvRowAttr = list_make1(agg_te);
           }
-
-          // This is the is_prov_row of this aggregate query
-          // that will be used by above query nodes.
-          if (query->aggprojectClause)
-          {
-        	  AggProjectClause *aggP = (AggProjectClause *) query->aggprojectClause;
-        	  aggP->isProvRowAttrs= lcons(newTe, aggP->isProvRowAttrs);
-          }
-          else
-          {
-        	  AggProjectClause *new = (AggProjectClause *) makeNode(AggProjectClause);
-        	  query->aggprojectClause =  (Node *) new;
-			  new->isProvRowAttrs= list_make1(newTe);
-          }
-
-          /* adapt varno und varattno if referenced rte is used in a join-RTE */
-          //if (adaptToJoins)
-          //    getRTindexForProvTE (query, (Var *) expr);
 
           targetList = lappend(targetList, newTe);
           pList = lappend (pList, newTe);
@@ -438,7 +423,7 @@ correctRTEAlias (RangeTblEntry *rte)
 		foreach (lc, subQuery->targetList)
 		{
 			te = (TargetEntry *) lfirst(lc);
-			colnames = lappend(colnames, makeString(te->resname?pstrdup(te->resname):""));
+			colnames = lappend(colnames, makeString(te->resname));
 		}
 
 		rte->eref->colnames = colnames;

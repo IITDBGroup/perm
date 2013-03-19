@@ -146,7 +146,7 @@ typedef struct AggProjectClause
 	NodeTag		type;
 	List		*projAttrs;
 	List 		*isProvRowAttrs;
-	bool 		createIsProvRowAttr;
+	List 		*genIsProvRowAttr;
 } AggProjectClause;
 
 
@@ -765,7 +765,7 @@ typedef struct SelectStmt
 	Node	   *havingClause;	/* HAVING conditional-expression */
 	List	   *aggprojectClause;/* aggregate project clause */
 	List 	   *isProvRowAttrs;  /* attributes that mark provenance rows, used by aggproject */
-	bool	    genIsProvRowAttr; /* should aggproject clause generate boolean attribute that marks provenance rows */
+	List	   *genIsProvRowAttr; /* should aggproject clause generate boolean attribute that marks provenance rows */
 	/*
 	 * In a "leaf" node representing a VALUES list, the above fields are all
 	 * null, and instead this field is set.  Note that the elements of the

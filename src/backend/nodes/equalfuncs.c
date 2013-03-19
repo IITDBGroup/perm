@@ -823,7 +823,7 @@ _equalSelectStmt(SelectStmt *a, SelectStmt *b)
 	COMPARE_NODE_FIELD(havingClause);
 	COMPARE_NODE_FIELD(aggprojectClause);
 	COMPARE_NODE_FIELD(isProvRowAttrs);
-	COMPARE_SCALAR_FIELD(genIsProvRowAttr);
+	COMPARE_NODE_FIELD(genIsProvRowAttr);
 	COMPARE_NODE_FIELD(valuesLists);
 	COMPARE_NODE_FIELD(sortClause);
 	COMPARE_NODE_FIELD(limitOffset);
@@ -1924,7 +1924,7 @@ _equalAggProjectClause(AggProjectClause *a, AggProjectClause *b)
 {
 	COMPARE_NODE_FIELD(projAttrs);
 	COMPARE_NODE_FIELD(isProvRowAttrs);
-	COMPARE_SCALAR_FIELD(createIsProvRowAttr);
+	COMPARE_NODE_FIELD(genIsProvRowAttr);
 
 	return true;
 }

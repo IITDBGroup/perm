@@ -195,7 +195,7 @@ _readAggProjectClause(void)
 
 	READ_NODE_FIELD(projAttrs);
 	READ_NODE_FIELD(isProvRowAttrs);
-	READ_BOOL_FIELD(createIsProvRowAttr);
+	READ_NODE_FIELD(genIsProvRowAttr);
 
 	READ_DONE();
 }

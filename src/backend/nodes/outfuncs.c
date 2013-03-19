@@ -1634,7 +1634,7 @@ _outSelectStmt(StringInfo str, SelectStmt *node)
 	WRITE_NODE_FIELD(havingClause);
 	WRITE_NODE_FIELD(aggprojectClause);
 	WRITE_NODE_FIELD(isProvRowAttrs);
-	WRITE_BOOL_FIELD(genIsProvRowAttr);
+	WRITE_NODE_FIELD(genIsProvRowAttr);
 	WRITE_NODE_FIELD(valuesLists);
 	WRITE_NODE_FIELD(sortClause);
 	WRITE_NODE_FIELD(limitOffset);
@@ -2099,7 +2099,7 @@ _outAggProjectClause(StringInfo str, AggProjectClause *node)
 
 	WRITE_NODE_FIELD(projAttrs);
 	WRITE_NODE_FIELD(isProvRowAttrs);
-	WRITE_BOOL_FIELD(createIsProvRowAttr);
+	WRITE_NODE_FIELD(genIsProvRowAttr);
 }
 
 
