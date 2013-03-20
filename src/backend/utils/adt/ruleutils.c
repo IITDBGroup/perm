@@ -152,7 +152,7 @@ static void get_select_query_def(Query *query, deparse_context *context,
 static void get_basic_select_query(Query *query, deparse_context *context,
 					   TupleDesc resultDesc);
 static void get_target_list(List *targetList, deparse_context *context,
-				TupleDesc resultDesc);
+				TupleDesc resultDesc, bool ignoreAggProj);
 static void get_setop_query(Node *setOp, Query *query,
 				deparse_context *context,
 				TupleDesc resultDesc);
@@ -1938,6 +1938,7 @@ parseBackSafe (Query *query)
 {
 	/* replace ambigous unnamed column names */
 	replaceUnnamedColumnsWalker ((Node *) query, NULL);
+//	removeAggProjTargetEntriesWalker((Node *) query, NULL);
 	correctRecurSubQueryAlias(query);
 
 	return parseBack(query, true);
@@ -2124,7 +2125,7 @@ get_basic_select_query(Query *query, deparse_context *context,
 	}
 
 	/* Then we tell what to select (the targetlist) */
-	get_target_list(query->targetList, context, resultDesc);
+	get_target_list(query->targetList, context, resultDesc, true);
 
 	/* Add the FROM clause if needed */
 	get_from_clause(query, " FROM ", context);
@@ -2158,23 +2159,23 @@ get_basic_select_query(Query *query, deparse_context *context,
 	if (query->aggprojectClause)
 	{
 		AggProjectClause *aggP = (AggProjectClause *) query->aggprojectClause;
-		if (aggP->projAttrs != NULL)
+		if (list_length(aggP->projAttrs) > 0)
 		{
 			appendContextKeyword(context, " AGGPROJECT",
 								 -PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
-			get_target_list(aggP->projAttrs, context, NULL);
+			get_target_list(aggP->projAttrs, context, NULL, false);
 		}
 
 		/* Show columns adding for aggregate queries with PROVENANCE enabled */
-		if (aggP->isProvRowAttrs != NULL)
+		if (list_length(aggP->isProvRowAttrs) > 0)
 		{
 			appendContextKeyword(context, " ISPROVROWATTRS",
 								 -PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
-			get_target_list(aggP->isProvRowAttrs, context, NULL);
+			get_target_list(aggP->isProvRowAttrs, context, NULL, false);
 		}
 
 		/* is generation of isprovrow attribute activated? */
-		if (aggP->genIsProvRowAttr)
+		if (aggP->genIsProvRowAttr != NIL)
 		{
             TargetEntry *te= lfirst(list_head(aggP->genIsProvRowAttr));
 			appendContextKeyword(context, " GENISPROVROW",
@@ -2201,7 +2202,7 @@ get_basic_select_query(Query *query, deparse_context *context,
  */
 static void
 get_target_list(List *targetList, deparse_context *context,
-				TupleDesc resultDesc)
+				TupleDesc resultDesc,  bool ignoreAggProj)
 {
 	StringInfo	buf = context->buf;
 	char	   *sep;
@@ -2216,7 +2217,7 @@ get_target_list(List *targetList, deparse_context *context,
 		char	   *colname;
 		char	   *attname;
 
-		if (tle->resjunk)
+		if (tle->resjunk || (ignoreAggProj && tle->resorigcol == AGGPROJ_INDICATOR))
 			continue;			/* ignore junk entries */
 
 		appendStringInfoString(buf, sep);
@@ -2517,7 +2518,7 @@ get_insert_query_def(Query *query, deparse_context *context)
 	{
 		appendContextKeyword(context, " RETURNING",
 							 -PRETTYINDENT_STD, PRETTYINDENT_STD, 1);
-		get_target_list(query->returningList, context, NULL);
+		get_target_list(query->returningList, context, NULL, true);
 	}
 }
 
@@ -2596,7 +2597,7 @@ get_update_query_def(Query *query, deparse_context *context)
 	{
 		appendContextKeyword(context, " RETURNING",
 							 -PRETTYINDENT_STD, PRETTYINDENT_STD, 1);
-		get_target_list(query->returningList, context, NULL);
+		get_target_list(query->returningList, context, NULL, true);
 	}
 }
 
@@ -2641,7 +2642,7 @@ get_delete_query_def(Query *query, deparse_context *context)
 	{
 		appendContextKeyword(context, " RETURNING",
 							 -PRETTYINDENT_STD, PRETTYINDENT_STD, 1);
-		get_target_list(query->returningList, context, NULL);
+		get_target_list(query->returningList, context, NULL, true);
 	}
 }
 

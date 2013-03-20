@@ -460,6 +460,39 @@ replaceUnnamedColumnsWalker (Node *node, void *context)
 }
 
 /*
+ * Remove aggproject based entries from target list.
+ */
+//bool
+//removeAggProjTargetEntriesWalker (Node *node, void *context)
+//{
+//	if (node == NULL)
+//		return false;
+//
+//	if (IsA(node, Query))
+//	{
+//		List *newTarget = NIL;
+//		Query *q = (Query *) node;
+//		ListCell *lc;
+//
+//		foreach(lc, q->targetList)
+//		{
+//			TargetEntry *te = (TargetEntry *) lfirst(lc);
+//			if (te->resorigcol != AGGPROJ_INDICATOR)
+//			{
+//				newTarget = lappend(newTarget, te);
+//			}
+//		}
+//
+//		list_free(q->targetList);
+//		q->targetList = newTarget;
+//
+//		return query_tree_walker(q, removeAggProjTargetEntriesWalker, context, 0);
+//	}
+//
+//	return expression_tree_walker(node, removeAggProjTargetEntriesWalker, context);
+//}
+
+/*
  * find_rte_by_refname		- look up an RTE by refname in a deparse context
  *
  * Returns NULL if there is no matching RTE or the refname is ambiguous.

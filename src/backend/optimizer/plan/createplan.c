@@ -3116,6 +3116,9 @@ make_aggproj(PlannerInfo *root,
 			 AttrNumber *grpColIdx,
 			 int numAggProjCols,
 			 AttrNumber *aggProjColIdx,
+			 int numIsProvCols,
+			 AttrNumber *isProvColIdx,
+			 AttrNumber genIsProvRowColIdx,
 			 Oid *grpOperators,
 			 long numGroups,
 			 int numAggs,
@@ -3136,31 +3139,31 @@ make_aggproj(PlannerInfo *root,
 	node->aggPColIdx = aggProjColIdx;
 	node->numIsProvRowCols = list_length(aggProj->isProvRowAttrs);
 	// if we have to generate the isprovrow attribute then use store its index.
-	if (aggProj->genIsProvRowAttr)
-		node->genProvRowIdx = ((TargetEntry *)
-				llast(aggProj->projAttrs))->resno + 1;
-	else
-		node->genProvRowIdx = 0;
-
-
-    // create indices for isprovrow attributes of subqueries
-    node->isProvRowColIdx = NULL;
-    if (node->numIsProvRowCols > 0)
-    {
-    	ListCell *lc;
-    	TargetEntry *te;
-    	Var *teVar;
-    	int i = 0;
-    	node->isProvRowColIdx = (AttrNumber *) palloc(sizeof(AttrNumber)
-    			* node->numIsProvRowCols);
-
-    	foreach(lc, aggProj->isProvRowAttrs)
-    	{
-    		te = (TargetEntry *) lfirst(lc);
-    		teVar = (Var *) te->expr;
-    		node->isProvRowColIdx[i++] = teVar->varattno;
-    	}
-    }
+//	if (genIsProvRowColIdx)
+		node->genProvRowIdx = genIsProvRowColIdx;
+//	else
+//		node->genProvRowIdx = 0;
+	node->numIsProvRowCols = numIsProvCols;
+	node->isProvRowColIdx = isProvColIdx;
+//    // create indices for isprovrow attributes of subqueries
+//    if (node->numIsProvRowCols > 0)
+//    {
+//    	ListCell *lc;
+//    	TargetEntry *te;
+//    	Var *teVar;
+//    	int i = 0;
+//    	node->isProvRowColIdx = (AttrNumber *) palloc(sizeof(AttrNumber)
+//    			* node->numIsProvRowCols);
+//
+//    	foreach(lc, aggProj->isProvRowAttrs)
+//    	{
+//    		te = (TargetEntry *) lfirst(lc);
+//    		teVar = (Var *) te->expr;
+//    		node->isProvRowColIdx[i++] = teVar->varattno;
+//    	}
+//    }
+//    else
+//    	node->isProvRowColIdx = NULL;
 
     // determine cost
 	copy_plan_costsize(plan, lefttree); /* only care about copying size */

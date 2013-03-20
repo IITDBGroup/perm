@@ -3743,6 +3743,18 @@ expression_tree_walker(Node *node,
 					return true;
 			}
 			break;
+		case T_AggProjectClause:
+			{
+				AggProjectClause *aggP = (AggProjectClause *) node;
+
+				if (walker(aggP->projAttrs, context))
+					return true;
+				if (walker(aggP->genIsProvRowAttr, context))
+					return true;
+				if (walker(aggP->isProvRowAttrs, context))
+					return true;
+			}
+		break;
 		default:
 			elog(ERROR, "unrecognized node type: %d",
 				 (int) nodeTag(node));
@@ -3787,6 +3799,8 @@ query_tree_walker(Query *query,
 	if (walker(query->limitOffset, context))
 		return true;
 	if (walker(query->limitCount, context))
+		return true;
+	if (walker(query->aggprojectClause, context))
 		return true;
 	if (range_table_walker(query->rtable, walker, context, flags))
 		return true;
@@ -4381,6 +4395,18 @@ expression_tree_mutator(Node *node,
 				return (Node *) newnode;
 			}
 			break;
+		case T_AggProjectClause:
+			{
+				AggProjectClause *aggP = (AggProjectClause *) node;
+				AggProjectClause *newnode;
+
+				FLATCOPY(newnode, aggP, AggProjectClause);
+				MUTATE(newnode->genIsProvRowAttr, aggP->genIsProvRowAttr, List *);
+				MUTATE(newnode->genIsProvRowAttr, aggP->isProvRowAttrs, List *);
+				MUTATE(newnode->genIsProvRowAttr, aggP->projAttrs, List *);
+				return (Node *) newnode;
+			}
+		break;
 		default:
 			elog(ERROR, "unrecognized node type: %d",
 				 (int) nodeTag(node));

@@ -260,11 +260,11 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
         if (query->hasAggs && prov_use_aggproject)
         {
           TargetEntry *agg_te;
-          Value v;
-          v.type = T_Integer;
-          v.val.ival = 0;
+//          Value v;
+//          v.type = T_Integer;
+//          v.val.ival = 0;
 
-		  expr = (Expr *) make_const(&v);
+		  expr = (Expr *) makeBoolConst(true, false);
           sprintf(col_name, "is_prov_row_attr%d", curIsProvRow+1);
           newTe= makeTargetEntry((Expr *) expr, curResno, pstrdup(col_name), false);
 

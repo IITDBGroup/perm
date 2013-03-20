@@ -71,13 +71,18 @@ static bool choose_hashed_grouping(PlannerInfo *root,
 					   Oid *groupOperators, double dNumGroups,
 					   AggClauseCounts *agg_counts);
 static List *make_subplanTargetList(PlannerInfo *root, List *tlist,
-					   AttrNumber **groupColIdx, bool *need_tlist_eval);
+					   AttrNumber **groupColIdx, bool *need_tlist_eval,
+					   AttrNumber **aggProjColIdx, AttrNumber **isProvRowAttrs);
+//					   AttrNumber *genIsProvRow);
 static void locate_grouping_columns(PlannerInfo *root,
 						List *tlist,
 						List *sub_tlist,
-						AttrNumber *groupColIdx);
+						AttrNumber *groupColIdx,
+						AttrNumber *aggPColIdx,
+						AttrNumber *isProvRowColIdx);
 static List *postprocess_setop_tlist(List *new_tlist, List *orig_tlist);
-
+static void addEntriesToTargetListAndRecordIdx (List **tlist, AttrNumber **idx,
+		List *newTargets, bool *need_tlist_eval);
 
 /*****************************************************************************
  *
@@ -827,6 +832,10 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 		int			numAggProjCols = (parse->aggprojectClause) ? list_length((
 							(AggProjectClause *) parse->aggprojectClause)->projAttrs) : 0;
 		AttrNumber *aggProjColIdx = NULL;
+		int			numIsProvRowCols = (parse->aggprojectClause) ? list_length((
+							(AggProjectClause *) parse->aggprojectClause)->isProvRowAttrs) : 0;
+		AttrNumber *isProvRowColIdx = NULL;
+		AttrNumber genIsProvRow = 0;
 		bool		use_hashed_grouping = false;
 
 		MemSet(&agg_counts, 0, sizeof(AggClauseCounts));
@@ -839,7 +848,9 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 		 * tlist if grouping or aggregation is needed.
 		 */
 		sub_tlist = make_subplanTargetList(root, tlist,
-										   &groupColIdx, &need_tlist_eval);
+										   &groupColIdx, &need_tlist_eval,
+										   &aggProjColIdx, &isProvRowColIdx);
+//										   &genIsProvRow);
 
 		/*
 		 * Calculate pathkeys that represent grouping/ordering requirements.
@@ -1024,7 +1035,8 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 				 * grouping-column indexes make_subplanTargetList computed.
 				 */
 				locate_grouping_columns(root, tlist, result_plan->targetlist,
-										groupColIdx);
+										groupColIdx, aggProjColIdx,
+										isProvRowColIdx);
 			}
 
 			/*
@@ -1061,6 +1073,8 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 					ListCell *lc;
 					int i = 0;
 					TargetEntry *te;
+					if (aggProjColIdx)
+						pfree(aggProjColIdx);
 					aggProjColIdx = (AttrNumber *) palloc(sizeof(AttrNumber) * numAggProjCols);
 
 					foreach(lc, aggP->projAttrs)
@@ -1068,6 +1082,11 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 						te = (TargetEntry *) lfirst(lc);
 						aggProjColIdx[i++] = (AttrNumber) te->resno;
 					}
+				}
+				if (list_length(aggP->genIsProvRowAttr) > 0)
+				{
+					TargetEntry *te = (TargetEntry *) linitial(aggP->genIsProvRowAttr);
+					genIsProvRow = te->resno;
 				}
 				if (parse->groupClause)
 				{
@@ -1095,6 +1114,9 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 													groupColIdx,
 													numAggProjCols,
 													aggProjColIdx,
+													numIsProvRowCols,
+													isProvRowColIdx,
+													genIsProvRow,
 													groupOperators,
 													numGroups,
 													agg_counts.numAggs,
@@ -1704,7 +1726,10 @@ static List *
 make_subplanTargetList(PlannerInfo *root,
 					   List *tlist,
 					   AttrNumber **groupColIdx,
-					   bool *need_tlist_eval)
+					   bool *need_tlist_eval,
+					   AttrNumber **aggProjColIdx,
+					   AttrNumber **isProvRowAttrs)
+//					   AttrNumber *genIsProvRow)
 {
 	Query	   *parse = root->parse;
 	List	   *sub_tlist;
@@ -1729,6 +1754,8 @@ make_subplanTargetList(PlannerInfo *root,
 	 * Vars; they will be replaced by Params later on).
 	 */
 	sub_tlist = flatten_tlist(tlist);
+
+	// add vars needed for having qual
 	extravars = pull_var_clause(parse->havingQual, false);
 	sub_tlist = add_to_flat_tlist(sub_tlist, extravars);
 	list_free(extravars);
@@ -1778,7 +1805,70 @@ make_subplanTargetList(PlannerInfo *root,
 		}
 	}
 
+	// add vars needed for aggproject
+	if (parse->aggprojectClause)
+	{
+		AggProjectClause *aggP = (AggProjectClause *) parse->aggprojectClause;
+
+		// add additional projection vars
+		addEntriesToTargetListAndRecordIdx(&sub_tlist, aggProjColIdx,
+				aggP->projAttrs, need_tlist_eval);
+
+		// add isProvRow vars
+		if (list_length(aggP->isProvRowAttrs) > 0)
+		{
+			addEntriesToTargetListAndRecordIdx(&sub_tlist, isProvRowAttrs,
+							aggP->isProvRowAttrs, need_tlist_eval);
+		}
+	}
+
 	return sub_tlist;
+}
+
+/*
+ * Add all vars from a list of target entries (that are assumed to only have flat single var expressions)
+ * to a target list and record the positions of these vars in the provide AttrNumber array.
+ */
+void
+addEntriesToTargetListAndRecordIdx (List **tlist, AttrNumber **idx,
+		List *newTargets, bool *need_tlist_eval)
+{
+	AttrNumber *projCols = (AttrNumber *) palloc(sizeof(AttrNumber)
+			* list_length(newTargets));
+	ListCell *lc, *innerLc;
+	int idxPos = 0;
+	List	   *extravars = NIL;
+	List *sub_tlist = *tlist;
+	*idx = projCols;
+
+	// add additional projection vars
+	extravars = pull_var_clause((Node *) newTargets, false);
+	sub_tlist = add_to_flat_tlist(sub_tlist, extravars);
+	list_free(extravars);
+
+	foreach(lc, newTargets)
+	{
+		Var *v = (Var *) ((TargetEntry *) lfirst(lc))->expr;
+		TargetEntry *subTe;
+
+		foreach(innerLc, sub_tlist)
+		{
+			subTe = (TargetEntry *) lfirst(innerLc);
+			if (equal(subTe->expr, v))
+				break;
+		}
+		if (!innerLc)
+		{
+			subTe = makeTargetEntry((Expr *) v,
+									list_length(sub_tlist) + 1,
+									NULL,
+									false);
+			sub_tlist = lappend(sub_tlist, subTe);
+			*need_tlist_eval = true;		/* it's not flat anymore */
+		}
+		projCols[idxPos++] = subTe->resno;
+	}
+	*tlist = sub_tlist;
 }
 
 /*
@@ -1793,7 +1883,9 @@ static void
 locate_grouping_columns(PlannerInfo *root,
 						List *tlist,
 						List *sub_tlist,
-						AttrNumber *groupColIdx)
+						AttrNumber *groupColIdx,
+						AttrNumber *aggPColIdx,
+						AttrNumber *isProvRowColIdx)
 {
 	int			keyno = 0;
 	ListCell   *gl;
@@ -1825,6 +1917,48 @@ locate_grouping_columns(PlannerInfo *root,
 			elog(ERROR, "failed to locate grouping columns");
 
 		groupColIdx[keyno++] = te->resno;
+	}
+
+	// deal with aggproject columns and isprovrow columns
+	if (root->parse->aggprojectClause)
+	{
+		AggProjectClause *aggP = (AggProjectClause *) root->parse->aggprojectClause;
+		int idx = 0;
+		ListCell *innerLc;
+		TargetEntry *te;
+
+		foreach(gl, aggP->projAttrs)
+		{
+			Expr *pExpr = ((TargetEntry *) lfirst(gl))->expr;
+
+			foreach(innerLc, sub_tlist)
+			{
+				te = (TargetEntry *) lfirst(innerLc);
+				if (equal(pExpr, te->expr))
+					break;
+			}
+			if (!innerLc)
+				elog(ERROR, "failed to locate aggproject columns");
+
+			aggPColIdx[idx++] = te->resno;
+		}
+
+		idx = 0;
+		foreach(gl, aggP->isProvRowAttrs)
+		{
+			Expr *pExpr = ((TargetEntry *) lfirst(gl))->expr;
+
+			foreach(innerLc, sub_tlist)
+			{
+				te = (TargetEntry *) lfirst(innerLc);
+				if (equal(pExpr, te->expr))
+					break;
+			}
+			if (!innerLc)
+				elog(ERROR, "failed to locate isprovrow columns");
+
+			isProvRowColIdx[idx++] = te->resno;
+		}
 	}
 }
 

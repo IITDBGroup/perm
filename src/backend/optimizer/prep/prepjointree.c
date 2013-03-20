@@ -396,6 +396,17 @@ pull_up_simple_subquery(PlannerInfo *root, Node *jtnode, RangeTblEntry *rte,
 				   varno, 0, rte,
 				   subtlist, CMD_SELECT, 0);
 
+	// adapt aggproject clause attributes
+	if (parse->aggprojectClause)
+	{
+		AggProjectClause *aggP = (AggProjectClause *) parse->aggprojectClause;
+
+		aggP->isProvRowAttrs = (List *) ResolveNew((Node *) aggP->isProvRowAttrs,
+						varno, 0, rte, subtlist, CMD_SELECT, 0);
+		aggP->projAttrs = (List *) ResolveNew((Node * ) aggP->projAttrs,
+						varno, 0, rte, subtlist, CMD_SELECT, 0);
+	}
+
 	foreach(rt, parse->rtable)
 	{
 		RangeTblEntry *otherrte = (RangeTblEntry *) lfirst(rt);

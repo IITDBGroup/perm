@@ -920,9 +920,9 @@ aggProj_retrieve_direct(AggProjState *aggstate)
 					// check that all input isprovrow attribute values are "true"
 					for(i = 0; i  < aggstate->numIsProvRowCols && result; i++)
 					{
-						if (aggstate->newGroup)
-							tuplestore_puttupleslot(tuplestorestate, aggstate->tempTupleTableSlot);
-						else
+//						if (aggstate->newGroup)
+//							tuplestore_puttupleslot(tuplestorestate, aggstate->tempTupleTableSlot);
+//						else
 						result = result && DatumGetBool(slot_getattr(
                                 aggstate->newGroup?aggstate->tempTupleTableSlot:outerslot,
 								aggstate->isprovrowInputs[i], &isnull));
@@ -1061,9 +1061,9 @@ aggProj_retrieve_direct(AggProjState *aggstate)
 			{
 				// only set to true on the last tuple (could also do the first but easier this way)
 				if (aggstate->count == 0)
-					projResult->tts_values[aggstate->isprovrowAttr - 2] = BoolGetDatum(true);
+					projResult->tts_values[aggstate->isprovrowAttr - 1] = BoolGetDatum(true);
 				else
-					projResult->tts_values[aggstate->isprovrowAttr - 2] = BoolGetDatum(false);
+					projResult->tts_values[aggstate->isprovrowAttr - 1] = BoolGetDatum(false);
 			}
 
 			if (aggstate->count == 0)

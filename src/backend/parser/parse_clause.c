@@ -43,6 +43,8 @@
 #define equalstr(a, b)	\
 	(((a) != NULL && (b) != NULL) ? (strcmp(a, b) == 0) : (a) == (b))
 
+#define AGGPROJ_COL -666
+
 static char *clauseText[] = {"ORDER BY", "GROUP BY", "DISTINCT ON"};
 
 static void extractRemainingColumns(List *common_colnames,
@@ -1455,6 +1457,7 @@ transformAggProjClause(ParseState *pstate,
     {
 	  TargetEntry *tle = lfirst(l);
 	  (*targetlist) = lappend(*targetlist, tle);
+	  tle->resorigcol = AGGPROJ_COL;
 	}
 
     curResno = pstate->p_next_resno;
@@ -1462,13 +1465,21 @@ transformAggProjClause(ParseState *pstate,
     pstate->p_next_resno = curResno;
 
     // add a target entry for the isprovrow attribute
-    if (sel->genIsProvRowAttr)
+    if (list_length(sel->genIsProvRowAttr) > 0)
     {
-      curResno = pstate->p_next_resno;
-      result->genIsProvRowAttr = transformTargetList(pstate, sel->genIsProvRowAttr);
-      pstate->p_next_resno = curResno;
-      (*targetlist) = lappend(*targetlist, lfirst((ListCell*)result->isProvRowAttrs));
+    	TargetEntry *tle;
+    	curResno = pstate->p_next_resno;
+    	result->genIsProvRowAttr = transformTargetList(pstate, sel->genIsProvRowAttr);
+    	pstate->p_next_resno = curResno;
+    	tle = (TargetEntry *) linitial(result->genIsProvRowAttr);
+    	tle->expr = (Expr *) makeBoolConst(false, false);
+    	tle->resorigcol = AGGPROJ_COL;
+    	(*targetlist) = lappend(*targetlist, tle);
+      //TODO throw error is more than one entry
+//      (*targetlist) = lappend(*targetlist, lfirst((ListCell*)result->isProvRowAttrs));
     }
+    else
+    	result->genIsProvRowAttr = NIL;
 
 	return (Node *) result;
 }
