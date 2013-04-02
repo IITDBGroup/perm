@@ -34,6 +34,7 @@
 #include "rewrite/rewriteManip.h"
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
+#include "provrewrite/prov_util.h"
 
 
 #define ORDER_CLAUSE 0
@@ -42,8 +43,6 @@
 /* Macro for comparing string fields that might be NULL */
 #define equalstr(a, b)	\
 	(((a) != NULL && (b) != NULL) ? (strcmp(a, b) == 0) : (a) == (b))
-
-#define AGGPROJ_COL -666
 
 static char *clauseText[] = {"ORDER BY", "GROUP BY", "DISTINCT ON"};
 
@@ -1457,7 +1456,7 @@ transformAggProjClause(ParseState *pstate,
     {
 	  TargetEntry *tle = lfirst(l);
 	  (*targetlist) = lappend(*targetlist, tle);
-	  tle->resorigcol = AGGPROJ_COL;
+	  tle->resorigcol = AGGPROJ_INDICATOR;
 	}
 
     curResno = pstate->p_next_resno;
@@ -1473,7 +1472,7 @@ transformAggProjClause(ParseState *pstate,
     	pstate->p_next_resno = curResno;
     	tle = (TargetEntry *) linitial(result->genIsProvRowAttr);
     	tle->expr = (Expr *) makeBoolConst(false, false);
-    	tle->resorigcol = AGGPROJ_COL;
+    	tle->resorigcol = AGGPROJ_INDICATOR;
     	(*targetlist) = lappend(*targetlist, tle);
       //TODO throw error is more than one entry
 //      (*targetlist) = lappend(*targetlist, lfirst((ListCell*)result->isProvRowAttrs));

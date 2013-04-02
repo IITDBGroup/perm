@@ -3139,10 +3139,7 @@ make_aggproj(PlannerInfo *root,
 	node->aggPColIdx = aggProjColIdx;
 	node->numIsProvRowCols = list_length(aggProj->isProvRowAttrs);
 	// if we have to generate the isprovrow attribute then use store its index.
-//	if (genIsProvRowColIdx)
-		node->genProvRowIdx = genIsProvRowColIdx;
-//	else
-//		node->genProvRowIdx = 0;
+	node->genProvRowIdx = genIsProvRowColIdx;
 	node->numIsProvRowCols = numIsProvCols;
 	node->isProvRowColIdx = isProvColIdx;
 //    // create indices for isprovrow attributes of subqueries

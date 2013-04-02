@@ -101,12 +101,141 @@ addProvenanceAttrsForRange (Query *query, int min, int max, List *pList)
 	return addProvenanceAttrs (query, subList, pList, true);
 }
 
+/* 
+ * Handle AGGPROJECT Clause.
+ *
+ * The primary work here is to rewrite
+ * AGGPROJECT and ISPROVROWATTRS clauses.
+ */
+#define IS_PROV_ROW_ATTR(te) !strncmp("is_prov_row_attr",  \
+                              te->resname, strlen("is_prov_row_attr"))
+void addAggProvenanceAttrs(Query *query, TargetEntry *origTe, TargetEntry *newTe,
+                           int *curIsProvRow)
+{
+    Var *varNode;
+    char col_name[25];
+    bool alreadyReferredByQuery= false;
+
+    if (!prov_use_aggproject)
+        return;
+
+    /* For every non provenance attribute on aggregate query, we 
+     * add it to AGGPROJECT clause
+     */
+    if (!IS_PROV_ROW_ATTR(origTe))
+    {  
+      if(query->hasAggs)
+      {
+          if (query->aggprojectClause)
+              lappend(((AggProjectClause *) query->aggprojectClause)->projAttrs, newTe);
+          else {
+              AggProjectClause *new = (AggProjectClause *) makeNode(AggProjectClause);
+              query->aggprojectClause = (Node *) new;
+              new->projAttrs = list_make1(newTe);
+              new->isProvRowAttrs = NIL;
+              new->genIsProvRowAttr = NIL;
+          }
+      }
+      return; // Not a provenance attribute.
+    }
+
+    /* Determine if provenance attribute is 
+     * to be refered by ISPROVROWATTRS clause
+     */
+    varNode= (Var*) newTe->expr;
+    if (nodeTag(origTe->expr) == T_Var)
+    {
+        Var *v= (Var*) origTe->expr;
+        if (v->varnoold == -3)
+            alreadyReferredByQuery= true;
+        if (*curIsProvRow < v->varoattno)
+            *curIsProvRow= v->varoattno;
+    }
+    else if (nodeTag(origTe->expr) == T_Const)
+    {
+        *curIsProvRow++;
+        // if 2 AggProj from same FROM clause
+        // change name of duplicate is_prov_row
+        if (*curIsProvRow) 
+        {
+            pfree(newTe->resname);
+            sprintf(col_name, "is_prov_row_attr%d", *curIsProvRow);
+            newTe->resname= pstrdup(col_name);
+        }
+    }
+    varNode->varoattno= *curIsProvRow; // Maintain attr number
+
+    /* 
+     * If this is a aggregate query,
+     * 1) We add new provenance attribute to aggproject
+     *    for aggregate queries, so that TOP level queries
+     *    can project it as part of result.
+     *
+     * 2) We add new provenance attributes of subqueries
+     *    into isProvRowAttrs list, if they are not refered yet.
+     */
+    if (query->hasAggs)
+    { 
+        AggProjectClause *aggP = (AggProjectClause *) query->aggprojectClause;
+        if (!aggP)
+        {
+            aggP = (AggProjectClause *) makeNode(AggProjectClause);
+            query->aggprojectClause = (Node *) aggP;
+            aggP->projAttrs= NIL;
+            aggP->genIsProvRowAttr = NIL;
+        }
+        aggP->projAttrs = lappend(aggP->projAttrs, newTe);
+
+        if(!alreadyReferredByQuery)
+        {
+            aggP->isProvRowAttrs = lappend(aggP->isProvRowAttrs, newTe);
+            varNode->varnoold= -3; // Mark that a Query referred
+        }
+    }
+}
+
+/* Generate GENISPROVROW clause */
+TargetEntry* genProvRowAttr(Query *query,
+                    int *curIsProvRow, int curResno)
+{
+    TargetEntry *agg_te;
+    char col_name[25];
+	Expr *expr;
+
+    // Stop if this is not aggregate query or 
+    // if we are not using prov_use_aggproject
+    if (!query->hasAggs || !prov_use_aggproject)
+        return NULL;
+
+    expr = (Expr *) makeBoolConst(true, false);
+    sprintf(col_name, "is_prov_row_attr%d", *curIsProvRow+1);
+    newTe= makeTargetEntry((Expr *) expr, curResno, pstrdup(col_name), false);
+    newTe->resorigcol= AGGPROJ_INDICATOR;
+
+    // Append it to aggprojectClause also, so that
+    // they are visible in output.
+    //agg_te= flatCopyTargetEntry(newTe);
+    if (query->aggprojectClause)
+    {
+        AggProjectClause *aggP = (AggProjectClause *) query->aggprojectClause;
+        aggP->genIsProvRowAttr = list_make1(newTe);
+    }
+    else
+    {
+        AggProjectClause *new = (AggProjectClause *) makeNode(AggProjectClause);
+        query->aggprojectClause = (Node *) new;
+        new->projAttrs = NULL;
+        new->genIsProvRowAttr = list_make1(newTe);
+    }
+
+    return(newTe);
+}
+
 /*
  * For a given query node this methods pops the provenance attributes
  * of each subquery from pStack and appends them to the target list
  * and to pList of the query.
  */
-
 List *
 addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
 {
@@ -122,7 +251,6 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
 	AttrNumber curResno;
     Var *varNode;
     int curIsProvRow= -1;
-    char col_name[20];
 
 	targetList = query->targetList;
 	curResno = list_length(query->targetList) + 1;
@@ -150,7 +278,9 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
 						exprTypmod ((Node *) te->expr),
 						0);
             varNode->varnoold= ((Var*) te->expr)->varnoold;
-			newTe = makeTargetEntry((Expr*) varNode, curResno, te->resname, false);
+			newTe = makeTargetEntry((Expr*) varNode, curResno, pstrdup(te->resname), false);
+            if (query->hasAggs)
+    	        newTe->resorigcol= AGGPROJ_INDICATOR;
 
 			/* adapt varno und varattno if referenced rte is used in a 
              * join-RTE 
@@ -160,93 +290,8 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
 
             /* if this is a aggregate query, then add provenance columns
              * as AGGPROJECT columns
-             *
-             * TODO: aggprojectClause is use only to get the count
-             *       by planner when creating AggProj node. We can
-             *       avoid preparing list for aggprojectClause and
-             *       just keep a flag stating there were new AGGPROJECT
-             *       columns appended to targetlist. This should serve
-             *       the purpose. aggprojectClause is used only when
-             *       use explicitly uses AGGPROJECT keyword in the
-             *       queries.
              */
-            if (prov_use_aggproject)
-            {
-              if (query->hasAggs)
-              {
-                TargetEntry *agg_te= flatCopyTargetEntry(newTe);
-
-                if (query->aggprojectClause)
-                  lappend(((AggProjectClause *) query->aggprojectClause)->projAttrs, agg_te);
-                else {
-                	AggProjectClause *new = (AggProjectClause *) makeNode(AggProjectClause);
-                	query->aggprojectClause = (Node *) new;
-                	new->projAttrs = list_make1(agg_te);
-                	new->isProvRowAttrs = NIL;
-                	new->genIsProvRowAttr = NIL;
-
-                }
-              }
-
-              /* Check if Var in TargetEntry is a 'is_prov_row'
-               * Yes: Then add it to isProvRowAttrs
-               * No: Then mark newTe's Var node so that some parent
-               *     add's it to isProvRowAttrs latter.
-               *
-               * Only aggregate queries will add 'is_prov_row'
-               * to its isProvRowAttrs. For other queries
-               * Var node is still be left as not referenced.
-               *
-               * The first element in isProvRowAttrs will point
-               * to 'is_prov_row' attribute of self query, rest
-               * all elements point to var node of child queries
-               *
-               */
-              if (!strncmp("is_prov_row_attr", te->resname, 
-                           strlen("is_prov_row_attr")))
-              {
-                bool alreadyReferredByQuery= false;
-                if (nodeTag(te->expr) == T_Var)
-                {
-                  Var *v= (Var*) te->expr;
-                  if (v->varnoold == -3)
-                    alreadyReferredByQuery= true;
-                  if (curIsProvRow < v->varoattno)
-                    curIsProvRow= v->varoattno;
-                }
-                else if (nodeTag(te->expr) == T_Const)
-                {
-                    curIsProvRow++;
-                    // if 2 AggProj from same FROM clause
-                    // change name of duplicate is_prov_row
-                    if (curIsProvRow) 
-                    {
-                        pfree(newTe->resname);
-                        sprintf(col_name, "is_prov_row_attr%d", curIsProvRow);
-                        newTe->resname= pstrdup(col_name);
-                    }
-                }
-
-                if (!alreadyReferredByQuery && query->hasAggs)
-                { 
-                  if (query->aggprojectClause)
-                  {
-                	  AggProjectClause *aggP = (AggProjectClause *) query->aggprojectClause;
-                	  aggP->isProvRowAttrs = lappend(aggP->isProvRowAttrs, newTe);
-                  }
-                  else
-                  {
-                	  AggProjectClause *new = (AggProjectClause *) makeNode(AggProjectClause);
-                	  query->aggprojectClause = (Node *) new;
-                	  new->projAttrs = NIL;
-                	  new->isProvRowAttrs = list_make1(newTe);
-                	  new->genIsProvRowAttr = NIL;
-                  }
-                  varNode->varnoold= -3; // Mark that a Query referred
-                }
-                varNode->varoattno= curIsProvRow; // Maintain attr number
-              }
-            }
+            addAggProvenanceAttrs(query, te, newTe, &curIsProvRow);
 
 			/* append to targetList and pList */
 			targetList = lappend (targetList, newTe);
@@ -257,34 +302,8 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
 		}
 
         // Add 'is_prov_row' bool attribute.
-        if (query->hasAggs && prov_use_aggproject)
+        if ((newTe=genProvRowAttr(query, &curIsProvRow, curResno)) != NULL)
         {
-          TargetEntry *agg_te;
-//          Value v;
-//          v.type = T_Integer;
-//          v.val.ival = 0;
-
-		  expr = (Expr *) makeBoolConst(true, false);
-          sprintf(col_name, "is_prov_row_attr%d", curIsProvRow+1);
-          newTe= makeTargetEntry((Expr *) expr, curResno, pstrdup(col_name), false);
-
-          // Append it to aggprojectClause also, so that
-          // they are visible in output.
-          agg_te= flatCopyTargetEntry(newTe);
-          if (query->aggprojectClause)
-		  {
-        	  AggProjectClause *aggP = (AggProjectClause *) query->aggprojectClause;
-        	  aggP->projAttrs = lappend(aggP->projAttrs, agg_te);
-              aggP->genIsProvRowAttr = list_make1(agg_te);
-		  }
-          else
-          {
-        	  AggProjectClause *new = (AggProjectClause *) makeNode(AggProjectClause);
-        	  query->aggprojectClause = (Node *) new;
-        	  new->projAttrs = list_make1(agg_te);
-              new->genIsProvRowAttr = list_make1(agg_te);
-          }
-
           targetList = lappend(targetList, newTe);
           pList = lappend (pList, newTe);
 

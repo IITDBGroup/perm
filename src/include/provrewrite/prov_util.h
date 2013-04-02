@@ -116,6 +116,8 @@ typedef struct FindSubExpressionWalkerContext
 
 /*prototypes */
 
+#define AGGPROJ_INDICATOR -666
+
 /* provenance support functions */
 extern bool ignoreRTE(RangeTblEntry *rte);
 extern void setIgnoreRTE (RangeTblEntry *rte);

@@ -1927,6 +1927,14 @@ locate_grouping_columns(PlannerInfo *root,
 		ListCell *innerLc;
 		TargetEntry *te;
 
+        /* TODO - Var->varnoold & Var->varoattno are used
+         * dring addProvenanceAttrs, so their top nodes values
+         * and sublist are different and this comparision
+         * fails.
+         * 1) We either need to reset these values after
+         *    addProvenanceAttrs() for top query.
+         * 2) OR write a _equal operator to compare Var's
+         *    without these 2. */
 		foreach(gl, aggP->projAttrs)
 		{
 			Expr *pExpr = ((TargetEntry *) lfirst(gl))->expr;
@@ -1943,7 +1951,7 @@ locate_grouping_columns(PlannerInfo *root,
 			aggPColIdx[idx++] = te->resno;
 		}
 
-		idx = 0;
+        idx = 0;
 		foreach(gl, aggP->isProvRowAttrs)
 		{
 			Expr *pExpr = ((TargetEntry *) lfirst(gl))->expr;

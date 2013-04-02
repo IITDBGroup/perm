@@ -15,9 +15,6 @@
 
 #include "nodes/parsenodes.h"
 
-/* indicator for aggproject columns in target lists */
-#define AGGPROJ_INDICATOR -666
-
 extern bool replaceUnnamedColumnsWalker (Node *node, void *context);
 //extern bool removeAggProjTargetEntriesWalker (Node *node, void *context);
 

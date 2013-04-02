@@ -138,6 +138,30 @@ _equalVar(Var *a, Var *b)
 	return true;
 }
 
+/*
+ * Custom _equalVar, to ignore last two fields varnoold, varoattno
+ * for comparision. These two fields are used for debugging purpose
+ * and need not be used for comparision.
+ *
+ * This is required for AGGPROJECT implementation. See
+ * addProvenanceAttrs() for more information on how we use
+ * varnoold and varoattno.
+ *
+ * TODO- Need to handle this neatly.
+ */
+static bool
+_equalVarProv(Var *a, Var *b)
+{
+	COMPARE_SCALAR_FIELD(varno);
+	COMPARE_SCALAR_FIELD(varattno);
+	COMPARE_SCALAR_FIELD(vartype);
+	COMPARE_SCALAR_FIELD(vartypmod);
+	COMPARE_SCALAR_FIELD(varlevelsup);
+
+	return true;
+}
+
+
 static bool
 _equalConst(Const *a, Const *b)
 {
@@ -2059,7 +2083,9 @@ equal(void *a, void *b)
 			retval = _equalIntoClause(a, b);
 			break;
 		case T_Var:
-			retval = _equalVar(a, b);
+            // See comments for function _equalVarProv()
+            // for more info.
+			retval = _equalVarProv(a, b);
 			break;
 		case T_Const:
 			retval = _equalConst(a, b);
