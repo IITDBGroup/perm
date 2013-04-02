@@ -163,7 +163,6 @@ void addAggProvenanceAttrs(Query *query, TargetEntry *origTe, TargetEntry *newTe
             newTe->resname= pstrdup(col_name);
         }
     }
-    varNode->varoattno= *curIsProvRow; // Maintain attr number
 
     /* 
      * If this is a aggregate query,
@@ -192,13 +191,14 @@ void addAggProvenanceAttrs(Query *query, TargetEntry *origTe, TargetEntry *newTe
             varNode->varnoold= -3; // Mark that a Query referred
         }
     }
+    varNode->varoattno= *curIsProvRow; // Maintain attr number
 }
 
 /* Generate GENISPROVROW clause */
 TargetEntry* genProvRowAttr(Query *query,
                     int *curIsProvRow, int curResno)
 {
-    TargetEntry *agg_te;
+    TargetEntry *newTe;
     char col_name[25];
 	Expr *expr;
 
