@@ -153,7 +153,7 @@ void addAggProvenanceAttrs(Query *query, TargetEntry *origTe, TargetEntry *newTe
     }
     else if (nodeTag(origTe->expr) == T_Const)
     {
-        *curIsProvRow++;
+        *curIsProvRow= *curIsProvRow+1;
         // if 2 AggProj from same FROM clause
         // change name of duplicate is_prov_row
         if (*curIsProvRow) 
