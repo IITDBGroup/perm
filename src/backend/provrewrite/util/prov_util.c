@@ -109,12 +109,13 @@ addProvenanceAttrsForRange (Query *query, int min, int max, List *pList)
  */
 #define IS_PROV_ROW_ATTR(te) !strncmp("is_prov_row_attr",  \
                               te->resname, strlen("is_prov_row_attr"))
-void addAggProvenanceAttrs(Query *query, TargetEntry *origTe, TargetEntry *newTe,
+bool addAggProvenanceAttrs(Query *query, TargetEntry *origTe, TargetEntry *newTe,
                            int *curIsProvRow)
 {
     Var *varNode;
     char col_name[25];
-    bool alreadyReferredByQuery= false;
+    bool referredByQuery= false;
+    int attrNum;
 
     if (!prov_use_aggproject)
         return;
@@ -136,27 +137,28 @@ void addAggProvenanceAttrs(Query *query, TargetEntry *origTe, TargetEntry *newTe
               new->genIsProvRowAttr = NIL;
           }
       }
-      return; // Not a provenance attribute.
+      return false; // Not a provenance attribute.
     }
 
     /* Determine if provenance attribute is 
      * to be refered by ISPROVROWATTRS clause
      */
     varNode= (Var*) newTe->expr;
+    attrNum= atoi(newTe->resname+strlen("is_prov_row_attr"));
     if (nodeTag(origTe->expr) == T_Var)
     {
         Var *v= (Var*) origTe->expr;
         if (v->varnoold == -3)
-            alreadyReferredByQuery= true;
-        if (*curIsProvRow < v->varoattno)
-            *curIsProvRow= v->varoattno;
+            referredByQuery= true;
+        if (*curIsProvRow < attrNum)
+            *curIsProvRow= attrNum;
     }
     else if (nodeTag(origTe->expr) == T_Const)
     {
-        *curIsProvRow= *curIsProvRow+1;
         // if 2 AggProj from same FROM clause
         // change name of duplicate is_prov_row
-        if (*curIsProvRow) 
+        (*curIsProvRow)++;
+        if (*curIsProvRow > 0 && attrNum == 0)
         {
             pfree(newTe->resname);
             sprintf(col_name, "is_prov_row_attr%d", *curIsProvRow);
@@ -173,7 +175,7 @@ void addAggProvenanceAttrs(Query *query, TargetEntry *origTe, TargetEntry *newTe
      * 2) We add new provenance attributes of subqueries
      *    into isProvRowAttrs list, if they are not refered yet.
      */
-    if (query->hasAggs)
+    if (query->hasAggs && !referredByQuery)
     { 
         AggProjectClause *aggP = (AggProjectClause *) query->aggprojectClause;
         if (!aggP)
@@ -181,17 +183,15 @@ void addAggProvenanceAttrs(Query *query, TargetEntry *origTe, TargetEntry *newTe
             aggP = (AggProjectClause *) makeNode(AggProjectClause);
             query->aggprojectClause = (Node *) aggP;
             aggP->projAttrs= NIL;
-            aggP->genIsProvRowAttr = NIL;
+            aggP->genIsProvRowAttr= NIL;
+            aggP->isProvRowAttrs= NIL;
         }
-        aggP->projAttrs = lappend(aggP->projAttrs, newTe);
 
-        if(!alreadyReferredByQuery)
-        {
-            aggP->isProvRowAttrs = lappend(aggP->isProvRowAttrs, newTe);
-            varNode->varnoold= -3; // Mark that a Query referred
-        }
+        aggP->isProvRowAttrs = lappend(aggP->isProvRowAttrs, newTe);
+        varNode->varnoold= -3; // Mark that a Query referred
+        referredByQuery= true;
     }
-    varNode->varoattno= *curIsProvRow; // Maintain attr number
+    return (referredByQuery);
 }
 
 /* Generate GENISPROVROW clause */
@@ -208,7 +208,7 @@ TargetEntry* genProvRowAttr(Query *query,
         return NULL;
 
     expr = (Expr *) makeBoolConst(true, false);
-    sprintf(col_name, "is_prov_row_attr%d", *curIsProvRow+1);
+    sprintf(col_name, "is_prov_row_attr%d", (*curIsProvRow)+1);
     newTe= makeTargetEntry((Expr *) expr, curResno, pstrdup(col_name), false);
     newTe->resorigcol= AGGPROJ_INDICATOR;
 
@@ -291,14 +291,15 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
             /* if this is a aggregate query, then add provenance columns
              * as AGGPROJECT columns
              */
-            addAggProvenanceAttrs(query, te, newTe, &curIsProvRow);
+            if (addAggProvenanceAttrs(query, te, newTe, &curIsProvRow))
+                continue; // Do not propagate it to parent queries
 
-			/* append to targetList and pList */
-			targetList = lappend (targetList, newTe);
-			pList = lappend (pList, newTe);
+            /* append to targetList and pList */
+            pList = lappend (pList, newTe);
+            targetList = lappend (targetList, newTe);
 
-			/* increase current resno */
-			curResno++;
+            /* increase current resno */
+            curResno++;
 		}
 
         // Add 'is_prov_row' bool attribute.

@@ -3142,25 +3142,6 @@ make_aggproj(PlannerInfo *root,
 	node->genProvRowIdx = genIsProvRowColIdx;
 	node->numIsProvRowCols = numIsProvCols;
 	node->isProvRowColIdx = isProvColIdx;
-//    // create indices for isprovrow attributes of subqueries
-//    if (node->numIsProvRowCols > 0)
-//    {
-//    	ListCell *lc;
-//    	TargetEntry *te;
-//    	Var *teVar;
-//    	int i = 0;
-//    	node->isProvRowColIdx = (AttrNumber *) palloc(sizeof(AttrNumber)
-//    			* node->numIsProvRowCols);
-//
-//    	foreach(lc, aggProj->isProvRowAttrs)
-//    	{
-//    		te = (TargetEntry *) lfirst(lc);
-//    		teVar = (Var *) te->expr;
-//    		node->isProvRowColIdx[i++] = teVar->varattno;
-//    	}
-//    }
-//    else
-//    	node->isProvRowColIdx = NULL;
 
     // determine cost
 	copy_plan_costsize(plan, lefttree); /* only care about copying size */
