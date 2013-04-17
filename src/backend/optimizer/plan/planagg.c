@@ -84,8 +84,10 @@ optimize_minmax_aggregates(PlannerInfo *root, List *tlist, Path *best_path)
 	Node	   *hqual;
 	QualCost	tlist_cost;
 
-	/* Nothing to do if query has no aggregates */
-	if (!parse->hasAggs)
+	/* Nothing to do if query has no aggregates 
+     * OR do not optimize if we have AGGPROJECT Clause
+     */
+	if (!parse->hasAggs || parse->aggprojectClause)
 		return NULL;
 
 	Assert(!parse->setOperations);		/* shouldn't get here if a setop */
