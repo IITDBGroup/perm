@@ -90,14 +90,22 @@ logPList (List *pList)
 	pos = 0;
 	foreach(lc, pList)
 	{
-		if (IsA(lfirst(lc), TargetEntry)) {
-			te = (TargetEntry *) lfirst(lc);
+		if ((lfirst(lc) != NULL))
+		{
+			if (IsA(lfirst(lc), TargetEntry))
+			{
+				te = (TargetEntry *) lfirst(lc);
 
-			if(te)
-				ereport (DEBUG1,
-							(errcode(ERRCODE_DIVISION_BY_ZERO),
-							errmsg("%i: <%s>", pos, te->resname)));
+				if(te)
+					ereport (DEBUG1,
+								(errcode(ERRCODE_DIVISION_BY_ZERO),
+								errmsg("%i: <%s>", pos, te->resname)));
+			}
 		}
+		else
+			ereport (DEBUG1,
+							(errcode(ERRCODE_DIVISION_BY_ZERO),
+							errmsg("%i: <%s>", pos, "NULL")));
 		pos++;
 	}
 
