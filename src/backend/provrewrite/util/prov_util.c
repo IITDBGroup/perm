@@ -118,7 +118,7 @@ bool addAggProvenanceAttrs(Query *query, TargetEntry *origTe, TargetEntry *newTe
     int attrNum;
 
     if (!prov_use_aggproject)
-        return;
+        return false;
 
     /* For every non provenance attribute on aggregate query, we 
      * add it to AGGPROJECT clause
