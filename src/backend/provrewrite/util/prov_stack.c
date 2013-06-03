@@ -301,7 +301,7 @@ popListAndReverse (List **stack, int numElem)
 	for (i = 0; i < numElem; i++)
 		result = lcons(pop(stack),result);
 
-	logPList(result);
+	logNode(result,"reversed list");
 
 	return result;
 }

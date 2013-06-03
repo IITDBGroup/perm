@@ -70,6 +70,7 @@ static List *relRefCount;
 
 /* Function declarations */
 static Query *traverseQueryTree (RangeTblEntry *rteQuery, Query *query, char *cursorName);
+static bool needsAggRewrite(Query *query);
 
 /*
  * Rewrites a list of queries (a single input query might have been rewritten into multiple queries
@@ -290,7 +291,7 @@ Query *
 rewriteQueryNode (Query * query)
 {
 	/* is an aggregate query? */
-	if (query->hasAggs)
+	if (needsAggRewrite(query))
 		query = rewriteAggregateQuery (query);
 
 	/* is a set operation? */
@@ -304,6 +305,28 @@ rewriteQueryNode (Query * query)
 	LOGNODE(query, "rewritten query tree (influence contribution)");
 
 	return query;
+}
+
+/*
+ * Test whether a query node needs aggregation rewrite.
+ * 	1) If it has aggregation function -> YES
+ * 	2) If it has group-by expressions but no aggregation functions then
+ * 		a) If the group by expressions include all input attributes then we do
+ * 		 not need the more complex aggregation rewrite -> NO
+ * 		b) Otherwise -> YES
+ *
+ */
+bool
+needsAggRewrite(Query *query)
+{
+	// has aggregation functions, we have to use the aggregation rewrite
+	if (query->hasAggs)
+		return TRUE;
+	// has no aggregation functions and group by expressions -> no aggregation rewrite required
+	if (!query->groupClause)
+		return FALSE;
+	//TODO an potential optimization is to not rewrite a GROUP BY which has only SPJ operators below and includes all input attributes
+	return TRUE;
 }
 
 /*
