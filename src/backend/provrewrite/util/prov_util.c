@@ -109,10 +109,13 @@ addProvenanceAttrsForRange (Query *query, int min, int max, List *pList)
  */
 #define IS_PROV_ROW_ATTR(te) !strncmp("is_prov_row_attr",  \
                               te->resname, strlen("is_prov_row_attr"))
+#define PROV_ATTR_NOT_REFERRED -2 // Avoiding -1 as it might be in use.
+#define PROV_ATTR_REFERRED     -3
+
 bool addAggProvenanceAttrs(Query *query, TargetEntry *origTe, TargetEntry *newTe,
                            int *curIsProvRow)
 {
-    Var *varNode;
+    Var *newVar, *oldVar;
     char col_name[25];
     bool referredByQuery= false;
     int attrNum;
@@ -143,17 +146,16 @@ bool addAggProvenanceAttrs(Query *query, TargetEntry *origTe, TargetEntry *newTe
     /* Determine if provenance attribute is 
      * to be refered by ISPROVROWATTRS clause
      */
-    varNode= (Var*) newTe->expr;
+    newVar= (Var*) newTe->expr;
+    oldVar= (Var*) origTe->expr;
     attrNum= atoi(newTe->resname+strlen("is_prov_row_attr"));
-    if (nodeTag(origTe->expr) == T_Var)
-    {
-        Var *v= (Var*) origTe->expr;
-        if (v->varnoold == -3)
-            referredByQuery= true;
-        if (*curIsProvRow < attrNum)
-            *curIsProvRow= attrNum;
-    }
-    else if (nodeTag(origTe->expr) == T_Const)
+	if (oldVar->varnoold == PROV_ATTR_REFERRED)
+	{
+		referredByQuery= true;
+		if (*curIsProvRow < attrNum)
+			*curIsProvRow= attrNum;
+	}
+    else if (oldVar->varnoold == PROV_ATTR_NOT_REFERRED)
     {
         // if 2 AggProj from same FROM clause
         // change name of duplicate is_prov_row
@@ -188,7 +190,7 @@ bool addAggProvenanceAttrs(Query *query, TargetEntry *origTe, TargetEntry *newTe
         }
 
         aggP->isProvRowAttrs = lappend(aggP->isProvRowAttrs, newTe);
-        varNode->varnoold= -3; // Mark that a Query referred
+        newVar->varnoold= PROV_ATTR_REFERRED; // Mark that a Query referred
         referredByQuery= true;
     }
     return (referredByQuery);
@@ -305,8 +307,18 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
         // Add 'is_prov_row' bool attribute.
         if ((newTe=genProvRowAttr(query, &curIsProvRow, curResno)) != NULL)
         {
+	      TargetEntry *tmpTe;
           targetList = lappend(targetList, newTe);
-          pList = lappend (pList, newTe);
+
+		  varNode= makeVar (curSubquery,
+						  newTe->resno,
+						  exprType ((Node *) newTe->expr),
+						  exprTypmod ((Node *) newTe->expr),
+						  0);
+          varNode->varnoold= PROV_ATTR_NOT_REFERRED; // Not yet referred.
+		  tmpTe = makeTargetEntry((Expr*) varNode, newTe->resno, pstrdup(newTe->resname), false);
+    	  tmpTe->resorigcol= AGGPROJ_INDICATOR;
+          pList = lappend (pList, tmpTe);
 
           curResno++;
         }
