@@ -199,14 +199,22 @@ parseCheckAggregates(ParseState *pstate, Query *qry)
 	}
 
 	/*
-	 * Check the targetlist and HAVING clause for ungrouped variables.
+	 * Flatten aggproject clause entries and cache them
 	 */
 	if (qry->aggprojectClause != NULL)
+	{
 		aggProjClauses = ((AggProjectClause *) qry->aggprojectClause)->projAttrs;
+		if (hasJoinRTEs)
+			aggProjClauses = (List *) flatten_join_alias_vars(root, (Node *) aggProjClauses);
+	}
 
+	/*
+	 * Check the targetlist and HAVING clause for ungrouped variables.
+	 */
 	clause = (Node *) qry->targetList;
 	if (hasJoinRTEs)
 		clause = flatten_join_alias_vars(root, clause);
+
 	check_ungrouped_columns(clause, pstate,
 							groupClauses, have_non_var_grouping, aggProjClauses);
 

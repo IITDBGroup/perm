@@ -337,6 +337,10 @@ subquery_planner(PlannerGlobal *glob, Query *parse,
 	parse->havingQual = preprocess_expression(root, parse->havingQual,
 											  EXPRKIND_QUAL);
 
+	parse->aggprojectClause =
+		preprocess_expression(root, (Node *) parse->aggprojectClause,
+							  EXPRKIND_TARGET);
+
 	parse->limitOffset = preprocess_expression(root, parse->limitOffset,
 											   EXPRKIND_LIMIT);
 	parse->limitCount = preprocess_expression(root, parse->limitCount,

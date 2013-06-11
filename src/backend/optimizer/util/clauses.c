@@ -4402,8 +4402,9 @@ expression_tree_mutator(Node *node,
 
 				FLATCOPY(newnode, aggP, AggProjectClause);
 				MUTATE(newnode->genIsProvRowAttr, aggP->genIsProvRowAttr, List *);
-				MUTATE(newnode->genIsProvRowAttr, aggP->isProvRowAttrs, List *);
-				MUTATE(newnode->genIsProvRowAttr, aggP->projAttrs, List *);
+				MUTATE(newnode->isProvRowAttrs, aggP->isProvRowAttrs, List *);
+				MUTATE(newnode->projAttrs, aggP->projAttrs, List *);
+
 				return (Node *) newnode;
 			}
 		break;
@@ -4459,6 +4460,8 @@ query_tree_mutator(Query *query,
 	MUTATE(query->havingQual, query->havingQual, Node *);
 	MUTATE(query->limitOffset, query->limitOffset, Node *);
 	MUTATE(query->limitCount, query->limitCount, Node *);
+	MUTATE(query->aggprojectClause, query->aggprojectClause, Node *);
+
 	query->rtable = range_table_mutator(query->rtable,
 										mutator, context, flags);
 	return query;
