@@ -56,12 +56,12 @@ typedef struct ExplainState
 
 static void ExplainOneQuery(Query *query, ExplainStmt *stmt,
 				const char *queryString,
-				ParamListInfo params, TupOutputState *tstate);
+				ParamListInfo params, TupOutputState *tstate, double rewritetime);
 static void ExplainQueryGraph (Query *query, ExplainStmt *stmt,
 				const char *queryString, ParamListInfo params,
 				TupOutputState *tstate);
 static void ExplainOnePlanProv (Query *query, PlannedStmt *plannedstmt, ParamListInfo params,
-			   ExplainStmt *stmt, TupOutputState *tstate);
+			   ExplainStmt *stmt, TupOutputState *tstate, double rewritetime, double plantime);
 static void report_triggers(ResultRelInfo *rInfo, bool show_relname,
 				StringInfo buf);
 static double elapsed_time(instr_time *starttime);
@@ -95,6 +95,8 @@ ExplainQuery(ExplainStmt *stmt, const char *queryString,
 	TupOutputState *tstate;
 	List	   *rewritten;
 	ListCell   *l;
+	double		rewritetime;
+	instr_time	starttime;
 
 	/* Convert parameter type data to the form parser wants */
 	getParamListTypes(params, &param_types, &num_params);
@@ -109,8 +111,11 @@ ExplainQuery(ExplainStmt *stmt, const char *queryString,
 	 * executed repeatedly.  (See also the same hack in DECLARE CURSOR and
 	 * PREPARE.)  XXX FIXME someday.
 	 */
+	INSTR_TIME_SET_CURRENT(starttime);
+
 	rewritten = pg_analyze_and_rewrite((Node *) copyObject(stmt->query),
 									   queryString, param_types, num_params);
+	rewritetime = elapsed_time(&starttime);
 
 	/* prepare for projection of tuples */
 	tstate = begin_tup_output_tupdesc(dest, ExplainResultDesc(stmt));
@@ -126,7 +131,7 @@ ExplainQuery(ExplainStmt *stmt, const char *queryString,
 		foreach(l, rewritten)
 		{
 			ExplainOneQuery((Query *) lfirst(l), stmt,
-							queryString, params, tstate);
+							queryString, params, tstate, rewritetime);
 			/* put a blank line between plans */
 			if (lnext(l) != NULL)
 				do_text_output_oneline(tstate, "");
@@ -158,8 +163,11 @@ ExplainResultDesc(ExplainStmt *stmt)
  */
 static void
 ExplainOneQuery(Query *query, ExplainStmt *stmt, const char *queryString,
-				ParamListInfo params, TupOutputState *tstate)
+				ParamListInfo params, TupOutputState *tstate, double rewritetime)
 {
+	instr_time starttime;
+	double plantime;
+
 	/* if the user requested the query graph output dot commands for this */
 	if (stmt->graph)
 	{
@@ -182,13 +190,15 @@ ExplainOneQuery(Query *query, ExplainStmt *stmt, const char *queryString,
 		PlannedStmt *plan;
 
 		/* plan the query */
+		INSTR_TIME_SET_CURRENT(starttime);
 		if (prov_use_optimizer && planner_hook == NULL)
 			planner_hook = generateCheapestProvenancePlan;
 
 		plan = planner(copyObject(query), 0, params);
+		plantime = elapsed_time(&starttime);
 
 		/* run it (if needed) and produce output */
-		ExplainOnePlanProv(query, plan, params, stmt, tstate);
+		ExplainOnePlanProv(query, plan, params, stmt, tstate, rewritetime, plantime);
 	}
 }
 
@@ -246,11 +256,12 @@ ExplainOneUtility(Node *utilityStmt, ExplainStmt *stmt,
 
 static void
 ExplainOnePlanProv (Query *query, PlannedStmt *plannedstmt, ParamListInfo params,
-			   ExplainStmt *stmt, TupOutputState *tstate)
+			   ExplainStmt *stmt, TupOutputState *tstate, double rewritetime, double plantime)
 {
 	QueryDesc  *queryDesc;
 	instr_time	starttime;
 	double		totaltime = 0;
+	double	    executiontime = 0;
 	ExplainState *es;
 	StringInfoData buf;
 	int			eflags;
@@ -326,7 +337,7 @@ ExplainOnePlanProv (Query *query, PlannedStmt *plannedstmt, ParamListInfo params
 			ExecutorRun(queryDesc, ForwardScanDirection, 0L);
 
 			/* We can't clean up 'till we're done printing the stats... */
-			totaltime += elapsed_time(&starttime);
+			executiontime += elapsed_time(&starttime);
 		}
 
 		es = (ExplainState *) palloc0(sizeof(ExplainState));
@@ -394,7 +405,7 @@ ExplainOnePlanProv (Query *query, PlannedStmt *plannedstmt, ParamListInfo params
 		{
 			INSTR_TIME_SET_CURRENT(starttime);
 			AfterTriggerEndQuery(queryDesc->estate);
-			totaltime += elapsed_time(&starttime);
+			executiontime += elapsed_time(&starttime);
 		}
 
 		/* Print info about runtime of triggers */
@@ -433,11 +444,23 @@ ExplainOnePlanProv (Query *query, PlannedStmt *plannedstmt, ParamListInfo params
 		if (stmt->analyze)
 			CommandCounterIncrement();
 
-		totaltime += elapsed_time(&starttime);
+		executiontime += elapsed_time(&starttime);
+
+		// print individual times for parsing + rewriting and planning
+		appendStringInfo(&buf, "Parse + Rewrite runtime: %.3f ms\n",
+						1000.0 * rewritetime);
+		appendStringInfo(&buf, "Planner runtime: %.3f ms\n",
+						1000.0 * plantime);
+		totaltime = rewritetime + plantime;
 
 		if (stmt->analyze)
-			appendStringInfo(&buf, "Total runtime: %.3f ms\n",
-							 1000.0 * totaltime);
+		{
+			appendStringInfo(&buf, "Execution runtime: %.3f ms\n",
+							 1000.0 * executiontime);
+			totaltime += executiontime;
+		}
+		appendStringInfo(&buf, "Total runtime: %.3f ms\n",
+									 1000.0 * totaltime);
 		do_text_output_multiline(tstate, buf.data);
 
 		pfree(buf.data);
@@ -507,7 +530,7 @@ void
 ExplainOnePlan(PlannedStmt *plannedstmt, ParamListInfo params,
 			   ExplainStmt *stmt, TupOutputState *tstate)
 {
-	ExplainOnePlanProv(NULL, plannedstmt, params, stmt, tstate);
+	ExplainOnePlanProv(NULL, plannedstmt, params, stmt, tstate, 0, 0);
 }
 
 /* Compute elapsed time in seconds since given timestamp */
