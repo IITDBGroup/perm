@@ -116,8 +116,11 @@ addProvenanceAttrsForRange (Query *query, int min, int max, List *pList)
  * The primary work here is to rewrite
  * AGGPROJECT and ISPROVROWATTRS clauses.
  */
-#define IS_PROV_ROW_ATTR(te) !strncmp("is_prov_row_attr",  \
-                              te->resname, strlen("is_prov_row_attr"))
+#define IS_PROV_ROW_ATTR(te) \
+	(te->resname != NULL && !strncmp("is_prov_row_attr",  \
+              te->resname, \
+				(strlen(te->resname) < strlen("is_prov_row_attr") ? \
+						strlen(te->resname) : strlen("is_prov_row_attr"))))
 #define PROV_ATTR_NOT_REFERRED -2 // Avoiding -1 as it might be in use.
 #define PROV_ATTR_REFERRED     -3
 
