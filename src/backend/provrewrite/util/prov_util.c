@@ -38,7 +38,13 @@
 #include "provrewrite/prov_nodes.h"
 #include "provrewrite/prov_sublink_util_search.h"
 
-
+/* data structures */
+typedef struct VarAttnoWalkerContext
+{
+	int varlevelsup;
+	int *attnoMap;
+	int varno;
+} VarAttnoWalkerContext;
 
 /* prototypes */
 static void getViewRelations (Oid relid, List **result);
@@ -54,6 +60,9 @@ static void fromItemWalker (Node *node, GetFromItemWalkerContext *context);
 static Node *replaceSubExpressionsMutator (Node *node, ReplaceSubExpressionsContext *context);
 static bool findSubExpressionWalker (Node *node, FindSubExpressionWalkerContext *context);
 static bool removeProvInfoNodesWalker (Node *node, void *context);
+static bool removeTopIsProvRowAttrTargetEntriesWalker (Node *node, void *context);
+static bool adaptVarattnoWalker (Node *node, VarAttnoWalkerContext *context);
+static int getRTEPos(Query *q, Query *parent);
 static bool queryHasRewriteChildrenWalker (Node *node, bool *context);
 static Node *getJoinTreeNodeWalker (Node *node, Index rtindex);
 static Node *getCastedVarOrConst (Node *node);
@@ -149,21 +158,21 @@ bool addAggProvenanceAttrs(Query *query, TargetEntry *origTe, TargetEntry *newTe
     newVar= (Var*) newTe->expr;
     oldVar= (Var*) origTe->expr;
     attrNum= atoi(newTe->resname+strlen("is_prov_row_attr"));
-	if (oldVar->varnoold == PROV_ATTR_REFERRED)
-	{
-		referredByQuery= true;
-		if (*curIsProvRow < attrNum)
-			*curIsProvRow= attrNum;
-	}
+    if (*curIsProvRow < attrNum)
+	*curIsProvRow= attrNum;
+    if (oldVar->varnoold == PROV_ATTR_REFERRED)
+    {
+	referredByQuery= true;
+    }
     else if (oldVar->varnoold == PROV_ATTR_NOT_REFERRED)
     {
         // if 2 AggProj from same FROM clause
         // change name of duplicate is_prov_row
-        (*curIsProvRow)++;
-        if (*curIsProvRow > 0 && attrNum == 0)
+        //(*curIsProvRow)++;
+        if (attrNum == 0)
         {
             pfree(newTe->resname);
-            sprintf(col_name, "is_prov_row_attr%d", *curIsProvRow);
+            sprintf(col_name, "is_prov_row_attr%d", ++(*curIsProvRow));
             newTe->resname= pstrdup(col_name);
         }
     }
@@ -193,6 +202,10 @@ bool addAggProvenanceAttrs(Query *query, TargetEntry *origTe, TargetEntry *newTe
         newVar->varnoold= PROV_ATTR_REFERRED; // Mark that a Query referred
         referredByQuery= true;
     }
+    else if(!referredByQuery)
+    {
+        newVar->varnoold= PROV_ATTR_NOT_REFERRED; // Not yet referred.
+    }
     return (referredByQuery);
 }
 
@@ -210,7 +223,7 @@ TargetEntry* genProvRowAttr(Query *query,
         return NULL;
 
     expr = (Expr *) makeBoolConst(true, false);
-    sprintf(col_name, "is_prov_row_attr%d", (*curIsProvRow)+1);
+    sprintf(col_name, "is_prov_row_attr%d", ++(*curIsProvRow));
     newTe= makeTargetEntry((Expr *) expr, curResno, pstrdup(col_name), false);
     newTe->resorigcol= AGGPROJ_INDICATOR;
 
@@ -243,16 +256,16 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
 {
 	ListCell *subqLc;
 	ListCell *pTeLc;
-	List *targetList;		/* new targetlist for query */
+	List *targetList;	/* new targetlist for query */
 	List *subPStack;
-	List *curPSet;			/* currently processed pSet */
-	TargetEntry *te;		/* a TargetEntry from current pSet */
-	TargetEntry *newTe;		/* new TargetEntry derived from te */
+	List *curPSet;		/* currently processed pSet */
+	TargetEntry *te;	/* a TargetEntry from current pSet */
+	TargetEntry *newTe;	/* new TargetEntry derived from te */
 	Expr *expr;
 	Index curSubquery;
 	AttrNumber curResno;
-    Var *varNode;
-    int curIsProvRow= -1;
+	Var *varNode;
+	int curIsProvRow= -1;
 
 	targetList = query->targetList;
 	curResno = list_length(query->targetList) + 1;
@@ -279,49 +292,48 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
 						exprType ((Node *) te->expr),
 						exprTypmod ((Node *) te->expr),
 						0);
-            varNode->varnoold= ((Var*) te->expr)->varnoold;
+			varNode->varnoold= ((Var*) te->expr)->varnoold;
 			newTe = makeTargetEntry((Expr*) varNode, curResno, pstrdup(te->resname), false);
-            if (query->hasAggs)
-    	        newTe->resorigcol= AGGPROJ_INDICATOR;
+			if (query->hasAggs)
+				newTe->resorigcol= AGGPROJ_INDICATOR;
 
 			/* adapt varno und varattno if referenced rte is used in a 
-             * join-RTE 
-             */ 
+			 * join-RTE 
+			 */ 
 			if (adaptToJoins)
 				getRTindexForProvTE (query, varNode);
 
-            /* if this is a aggregate query, then add provenance columns
-             * as AGGPROJECT columns
-             */
-            if (addAggProvenanceAttrs(query, te, newTe, &curIsProvRow))
-                continue; // Do not propagate it to parent queries
+			/* if this is a aggregate query, then add provenance columns
+			 * as AGGPROJECT columns
+			 */
+			if (addAggProvenanceAttrs(query, te, newTe, &curIsProvRow))
+			    continue; // Do not propagate it to parent queries
 
-            /* append to targetList and pList */
-            pList = lappend (pList, newTe);
-            targetList = lappend (targetList, newTe);
+			/* append to targetList and pList */
+			pList = lappend (pList, newTe);
+			targetList = lappend (targetList, newTe);
 
-            /* increase current resno */
-            curResno++;
+			/* increase current resno */
+			curResno++;
 		}
 
-        // Add 'is_prov_row' bool attribute.
-        if ((newTe=genProvRowAttr(query, &curIsProvRow, curResno)) != NULL)
-        {
-	      TargetEntry *tmpTe;
-          targetList = lappend(targetList, newTe);
+		// Add 'is_prov_row' bool attribute.
+		if ((newTe=genProvRowAttr(query, &curIsProvRow, curResno)) != NULL)
+		{
+			TargetEntry *tmpTe;
+			targetList = lappend(targetList, newTe);
 
-		  varNode= makeVar (curSubquery,
-						  newTe->resno,
-						  exprType ((Node *) newTe->expr),
-						  exprTypmod ((Node *) newTe->expr),
-						  0);
-          varNode->varnoold= PROV_ATTR_NOT_REFERRED; // Not yet referred.
-		  tmpTe = makeTargetEntry((Expr*) varNode, newTe->resno, pstrdup(newTe->resname), false);
-    	  tmpTe->resorigcol= AGGPROJ_INDICATOR;
-          pList = lappend (pList, tmpTe);
-
-          curResno++;
-        }
+			varNode= makeVar (curSubquery,
+					  newTe->resno,
+					  exprType ((Node *) newTe->expr),
+					  exprTypmod ((Node *) newTe->expr),
+					  0);
+			varNode->varnoold= PROV_ATTR_NOT_REFERRED; // Not yet referred.
+			tmpTe = makeTargetEntry((Expr*) varNode, newTe->resno, pstrdup(newTe->resname), false);
+			tmpTe->resorigcol= AGGPROJ_INDICATOR;
+			pList = lappend (pList, tmpTe);
+			curResno++;
+		}
 	}
 
 	/* replace old targetList of query */
@@ -1776,10 +1788,196 @@ removeProvInfoNodes (Query *query)
 	removeProvInfoNodesWalker ((Node *) query, NULL);
 }
 
+void
+removeTopIsProvRowAttrTargetEntries (Query *query)
+{
+	removeTopIsProvRowAttrTargetEntriesWalker ((Node *) query, NULL);
+}
+
+/*
+ * Remove top most is_prov_row_attr# from the query
+ */
+static bool
+removeTopIsProvRowAttrTargetEntriesWalker (Node *node, void *context)
+{
+	if (node == NULL)
+		return false;
+
+	if (IsA(node, Query))
+	{
+		Query *q = (Query *) node;
+		ListCell *lc; // *next, *prev;
+		bool found = false;
+		int tlLength = list_length(q->targetList) + 1;
+		List *toDel = NIL;
+//		prev = NULL;
+
+		foreach(lc, q->targetList)
+		{
+			TargetEntry *te = (TargetEntry *) lfirst(lc);
+
+			if (IS_PROV_ROW_ATTR(te))
+			{
+				elog(INFO, "GOPAL found type: %s", te->resname);
+				toDel = lappend(toDel, te);
+				found= true;
+			}
+		}
+//		for (cell = list_head(q->targetList); cell; cell = next)
+//		{
+//			TargetEntry *te = (TargetEntry *) lfirst(cell);
+//
+//			next = lnext(cell);
+//			if (IS_PROV_ROW_ATTR(te))
+//			{
+//				elog(INFO, "GOPAL found type: %s", te->resname);
+//				q->targetList = list_delete_cell(q->targetList, cell, prev);
+//				found= true;
+//			}
+//			else
+//				prev = cell;
+//		}
+
+		/* if at least one attribute was removed then we need to adapt everything
+		 * referring to attributes for which the number has changed.
+		 *   1) adapt resnos from the target list
+		 *   2) adapt the RTE for this query node
+		 *   3) adapt Var nodes from the parent query node referring to these attrs
+		 */
+		if (found)
+		{
+			int *newResno = (int *) palloc(sizeof(int) *tlLength);
+			int i;
+			ListCell *lc;
+			List *oldTarget = q->targetList;
+
+			// remove target entries
+			q->targetList = list_difference_ptr(q->targetList, toDel);
+			list_free(oldTarget);
+			list_free(toDel);
+
+			// 1) adapt resno of target entries and store mapping between old and new resnos
+			foreachi(lc, i, q->targetList) {
+				TargetEntry *te = (TargetEntry *) lfirst(lc);
+				newResno[te->resno] = i + 1;
+				te->resno = i + 1;
+			}
+
+			if (context != NULL)
+			{
+				Query *parent = (Query *) context;
+				VarAttnoWalkerContext *vaContext;
+				int varno = getRTEPos(q, parent);
+
+				// 2) adapt RTE for the current query
+				correctSubQueryAlias(parent);
+
+				// 3) adapt Var nodes in the parent query
+				vaContext = (VarAttnoWalkerContext *) palloc(sizeof(VarAttnoWalkerContext));
+				vaContext->attnoMap = newResno;
+				vaContext->varlevelsup = 0;
+				vaContext->varno = varno;
+
+				query_tree_walker((Query *) parent, adaptVarattnoWalker, vaContext, 0);
+				pfree(vaContext);
+			}
+			pfree(newResno);
+
+			// Stop traversing when you find first aggregate query.
+			// Remove GENISPROVROW clause items on TOP aggregate query.
+			if (q->hasAggs)
+			{
+				if( q->aggprojectClause)
+				{
+					AggProjectClause *aggNode =
+							(AggProjectClause *) q->aggprojectClause;
+
+					// Remove GENISPROVROW elements
+					if (aggNode->genIsProvRowAttr)
+					{
+						elog(INFO, "GOPAL found GENISPROVROW: ");
+						list_free(aggNode->genIsProvRowAttr);
+						aggNode->genIsProvRowAttr= NIL;
+					}
+				}
+			}
+		}
+
+		/* We might have to remove is_prov_row_attr from intermediate queries
+		 * until we find first aggregate query.
+		 */
+		return query_tree_walker(q, removeTopIsProvRowAttrTargetEntriesWalker, q, 0);
+	}
+
+	return expression_tree_walker(node, removeTopIsProvRowAttrTargetEntriesWalker, context);
+}
+
+/*
+ * Find the RTE for a given subquery in the RT of a parent query
+ */
+static int
+getRTEPos(Query *q, Query *parent)
+{
+	RangeTblEntry *rte;
+	ListCell *lc;
+	int i = 0;
+
+	foreachi(lc, i, parent->rtable)
+	{
+		rte = (RangeTblEntry *) lfirst(lc);
+		if (rte->rtekind == RTE_SUBQUERY && equal(q, rte->subquery))
+			return i + 1;
+	}
+
+	return -1;
+}
+
 /*
  *
  */
+static bool
+adaptVarattnoWalker (Node *node, VarAttnoWalkerContext *context)
+{
+	if (node == NULL)
+		return false;
 
+	// only recurse into nested subqueries
+	if (IsA(node,Query) && context->varlevelsup > 0)
+	{
+		int oldLevelsUp = context->varlevelsup++;
+		bool result = query_tree_walker((Query *) node, adaptVarattnoWalker,
+				(void *) context, 0);
+		context->varlevelsup = oldLevelsUp;
+		return result;
+	}
+
+	// recurse into sublinks
+	if (IsA(node, SubLink))
+	{
+		SubLink *sub = (SubLink *) node;
+		int oldLevelsUp = context->varlevelsup++;
+		bool result = query_tree_walker((Query *) sub->subselect, adaptVarattnoWalker,
+				(void *) context, 0);
+		context->varlevelsup = oldLevelsUp;
+		return result;
+	}
+
+	// adapt var nodes
+	if (IsA(node, Var))
+	{
+		Var *v = (Var *) node;
+
+		// if it is a var from the modified query then adapt it
+		if (v->varno == context->varno && v->varlevelsup == context->varlevelsup)
+			v->varattno = context->attnoMap[v->varattno];
+	}
+
+	return expression_tree_walker(node, adaptVarattnoWalker, (void *) context);
+}
+
+/*
+ *
+ */
 static bool
 removeProvInfoNodesWalker (Node *node, void *context)
 {

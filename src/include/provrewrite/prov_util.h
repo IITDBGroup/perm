@@ -122,6 +122,7 @@ typedef struct FindSubExpressionWalkerContext
 extern bool ignoreRTE(RangeTblEntry *rte);
 extern void setIgnoreRTE (RangeTblEntry *rte);
 extern void removeProvInfoNodes (Query *query);
+extern void removeTopIsProvRowAttrTargetEntries (Query *query);
 extern bool queryHasRewriteChildren (Query *query);
 extern bool hasProvenanceSubqueryOrSublink (Query *query);
 extern List *addProvenanceAttrsForRange (Query *query, int min, int max,
@@ -185,5 +186,12 @@ extern TargetEntry *findTeForVar (Var *var, List *targetList);
 extern bool hasOuterJoins (Query *query);
 extern char *getAlias (RangeTblEntry *rte);
 extern Var *resolveToRteVar (Var *var, Query *query);
+
+// aggproject stuff
+extern bool addAggProvenanceAttrs(Query *query, TargetEntry *origTe,
+		TargetEntry *newTe, int *curIsProvRow);
+extern TargetEntry* genProvRowAttr(Query *query,
+                    int *curIsProvRow, int curResno);
+
 
 #endif /*PROV_UTIL_H_*/

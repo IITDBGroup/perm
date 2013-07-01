@@ -21,6 +21,7 @@
 #include "utils/lsyscache.h"
 
 /* prefix for provenance attributes */
+const char IsProvRowPrefix[] = "is_prov_row_attr";
 const char ProvPraefix[] = "prov_";
 const char AnnotPraefix[] = "annot_";
 const char TransProvName[] = "trans_prov";
@@ -377,7 +378,8 @@ isProvAttr (TargetEntry *te)
 		return false;
 
 	if (!strncmp(te->resname, ProvPraefix, 5)
-			|| !strncmp(te->resname, AnnotPraefix, 6))
+			|| !strncmp(te->resname, AnnotPraefix, 6)
+			|| !strncmp(te->resname, IsProvRowPrefix, sizeof(IsProvRowPrefix)))
 		return true;
 
 	if (STR_LEN_CMP(TransProvName,10)

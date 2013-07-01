@@ -139,6 +139,9 @@ provenanceRewriteQuery (Query *query)
 	/* try to pushdown selections */
 	query = pushdownSelections(query);
 
+	/* Remove top most is_prov_row_attr */
+	removeTopIsProvRowAttrTargetEntries(query);
+
 	LOGNODE(query, "complete rewritten query tree");
 	LOGDEBUG(parseBackSafe(copyObject(query))->data);
 
