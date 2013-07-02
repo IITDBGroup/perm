@@ -1902,6 +1902,7 @@ removeTopIsProvRowAttrTargetEntriesWalker (Node *node, void *context)
 						aggNode->genIsProvRowAttr= NIL;
 					}
 				}
+				return false;
 			}
 		}
 
