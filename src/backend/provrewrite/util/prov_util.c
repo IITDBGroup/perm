@@ -318,24 +318,25 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
 			/* increase current resno */
 			curResno++;
 		}
+	}
 
-		// Add 'is_prov_row' bool attribute.
-		if ((newTe=genProvRowAttr(query, &curIsProvRow, curResno)) != NULL)
-		{
-			TargetEntry *tmpTe;
-			targetList = lappend(targetList, newTe);
 
-			varNode= makeVar (curSubquery,
-					  newTe->resno,
-					  exprType ((Node *) newTe->expr),
-					  exprTypmod ((Node *) newTe->expr),
-					  0);
-			varNode->varnoold= PROV_ATTR_NOT_REFERRED; // Not yet referred.
-			tmpTe = makeTargetEntry((Expr*) varNode, newTe->resno, pstrdup(newTe->resname), false);
-			tmpTe->resorigcol= AGGPROJ_INDICATOR;
-			pList = lappend (pList, tmpTe);
-			curResno++;
-		}
+	// Add 'is_prov_row' bool attribute.
+	if ((newTe=genProvRowAttr(query, &curIsProvRow, curResno)) != NULL)
+	{
+		TargetEntry *tmpTe;
+		targetList = lappend(targetList, newTe);
+
+		varNode= makeVar (curSubquery, // Works: but Can we really use curSubquery ?
+				newTe->resno,
+				exprType ((Node *) newTe->expr),
+				exprTypmod ((Node *) newTe->expr),
+				0);
+		varNode->varnoold= PROV_ATTR_NOT_REFERRED; // Not yet referred.
+		tmpTe = makeTargetEntry((Expr*) varNode, newTe->resno, pstrdup(newTe->resname), false);
+		tmpTe->resorigcol= AGGPROJ_INDICATOR;
+		pList = lappend (pList, tmpTe);
+		curResno++;
 	}
 
 	/* replace old targetList of query */
