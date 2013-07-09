@@ -131,9 +131,6 @@ bool addAggProvenanceAttrs(Query *query, TargetEntry *origTe, TargetEntry *newTe
     bool referredByQuery= false;
     int attrNum;
 
-    if (!prov_use_aggproject)
-        return false;
-
     /* For every non provenance attribute on aggregate query, we 
      * add it to AGGPROJECT clause
      */
@@ -215,37 +212,37 @@ bool addAggProvenanceAttrs(Query *query, TargetEntry *origTe, TargetEntry *newTe
 TargetEntry* genProvRowAttr(Query *query,
                     int *curIsProvRow, int curResno)
 {
-    TargetEntry *newTe;
-    char col_name[25];
+	TargetEntry *newTe;
+	char col_name[25];
 	Expr *expr;
 
-    // Stop if this is not aggregate query or 
-    // if we are not using prov_use_aggproject
-    if (!query->hasAggs || !prov_use_aggproject)
-        return NULL;
+	// Stop if this is not aggregate query or 
+	// if we are not using prov_use_aggproject
+	if (!query->hasAggs || !prov_use_aggproject)
+		return NULL;
 
-    expr = (Expr *) makeBoolConst(true, false);
-    sprintf(col_name, "is_prov_row_attr%d", ++(*curIsProvRow));
-    newTe= makeTargetEntry((Expr *) expr, curResno, pstrdup(col_name), false);
-    newTe->resorigcol= AGGPROJ_INDICATOR;
+	expr = (Expr *) makeBoolConst(true, false);
+	sprintf(col_name, "is_prov_row_attr%d", ++(*curIsProvRow));
+	newTe= makeTargetEntry((Expr *) expr, curResno, pstrdup(col_name), false);
+	newTe->resorigcol= AGGPROJ_INDICATOR;
 
-    // Append it to aggprojectClause also, so that
-    // they are visible in output.
-    //agg_te= flatCopyTargetEntry(newTe);
-    if (query->aggprojectClause)
-    {
-        AggProjectClause *aggP = (AggProjectClause *) query->aggprojectClause;
-        aggP->genIsProvRowAttr = list_make1(newTe);
-    }
-    else
-    {
-        AggProjectClause *new = (AggProjectClause *) makeNode(AggProjectClause);
-        query->aggprojectClause = (Node *) new;
-        new->projAttrs = NULL;
-        new->genIsProvRowAttr = list_make1(newTe);
-    }
+	// Append it to aggprojectClause also, so that
+	// they are visible in output.
+	//agg_te= flatCopyTargetEntry(newTe);
+	if (query->aggprojectClause)
+	{
+		AggProjectClause *aggP = (AggProjectClause *) query->aggprojectClause;
+		aggP->genIsProvRowAttr = list_make1(newTe);
+	}
+	else
+	{
+		AggProjectClause *new = (AggProjectClause *) makeNode(AggProjectClause);
+		query->aggprojectClause = (Node *) new;
+		new->projAttrs = NULL;
+		new->genIsProvRowAttr = list_make1(newTe);
+	}
 
-    return(newTe);
+	return(newTe);
 }
 
 /*
@@ -308,8 +305,11 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
 			/* if this is a aggregate query, then add provenance columns
 			 * as AGGPROJECT columns
 			 */
-			if (addAggProvenanceAttrs(query, te, newTe, &curIsProvRow))
-			    continue; // Do not propagate it to parent queries
+			if (prov_use_aggproject)
+			{
+				if (addAggProvenanceAttrs(query, te, newTe, &curIsProvRow))
+					continue; // Do not propagate it to parent queries
+			}
 
 			/* append to targetList and pList */
 			pList = lappend (pList, newTe);
@@ -1808,11 +1808,10 @@ removeTopIsProvRowAttrTargetEntriesWalker (Node *node, void *context)
 	if (IsA(node, Query))
 	{
 		Query *q = (Query *) node;
-		ListCell *lc; // *next, *prev;
+		ListCell *lc;
 		bool found = false;
 		int tlLength = list_length(q->targetList) + 1;
 		List *toDel = NIL;
-//		prev = NULL;
 
 		foreach(lc, q->targetList)
 		{
@@ -1820,25 +1819,10 @@ removeTopIsProvRowAttrTargetEntriesWalker (Node *node, void *context)
 
 			if (IS_PROV_ROW_ATTR(te))
 			{
-				elog(INFO, "GOPAL found type: %s", te->resname);
 				toDel = lappend(toDel, te);
 				found= true;
 			}
 		}
-//		for (cell = list_head(q->targetList); cell; cell = next)
-//		{
-//			TargetEntry *te = (TargetEntry *) lfirst(cell);
-//
-//			next = lnext(cell);
-//			if (IS_PROV_ROW_ATTR(te))
-//			{
-//				elog(INFO, "GOPAL found type: %s", te->resname);
-//				q->targetList = list_delete_cell(q->targetList, cell, prev);
-//				found= true;
-//			}
-//			else
-//				prev = cell;
-//		}
 
 		/* if at least one attribute was removed then we need to adapt everything
 		 * referring to attributes for which the number has changed.

@@ -156,6 +156,7 @@ extern bool prov_use_optimizer;
 extern bool prov_use_aggproject;
 extern bool prov_use_selection_pushdown;
 extern bool prov_xml_whitespace;
+extern bool prov_show_is_prov_attr;
 
 extern void SetConfigOption(const char *name, const char *value,
 				GucContext context, GucSource source);

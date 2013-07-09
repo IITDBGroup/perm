@@ -284,6 +284,7 @@ bool prov_use_optimizer = false;
 bool prov_use_aggproject = true;
 bool prov_use_selection_pushdown = false;
 bool prov_xml_whitespace = false;
+bool prov_show_is_prov_attr = false;
 
 /*
  * Displayable names for context types (enum GucContext)
@@ -1210,6 +1211,15 @@ static struct config_bool ConfigureNamesBool[] =
 		true, NULL, NULL
 	},
 
+	{
+		{"prov_show_is_prov_attr", PGC_USERSET, QUERY_TUNING,
+			gettext_noop("Show all is_prov_row_attr# when AGGPROJECT clause is in use."),
+			gettext_noop("If activated all the attributes named is_prov_row_attr# are shown."
+				     "By default such attributes are hidden."),
+		},
+		&prov_show_is_prov_attr,
+		true, NULL, NULL
+	},
 
 
 	/* End-of-list marker */
