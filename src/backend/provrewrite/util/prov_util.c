@@ -260,7 +260,7 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
 	List *curPSet;		/* currently processed pSet */
 	TargetEntry *te;	/* a TargetEntry from current pSet */
 	TargetEntry *newTe;	/* new TargetEntry derived from te */
-	Expr *expr;
+	Expr *expr, *isProvRowVars= NULL;
 	Index curSubquery;
 	AttrNumber curResno;
 	Var *varNode;
@@ -309,6 +309,15 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
 			{
 				if (addAggProvenanceAttrs(query, te, newTe, &curIsProvRow))
 					continue; // Do not propagate it to parent queries
+
+				/* Group all is_prov_row_attr# into AND expression tree
+				   For all non-aggregate queries
+				*/
+				if (!query->hasAggs && IS_PROV_ROW_ATTR(newTe))
+				{
+					isProvRowVars= lappend(isProvRowVars, varNode);
+					continue;
+				}
 			}
 
 			/* append to targetList and pList */
@@ -320,6 +329,23 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
 		}
 	}
 
+      	// Add finally one expression that groups all is_prov_row_attr#
+      	// Need to free newTe if we go inside - TODO
+      	if (!query->hasAggs && prov_use_aggproject && isProvRowVars)
+      	{
+      		TargetEntry *tmpTe;
+      		char col_name[25];
+      		Expr *e= makeBoolExpr(AND_EXPR, isProvRowVars);
+
+      		sprintf(col_name, "is_prov_row_attr%d", ++curIsProvRow);
+      		tmpTe= makeTargetEntry((Expr*) e, curResno, pstrdup(col_name), false);
+
+      		// Propagate this up
+      		//tmpTe->resorigcol= AGGPROJ_INDICATOR;
+      		//pList = lappend (pList, tmpTe);
+      		targetList = lappend (targetList, tmpTe);
+      		curResno++;
+      	}
 
 	// Add 'is_prov_row' bool attribute.
 	if ((newTe=genProvRowAttr(query, &curIsProvRow, curResno)) != NULL)
