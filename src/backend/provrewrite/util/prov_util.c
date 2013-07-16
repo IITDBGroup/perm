@@ -260,7 +260,8 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
 	List *curPSet;		/* currently processed pSet */
 	TargetEntry *te;	/* a TargetEntry from current pSet */
 	TargetEntry *newTe;	/* new TargetEntry derived from te */
-	Expr *expr, *isProvRowVars= NULL;
+	Expr *expr;
+	List *isProvRowVars= NIL;
 	Index curSubquery;
 	AttrNumber curResno;
 	Var *varNode;
@@ -268,6 +269,28 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
 
 	targetList = query->targetList;
 	curResno = list_length(query->targetList) + 1;
+
+	/* Remove TE's with resjunk=true if prov_use_aggproject=1
+	 * and this is a aggregate query without a GROUP/SORT clause.
+	 *
+	 * TODO: I guess the actual fix is to not add resjunk before we
+	 * reach this stage of query processing.
+     */
+	if (query->hasAggs && prov_use_aggproject && 
+		!(query->groupClause || query->sortClause))
+	{
+		bool found = false;
+		do
+		{
+			te = (TargetEntry *) llast(targetList);
+			if (te->resjunk)
+			{
+				found= true; curResno--;
+				targetList= list_delete_ptr(targetList, te);
+			}
+			else found= false;
+		} while (found == true);
+	}
 
 	subPStack = popListAndReverse (&pStack, list_length(subList));
 
@@ -353,7 +376,7 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
 		TargetEntry *tmpTe;
 		targetList = lappend(targetList, newTe);
 
-		varNode= makeVar (curSubquery, // Works: but Can we really use curSubquery ?
+		varNode= makeVar (-1, // This number is unused.
 				newTe->resno,
 				exprType ((Node *) newTe->expr),
 				exprTypmod ((Node *) newTe->expr),
