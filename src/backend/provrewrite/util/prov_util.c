@@ -260,8 +260,7 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
 	List *curPSet;		/* currently processed pSet */
 	TargetEntry *te;	/* a TargetEntry from current pSet */
 	TargetEntry *newTe;	/* new TargetEntry derived from te */
-	Expr *expr;
-	List *isProvRowVars= NIL;
+	List *isProvRowVars= NIL, *resJunkAttrs= NIL;
 	Index curSubquery;
 	AttrNumber curResno;
 	Var *varNode;
@@ -270,26 +269,37 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
 	targetList = query->targetList;
 	curResno = list_length(query->targetList) + 1;
 
-	/* Remove TE's with resjunk=true if prov_use_aggproject=1
-	 * and this is a aggregate query without a GROUP/SORT clause.
-	 *
-	 * TODO: I guess the actual fix is to not add resjunk before we
-	 * reach this stage of query processing.
-     */
-	if (query->hasAggs && prov_use_aggproject && 
-		!(query->groupClause || query->sortClause))
+	/* Remove TE's from targetList with resjunk=true if prov_use_aggproject=1
+	 * and this is a aggregate query with a GROUP or SORT clause.
+	 * - We remove a TE marked as resjunk, if there is equivalent provenance TE.
+	 * - We retain some TE's for which there are no equivalent provenance TE's.
+	 */
+#define SHOULD_HANDLE_RESJUNK(q) (q->hasAggs && prov_use_aggproject && \
+				 (q->groupClause || q->sortClause))
+	if (SHOULD_HANDLE_RESJUNK(query))
 	{
 		bool found = false;
-		do
+		ListCell *lc;
+
+		// Find all TE marked as resjunk
+		foreach(lc, targetList)
 		{
-			te = (TargetEntry *) llast(targetList);
+			te = (TargetEntry *) lfirst(lc);
 			if (te->resjunk)
 			{
 				found= true; curResno--;
-				targetList= list_delete_ptr(targetList, te);
+				resJunkAttrs= lappend(resJunkAttrs, te);
 			}
-			else found= false;
-		} while (found == true);
+		}
+
+		// Remove resJunk from targetlist.
+		if (found)
+		{
+			List *oldTarget;
+			oldTarget = targetList;
+			targetList = list_difference_ptr(targetList, resJunkAttrs);
+			list_free(oldTarget);
+		}
 	}
 
 	subPStack = popListAndReverse (&pStack, list_length(subList));
@@ -298,8 +308,7 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
 	foreach (subqLc, subList)
 	{
 		curSubquery = (Index) lfirst_int(subqLc);
-
-		/* pull next pSet from pStack */
+/* pull next pSet from pStack */
 		curPSet = (List *) pop (&subPStack);
 		logPList(curPSet);
 
@@ -324,6 +333,19 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
 			 */ 
 			if (adaptToJoins)
 				getRTindexForProvTE (query, varNode);
+
+			/* Remove element from resJunkAttrs if this 'newTe' is equivalent to it.
+			 * Copy ressortgroupref from resjunk TE, before removing resjunk TE.
+			 */
+			if (SHOULD_HANDLE_RESJUNK(query) && resJunkAttrs)
+			{
+				TargetEntry *tmpTe= findTeForVar (varNode, resJunkAttrs);
+				if (tmpTe)
+				{
+					newTe->ressortgroupref= tmpTe->ressortgroupref;
+					resJunkAttrs= list_delete_ptr(resJunkAttrs, tmpTe);
+				}
+			}
 
 			/* if this is a aggregate query, then add provenance columns
 			 * as AGGPROJECT columns
@@ -352,8 +374,9 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
 		}
 	}
 
-      	// Add finally one expression that groups all is_prov_row_attr#
-      	// Need to free newTe if we go inside - TODO
+      	/* Add finally one expression that groups all is_prov_row_attr#
+      	 * Need to free newTe if we go inside - TODO
+	 */
       	if (!query->hasAggs && prov_use_aggproject && isProvRowVars)
       	{
       		TargetEntry *tmpTe;
@@ -364,13 +387,11 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
       		tmpTe= makeTargetEntry((Expr*) e, curResno, pstrdup(col_name), false);
 
       		// Propagate this up
-      		//tmpTe->resorigcol= AGGPROJ_INDICATOR;
-      		//pList = lappend (pList, tmpTe);
       		targetList = lappend (targetList, tmpTe);
       		curResno++;
       	}
 
-	// Add 'is_prov_row' bool attribute.
+	/* Add 'is_prov_row' bool attribute. */
 	if ((newTe=genProvRowAttr(query, &curIsProvRow, curResno)) != NULL)
 	{
 		TargetEntry *tmpTe;
@@ -386,6 +407,22 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
 		tmpTe->resorigcol= AGGPROJ_INDICATOR;
 		pList = lappend (pList, tmpTe);
 		curResno++;
+	}
+
+	/* Add back pending resjunk attributes if any,
+	 * with proper te->resno.
+	 */
+	if (SHOULD_HANDLE_RESJUNK(query) && resJunkAttrs)
+	{
+		ListCell *lc;
+		foreach(lc, resJunkAttrs)
+		{
+			te = (TargetEntry *) lfirst(lc);
+			te->resno= curResno++;
+			targetList= lappend(targetList, te);
+		}
+		list_free(resJunkAttrs);
+		resJunkAttrs= NIL;
 	}
 
 	/* replace old targetList of query */
