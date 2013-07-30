@@ -1968,7 +1968,6 @@ removeTopIsProvRowAttrTargetEntriesWalker (Node *node, void *context)
 					// Remove GENISPROVROW elements
 					if (aggNode->genIsProvRowAttr)
 					{
-						elog(INFO, "GOPAL found GENISPROVROW: ");
 						list_free(aggNode->genIsProvRowAttr);
 						aggNode->genIsProvRowAttr= NIL;
 					}
