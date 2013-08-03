@@ -938,8 +938,8 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 		/*
 		 *  if aggproject clause is present, use sorting
 		 */
-		if (parse->aggprojectClause)
-			use_hashed_grouping = false;
+		//if (parse->aggprojectClause)
+		//	use_hashed_grouping = false;
 
 		/*
 		 * Select the best path.  If we are doing hashed grouping, we will
@@ -1043,32 +1043,13 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 										isProvRowColIdx);
 			}
 
-			/*
-			 * Insert AGG or GROUP node if needed, plus an explicit sort step
-			 * if necessary.
-			 *
-			 * HAVING clause, if any, becomes qual of the Agg or Group node.
-			 */
-			if (use_hashed_grouping)
-			{
-				/* Hashed aggregate plan --- no sort needed */
-				result_plan = (Plan *) make_agg(root,
-												tlist,
-												(List *) parse->havingQual,
-												AGG_HASHED,
-												numGroupCols,
-												groupColIdx,
-												groupOperators,
-												numGroups,
-												agg_counts.numAggs,
-												result_plan);
-				/* Hashed aggregation produces randomly-ordered results */
-				current_pathkeys = NIL;
-			}
-			else if (parse->aggprojectClause && parse->hasAggs)
+			if (parse->aggprojectClause && parse->hasAggs)
 			{
 				/* if aggproject is present, force using sorting ... */
 				AggStrategy aggstrategy = AGG_SORTED;
+				if (use_hashed_grouping)
+					aggstrategy = AGG_HASHED;
+
 				AggProjectClause *aggP = (AggProjectClause *) parse->aggprojectClause;
 				numAggProjCols = list_length(aggP->projAttrs);
 
@@ -1126,6 +1107,28 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 													agg_counts.numAggs,
                                                     (AggProjectClause *) parse->aggprojectClause,
 													result_plan);
+			}
+			/*
+			 * Insert AGG or GROUP node if needed, plus an explicit sort step
+			 * if necessary.
+			 *
+			 * HAVING clause, if any, becomes qual of the Agg or Group node.
+			 */
+			else if (use_hashed_grouping)
+			{
+				/* Hashed aggregate plan --- no sort needed */
+				result_plan = (Plan *) make_agg(root,
+												tlist,
+												(List *) parse->havingQual,
+												AGG_HASHED,
+												numGroupCols,
+												groupColIdx,
+												groupOperators,
+												numGroups,
+												agg_counts.numAggs,
+												result_plan);
+				/* Hashed aggregation produces randomly-ordered results */
+				current_pathkeys = NIL;
 			}
 			else if (parse->hasAggs)
 			{

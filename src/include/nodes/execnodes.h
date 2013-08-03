@@ -1404,6 +1404,10 @@ typedef struct AggProjState
 	List	   *hash_needed;	/* list of columns needed in hash table */
 	bool		table_filled;	/* hash table filled yet? */
 	TupleHashIterator hashiter; /* for iterating through hash table */
+
+    // Loop through all slots in each entry and then use hashiter to get new entry
+	TupleHashEntry lastHashEntry;
+
 	//	Agg agg_state;
 		// TUPLESTORE
 		// current mode (create group, output group)

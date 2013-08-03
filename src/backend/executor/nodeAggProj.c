@@ -208,9 +208,10 @@ typedef struct AggHashEntryData
 {
 	TupleHashEntryData shared;	/* common header for hash table entries */
 	/* per-aggregate transition status array - must be last! */
+	Tuplestorestate *tuplestorestate;       /* Store extra tuples needed for AggProject */
+	unsigned int tuplecount;
 	AggStatePerGroupData pergroup[1];	/* VARIABLE LENGTH ARRAY */
 } AggHashEntryData;				/* VARIABLE LENGTH STRUCT */
-
 
 static void initialize_aggregates(AggProjState *aggstate,
 					  AggStatePerAgg peragg,
@@ -219,6 +220,8 @@ static void advance_transition_function(AggProjState *aggstate,
 							AggStatePerAgg peraggstate,
 							AggStatePerGroup pergroupstate,
 							FunctionCallInfoData *fcinfo);
+static void aggproject_advance_aggregates(AggProjState *aggstate, AggStatePerGroup pergroup,
+							  			  TupleTableSlot *outerslot);
 static void advance_aggregates(AggProjState *aggstate, AggStatePerGroup pergroup);
 static void process_sorted_aggregate(AggProjState *aggstate,
 						 AggStatePerAgg peraggstate,
@@ -233,8 +236,8 @@ static void build_hash_table(AggProjState *aggstate);
 static AggHashEntry lookup_hash_entry(AggProjState *aggstate,
 				  TupleTableSlot *inputslot);
 static TupleTableSlot *aggProj_retrieve_direct(AggProjState *aggstate);
-static void agg_fill_hash_table(AggProjState *aggstate);
-static TupleTableSlot *agg_retrieve_hash_table(AggProjState *aggstate);
+static void aggProj_fill_hash_table(AggProjState *aggstate);
+static TupleTableSlot *aggProj_retrieve_hash_table(AggProjState *aggstate);
 static Datum GetAggInitVal(Datum textInitVal, Oid transtype);
 
 
@@ -417,6 +420,39 @@ advance_transition_function(AggProjState *aggstate,
 	pergroupstate->transValueIsNull = fcinfo->isnull;
 
 	MemoryContextSwitchTo(oldContext);
+}
+
+/* This is need for AggProject implementation
+ * Check if we need to advance aggregates based on isProvRowCols
+ */
+static void
+aggproject_advance_aggregates(AggProjState *aggstate, AggStatePerGroup pergroup, 
+							  TupleTableSlot *outerslot)
+{
+	// If we are processing input with isprovrow attribute then
+	// only advance aggregation functions is all these attributes are set to true
+	if (aggstate->numIsProvRowCols != 0)
+	{
+		bool result = true;
+		bool isnull = false;
+		int i;
+
+		// check that all input isprovrow attribute values are "true"
+		for(i = 0; i  < aggstate->numIsProvRowCols && result; i++)
+		{
+			bool isProvRowFromSubQuery= DatumGetBool(slot_getattr(
+									aggstate->newGroup?aggstate->tempTupleTableSlot:outerslot,
+									aggstate->isprovrowInputs[i], &isnull));
+			if (!isnull)
+				result = result && isProvRowFromSubQuery;
+		}
+
+		if (result)
+			advance_aggregates((AggProjState *) aggstate, pergroup);
+	}
+	// no input isprovrow attributes, advance aggregation functions
+	else
+		advance_aggregates((AggProjState *) aggstate, pergroup);
 }
 
 /*
@@ -776,15 +812,13 @@ ExecAggProj(AggProjState *node)
 {
 	if (node->agg_done && !node->output)
 		return NULL;
-/*
 	if (((Agg *) node->ss.ps.plan)->aggstrategy == AGG_HASHED)
 	{
 		if (!node->table_filled)
-			agg_fill_hash_table(node);
-		return agg_retrieve_hash_table(node);
+			aggProj_fill_hash_table(node);
+		return aggProj_retrieve_hash_table(node);
 	}
 	else
-	*/
 		return aggProj_retrieve_direct(node);
 }
 
@@ -909,30 +943,8 @@ aggProj_retrieve_direct(AggProjState *aggstate)
 						tuplestore_puttupleslot(tuplestorestate, outerslot);
 				}
 
-				// If we are processing input with isprovrow attribute then
-				// only advance aggregation functions is all these attributes are set to true
-				if (aggstate->numIsProvRowCols != 0)
-				{
-					bool result = true;
-					bool isnull = false;
-					int i;
-
-					// check that all input isprovrow attribute values are "true"
-					for(i = 0; i  < aggstate->numIsProvRowCols && result; i++)
-					{
-                        bool isProvRowFromSubQuery= DatumGetBool(slot_getattr(
-                                  aggstate->newGroup?aggstate->tempTupleTableSlot:outerslot,
-                                  aggstate->isprovrowInputs[i], &isnull));
-                        if (!isnull)
-                            result = result && isProvRowFromSubQuery;
-					}
-
-					if (result)
-						advance_aggregates((AggProjState *) aggstate, pergroup);
-				}
-				// no input isprovrow attributes, advance aggregation functions
-				else
-					advance_aggregates((AggProjState *) aggstate, pergroup);
+				/* Advance the aggregates */
+				aggproject_advance_aggregates(aggstate, pergroup, outerslot);
 
 				/* Reset per-input-tuple context after each tuple */
 				ResetExprContext(tmpcontext);
@@ -1088,7 +1100,7 @@ aggProj_retrieve_direct(AggProjState *aggstate)
  * ExecAgg for hashed case: phase 1, read input and build hash table
  */
 static void
-agg_fill_hash_table(AggProjState *aggstate)
+aggProj_fill_hash_table(AggProjState *aggstate)
 {
 	PlanState  *outerPlan;
 	ExprContext *tmpcontext;
@@ -1117,14 +1129,30 @@ agg_fill_hash_table(AggProjState *aggstate)
 		/* Find or build hashtable entry for this tuple's group */
 		entry = lookup_hash_entry(aggstate, outerslot);
 
+		/* Store each tuple in tuple store. */
+		if (entry->tuplestorestate == NULL)
+			entry->tuplestorestate = tuplestore_begin_heap(true, false, work_mem);
+		tuplestore_puttupleslot(entry->tuplestorestate, outerslot);
+		entry->tuplecount++;
+
 		/* Advance the aggregates */
-		advance_aggregates(aggstate, entry->pergroup);
+		aggproject_advance_aggregates(aggstate, entry->pergroup, outerslot);
 
 		/* Reset per-input-tuple context after each tuple */
 		ResetExprContext(tmpcontext);
 	}
-
 	aggstate->table_filled = true;
+
+	/* Reset each tuplestore index */
+	ResetTupleHashIterator(aggstate->hashtable, &aggstate->hashiter);
+	entry = (AggHashEntry) ScanTupleHashTable(&aggstate->hashiter);
+	while (entry)
+	{
+		Assert(entry->tuplestorestate != NULL);
+		tuplestore_rescan(entry->tuplestorestate);
+		entry = (AggHashEntry) ScanTupleHashTable(&aggstate->hashiter);
+	}
+
 	/* Initialize to walk the hash table */
 	ResetTupleHashIterator(aggstate->hashtable, &aggstate->hashiter);
 }
@@ -1133,8 +1161,9 @@ agg_fill_hash_table(AggProjState *aggstate)
  * ExecAgg for hashed case: phase 2, retrieving groups from hash table
  */
 static TupleTableSlot *
-agg_retrieve_hash_table(AggProjState *aggstate)
+aggProj_retrieve_hash_table(AggProjState *aggstate)
 {
+	TupleTableSlot *projResult = NULL;
 	ExprContext *econtext;
 	ProjectionInfo *projInfo;
 	Datum	   *aggvalues;
@@ -1165,7 +1194,14 @@ agg_retrieve_hash_table(AggProjState *aggstate)
 		/*
 		 * Find the next entry in the hash table
 		 */
-		entry = (AggHashEntry) ScanTupleHashTable(&aggstate->hashiter);
+		if (aggstate->lastHashEntry == NULL)
+ 		{
+			aggstate->lastHashEntry = ScanTupleHashTable(&aggstate->hashiter);
+			entry = (AggHashEntry) aggstate->lastHashEntry;
+		}
+		else
+			entry= (AggHashEntry) aggstate->lastHashEntry;
+
 		if (entry == NULL)
 		{
 			/* No more entries in hashtable, so done */
@@ -1176,15 +1212,16 @@ agg_retrieve_hash_table(AggProjState *aggstate)
 		/*
 		 * Clear the per-output-tuple context for each group
 		 */
-		ResetExprContext(econtext);
+		//ResetExprContext(econtext);
 
 		/*
 		 * Store the copied first input tuple in the tuple table slot reserved
 		 * for it, so that it can be used in ExecProject.
+		 * We are sure we have a tuple in store here.
 		 */
-		ExecStoreMinimalTuple(entry->shared.firstTuple,
-							  firstSlot,
-							  false);
+		if (!tuplestore_gettupleslot(entry->tuplestorestate, 1, firstSlot))
+				ereport(ERROR, (errcode(ERRCODE_DATA_EXCEPTION), errmsg("%s", "get tuple failed")));
+		aggstate->count++;
 
 		pergroup = entry->pergroup;
 
@@ -1199,7 +1236,7 @@ agg_retrieve_hash_table(AggProjState *aggstate)
 
 			Assert(!peraggstate->aggref->aggdistinct);
 			finalize_aggregate(aggstate, peraggstate, pergroupstate,
-							   &aggvalues[aggno], &aggnulls[aggno]);
+					   &aggvalues[aggno], &aggnulls[aggno]);
 		}
 
 		/*
@@ -1219,8 +1256,30 @@ agg_retrieve_hash_table(AggProjState *aggstate)
 			 * and the representative input tuple.	Note we do not support
 			 * aggregates returning sets ...
 			 */
-			return ExecProject(projInfo, NULL);
+			projResult = ExecProject(projInfo, NULL);
+
+			// Did we traverse all slots in current tuplestore ?
+			/* We are now at last tuple of a group */
+			if (aggstate->isprovrowAttr != 0)
+			{
+				if (aggstate->count == entry->tuplecount)
+					projResult->tts_values[aggstate->isprovrowAttr - 1] = BoolGetDatum(true);
+				else
+					projResult->tts_values[aggstate->isprovrowAttr - 1] = BoolGetDatum(false);
+			}
 		}
+
+		// Did we traverse all slots in current tuplestore ?
+		if (aggstate->count == entry->tuplecount)
+		{
+			aggstate->lastHashEntry= NULL;
+			tuplestore_end(entry->tuplestorestate);
+			entry->tuplestorestate = NULL;
+			aggstate->count= 0;
+		}
+
+		if (projResult)
+			return projResult;
 	}
 
 	/* No more groups */
