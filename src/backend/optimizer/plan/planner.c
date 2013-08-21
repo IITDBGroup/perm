@@ -1612,6 +1612,8 @@ choose_hashed_grouping(PlannerInfo *root,
 
 	if (hashentrysize * dNumGroups > work_mem * 1024L)
 		return false;
+	//TODO if aggproject then calculate the size including the input
+
 
 	/*
 	 * See if the estimated cost is no more than doing it the other way. While

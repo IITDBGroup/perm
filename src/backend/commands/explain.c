@@ -717,7 +717,21 @@ explain_outNode(StringInfo str,
 			}
 			break;
 		case T_AggProj:
-			pname = "AggProject";
+			switch (((AggProj *) plan)->aggstrategy)
+			{
+				case AGG_PLAIN:
+					pname = "AggProject";
+					break;
+				case AGG_SORTED:
+					pname = "GroupAggProject";
+					break;
+				case AGG_HASHED:
+					pname = "HashAggProject";
+					break;
+				default:
+					pname = "AggProject ???";
+					break;
+			}
 			break;
 		case T_Unique:
 			pname = "Unique";
@@ -977,6 +991,31 @@ explain_outNode(StringInfo str,
 							"Filter", plan,
 							str, indent, es);
 			break;
+		case T_AggProj:
+			{
+				int i;
+				AggProj *aplan = (AggProj *) plan;
+				show_sort_keys(plan,
+						aplan->numAggPCols,
+						aplan->aggPColIdx,
+						"Project",
+						str, indent, es);
+				if (aplan->numIsProvRowCols > 0)
+				{
+					for (i = 0; i <= indent; i++)
+						appendStringInfo(str, "  ");
+					appendStringInfoString(str, "Is Prov Rows: ");
+					for(i = 0; i < aplan->numIsProvRowCols; i++)
+						appendStringInfo(str, (i == 0) ? "%i" : ", %i", aplan->isProvRowColIdx[i]);
+					appendStringInfoString(str, "\n");
+				}
+				if (aplan->genProvRowIdx != -1)
+				{
+					for (i = 0; i <= indent; i++)
+						appendStringInfo(str, "  ");
+					appendStringInfoString(str, "Gen Is Prov Row\n");
+				}
+			}
 		case T_Agg:
 		case T_Group:
 			show_upper_qual(plan->qual,

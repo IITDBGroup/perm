@@ -1360,7 +1360,7 @@ replaceAggsWithConstsMutator(Node *node, void *context)
 					INT4OID, -1, 4, Int32GetDatum(0), false, true),
 					agg->aggtype, "");
 		else
-			return (Node *) makeNullConst(agg->aggtype, InvalidOid);
+			return (Node *) makeNullConst(agg->aggtype, -1);
 	}
 
 	// recurse
