@@ -2155,6 +2155,14 @@ get_basic_select_query(Query *query, deparse_context *context,
 		}
 	}
 
+	/* Add the HAVING clause if given */
+	if (query->havingQual != NULL)
+	{
+		appendContextKeyword(context, " HAVING ",
+							 -PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
+		get_rule_expr(query->havingQual, context, false);
+	}
+
 	/* Add the AGGPROJECT clause if given */
 	if (query->aggprojectClause)
 	{
@@ -2183,14 +2191,6 @@ get_basic_select_query(Query *query, deparse_context *context,
 			appendContextKeyword(context, te->resname,
 								-PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
 		}
-	}
-
-	/* Add the HAVING clause if given */
-	if (query->havingQual != NULL)
-	{
-		appendContextKeyword(context, " HAVING ",
-							 -PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
-		get_rule_expr(query->havingQual, context, false);
 	}
 }
 
