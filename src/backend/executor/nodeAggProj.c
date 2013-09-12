@@ -1206,6 +1206,7 @@ aggProj_retrieve_hash_table(AggProjState *aggstate)
 		{
 			/* No more entries in hashtable, so done */
 			aggstate->agg_done = TRUE;
+			ResetTupleHashIterator(aggstate->hashtable, &aggstate->hashiter);
 			return NULL;
 		}
 
@@ -1273,8 +1274,7 @@ aggProj_retrieve_hash_table(AggProjState *aggstate)
 		if (aggstate->count == entry->tuplecount)
 		{
 			aggstate->lastHashEntry= NULL;
-			tuplestore_end(entry->tuplestorestate);
-			entry->tuplestorestate = NULL;
+		        tuplestore_rescan(entry->tuplestorestate);
 			aggstate->count= 0;
 		}
 
