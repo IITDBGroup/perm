@@ -1073,7 +1073,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 					TargetEntry *te = (TargetEntry *) linitial(aggP->genIsProvRowAttr);
 					genIsProvRow = te->resno;
 				}
-				if (parse->groupClause)
+				if (parse->groupClause && !use_hashed_grouping)
 				{
 					if (!pathkeys_contained_in(group_pathkeys,
 											   current_pathkeys))
