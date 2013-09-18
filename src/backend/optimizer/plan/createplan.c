@@ -3158,10 +3158,7 @@ make_aggproj(PlannerInfo *root,
 	 * We will produce a single output tuple if not grouping, and a tuple per
 	 * group otherwise.
 	 */
-	if (aggstrategy == AGG_PLAIN)
-		plan->plan_rows = 1;
-	else
-		plan->plan_rows = numGroups;
+	plan->plan_rows = lefttree->plan_rows;
 
 	/*
 	 * We also need to account for the cost of evaluation of the qual (ie, the
