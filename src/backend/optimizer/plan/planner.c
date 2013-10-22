@@ -84,6 +84,8 @@ static List *postprocess_setop_tlist(List *new_tlist, List *orig_tlist);
 static void addEntriesToTargetListAndRecordIdx (List **tlist, AttrNumber **idx,
 		List *newTargets, bool *need_tlist_eval);
 
+extern bool prov_use_aggproject;
+
 /*****************************************************************************
  *
  *	   Query optimizer entry point
@@ -1560,6 +1562,7 @@ choose_hashed_grouping(PlannerInfo *root,
 	double		cheapest_path_rows;
 	int			cheapest_path_width;
 	Size		hashentrysize;
+	Size		tuplestoresize;
 	List	   *current_pathkeys;
 	Path		hashed_p;
 	Path		sorted_p;
@@ -1610,10 +1613,16 @@ choose_hashed_grouping(PlannerInfo *root,
 	/* plus the per-hash-entry overhead */
 	hashentrysize += hash_agg_entry_size(agg_counts->numAggs);
 
-	if (hashentrysize * dNumGroups > work_mem * 1024L)
-		return false;
-	//TODO if aggproject then calculate the size including the input
+	// if aggproject then calculate the size including the input
+	tuplestoresize = 0;
+	if (prov_use_aggproject)
+	{
+		// plus the size of tuplestoreentry's per group hashentry
+		tuplestoresize = cheapest_path_rows * cheapest_path_width;
+	}
 
+	if (((hashentrysize * dNumGroups) + tuplestoresize) > work_mem * 1024L)
+		return false;
 
 	/*
 	 * See if the estimated cost is no more than doing it the other way. While

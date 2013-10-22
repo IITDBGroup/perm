@@ -75,6 +75,7 @@
 #include "utils/selfuncs.h"
 #include "utils/tuplesort.h"
 
+extern bool prov_use_aggproject;
 
 #define LOG2(x)  (log(x) / 0.693147180559945)
 
@@ -1187,8 +1188,6 @@ cost_agg(Path *path, PlannerInfo *root,
 		/* calcs phrased this way to match HASHED case, see note above */
 		total_cost += cpu_operator_cost * input_tuples * numGroupCols;
 		total_cost += cpu_operator_cost * input_tuples * numAggs;
-		total_cost += cpu_operator_cost * numGroups * numAggs;
-		total_cost += cpu_tuple_cost * numGroups;
 	}
 	else
 	{
@@ -1196,9 +1195,19 @@ cost_agg(Path *path, PlannerInfo *root,
 		startup_cost = input_total_cost;
 		startup_cost += cpu_operator_cost * input_tuples * numGroupCols;
 		startup_cost += cpu_operator_cost * input_tuples * numAggs;
+
 		total_cost = startup_cost;
-		total_cost += cpu_operator_cost * numGroups * numAggs;
-		total_cost += cpu_tuple_cost * numGroups;
+	}
+
+	if (prov_use_aggproject)
+	{
+	    total_cost += cpu_operator_cost * input_tuples * numAggs;
+	    total_cost += cpu_tuple_cost * input_tuples;
+	}
+	else
+	{
+	    total_cost += cpu_operator_cost * numGroups * numAggs;
+	    total_cost += cpu_tuple_cost * numGroups;
 	}
 
 	path->startup_cost = startup_cost;
