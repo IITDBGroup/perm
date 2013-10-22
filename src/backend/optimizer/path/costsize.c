@@ -1199,7 +1199,7 @@ cost_agg(Path *path, PlannerInfo *root,
 		total_cost = startup_cost;
 	}
 
-	if (prov_use_aggproject)
+	if (aggstrategy != AGG_PLAIN && prov_use_aggproject)
 	{
 	    total_cost += cpu_operator_cost * input_tuples * numAggs;
 	    total_cost += cpu_tuple_cost * input_tuples;
