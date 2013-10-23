@@ -185,7 +185,7 @@ bool addAggProvenanceAttrs(Query *query, TargetEntry *origTe, TargetEntry *newTe
      * 2) We add new provenance attributes of subqueries
      *    into isProvRowAttrs list, if they are not refered yet.
      */
-    if (query->hasAggs && !referredByQuery)
+    if ((query->hasAggs || query->groupClause) && !referredByQuery)
     { 
         AggProjectClause *aggP = (AggProjectClause *) query->aggprojectClause;
         if (!aggP)
@@ -218,7 +218,7 @@ TargetEntry* genProvRowAttr(Query *query,
 
 	// Stop if this is not aggregate query or 
 	// if we are not using prov_use_aggproject
-	if (!query->hasAggs || !prov_use_aggproject)
+	if ((!query->hasAggs && !query->groupClause) || !prov_use_aggproject)
 		return NULL;
 
 	expr = (Expr *) makeBoolConst(true, false);
@@ -325,7 +325,7 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
 						0);
 			varNode->varnoold= ((Var*) te->expr)->varnoold;
 			newTe = makeTargetEntry((Expr*) varNode, curResno, pstrdup(te->resname), false);
-			if (query->hasAggs)
+			if (query->hasAggs || query->groupClause)
 				newTe->resorigcol= AGGPROJ_INDICATOR;
 
 			/* adapt varno und varattno if referenced rte is used in a 
@@ -358,7 +358,7 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
 				/* Group all is_prov_row_attr# into AND expression tree
 				   For all non-aggregate queries
 				*/
-				if (!query->hasAggs && IS_PROV_ROW_ATTR(newTe))
+				if ((!query->hasAggs && !query->groupClause) && IS_PROV_ROW_ATTR(newTe))
 				{
 					isProvRowVars= lappend(isProvRowVars, varNode);
 					continue;
@@ -377,7 +377,7 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
       	/* Add finally one expression that groups all is_prov_row_attr#
       	 * Need to free newTe if we go inside - TODO
 	 */
-      	if (!query->hasAggs && prov_use_aggproject && isProvRowVars)
+      	if ((!query->hasAggs && !query->groupClause) && prov_use_aggproject && isProvRowVars)
       	{
       		TargetEntry *tmpTe;
       		char col_name[25];

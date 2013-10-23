@@ -531,7 +531,7 @@ checkForNTupleDupConstructs (Query *query)
 	if (query->distinctClause)
 		return true;
 
-	if (query->hasAggs || query->hasSubLinks)
+	if (query->hasAggs || query->hasSubLinks || query->groupClause)
 		return true;
 
 	result = false;

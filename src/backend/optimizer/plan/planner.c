@@ -1045,7 +1045,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 										isProvRowColIdx);
 			}
 
-			if (parse->aggprojectClause && parse->hasAggs)
+			if (parse->aggprojectClause && (parse->hasAggs || parse->groupClause))
 			{
 				/* if aggproject is present, force using sorting ... */
 				AggStrategy aggstrategy = AGG_SORTED;
