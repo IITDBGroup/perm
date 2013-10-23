@@ -136,7 +136,7 @@ bool addAggProvenanceAttrs(Query *query, TargetEntry *origTe, TargetEntry *newTe
      */
     if (!IS_PROV_ROW_ATTR(origTe))
     {  
-      if(query->hasAggs)
+      if(query->hasAggs || query->groupClause)
       {
           if (query->aggprojectClause)
               lappend(((AggProjectClause *) query->aggprojectClause)->projAttrs, newTe);
@@ -274,7 +274,7 @@ addProvenanceAttrs (Query *query, List *subList, List *pList, bool adaptToJoins)
 	 * - We remove a TE marked as resjunk, if there is equivalent provenance TE.
 	 * - We retain some TE's for which there are no equivalent provenance TE's.
 	 */
-#define SHOULD_HANDLE_RESJUNK(q) (q->hasAggs && prov_use_aggproject && \
+#define SHOULD_HANDLE_RESJUNK(q) ((q->hasAggs || q->groupClause) && prov_use_aggproject && \
 				 (q->groupClause || q->sortClause))
 	if (SHOULD_HANDLE_RESJUNK(query))
 	{
