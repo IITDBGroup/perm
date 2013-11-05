@@ -1958,7 +1958,7 @@ removeTopIsProvRowAttrTargetEntriesWalker (Node *node, void *context)
 
 			// Stop traversing when you find first aggregate query.
 			// Remove GENISPROVROW clause items on TOP aggregate query.
-			if (q->hasAggs)
+			if (q->hasAggs || q->groupClause)
 			{
 				if( q->aggprojectClause)
 				{
