@@ -1567,6 +1567,8 @@ choose_hashed_grouping(PlannerInfo *root,
 	Path		hashed_p;
 	Path		sorted_p;
 	int			i;
+	bool        isAggproject = (root->parse->aggprojectClause != NULL);
+	double 		outputRows;
 
 	/*
 	 * Check can't-do-it conditions, including whether the grouping operators
@@ -1578,7 +1580,7 @@ choose_hashed_grouping(PlannerInfo *root,
 	 * (Doing so would imply storing *all* the input values in the hash table,
 	 * which seems like a certain loser.)
 	 */
-	if (!enable_hashagg)
+	if (!enable_hashagg && isAggproject)
 		return false;
 	if (agg_counts->numDistinctAggs != 0)
 		return false;
@@ -1606,6 +1608,8 @@ choose_hashed_grouping(PlannerInfo *root,
 		cheapest_path_width = 100;		/* arbitrary */
 	}
 
+	outputRows = isAggproject ? cheapest_path_rows : dNumGroups;
+
 	/* Estimate per-hash-entry space at tuple width... */
 	hashentrysize = MAXALIGN(cheapest_path_width) + MAXALIGN(sizeof(MinimalTupleData));
 	/* plus space for pass-by-ref transition values... */
@@ -1615,7 +1619,7 @@ choose_hashed_grouping(PlannerInfo *root,
 
 	// if aggproject then calculate the size including the input
 	tuplestoresize = 0;
-	if (prov_use_aggproject)
+	if (isAggproject)
 	{
 		// plus the size of tuplestoreentry's per group hashentry
 		tuplestoresize = cheapest_path_rows * cheapest_path_width;
@@ -1647,7 +1651,7 @@ choose_hashed_grouping(PlannerInfo *root,
 	/* Result of hashed agg is always unsorted */
 	if (root->sort_pathkeys)
 		cost_sort(&hashed_p, root, root->sort_pathkeys, hashed_p.total_cost,
-				  dNumGroups, cheapest_path_width, limit_tuples);
+				outputRows, cheapest_path_width, limit_tuples);
 
 	if (sorted_path)
 	{
@@ -1681,7 +1685,7 @@ choose_hashed_grouping(PlannerInfo *root,
 	if (root->sort_pathkeys &&
 		!pathkeys_contained_in(root->sort_pathkeys, current_pathkeys))
 		cost_sort(&sorted_p, root, root->sort_pathkeys, sorted_p.total_cost,
-				  dNumGroups, cheapest_path_width, limit_tuples);
+				outputRows, cheapest_path_width, limit_tuples);
 
 	/*
 	 * Now make the decision using the top-level tuple fraction.  First we
