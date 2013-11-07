@@ -17,6 +17,7 @@
 
 #include <limits.h>
 
+#include "utils/guc.h"
 #include "catalog/pg_operator.h"
 #include "executor/executor.h"
 #include "executor/nodeAgg.h"
@@ -83,8 +84,6 @@ static void locate_grouping_columns(PlannerInfo *root,
 static List *postprocess_setop_tlist(List *new_tlist, List *orig_tlist);
 static void addEntriesToTargetListAndRecordIdx (List **tlist, AttrNumber **idx,
 		List *newTargets, bool *need_tlist_eval);
-
-extern bool prov_use_aggproject;
 
 /*****************************************************************************
  *
@@ -1048,9 +1047,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 			if (parse->aggprojectClause && (parse->hasAggs || parse->groupClause))
 			{
 				/* if aggproject is present, force using sorting ... */
-				AggStrategy aggstrategy = AGG_SORTED;
-				if (use_hashed_grouping)
-					aggstrategy = AGG_HASHED;
+				AggStrategy aggstrategy = use_hashed_grouping ? AGG_HASHED : AGG_SORTED;
 
 				AggProjectClause *aggP = (AggProjectClause *) parse->aggprojectClause;
 				numAggProjCols = list_length(aggP->projAttrs);
@@ -1580,7 +1577,9 @@ choose_hashed_grouping(PlannerInfo *root,
 	 * (Doing so would imply storing *all* the input values in the hash table,
 	 * which seems like a certain loser.)
 	 */
-	if (!enable_hashagg && isAggproject)
+	if (!enable_hashagg)
+		return false;
+	if (!prov_use_aggproject_hash && isAggproject)
 		return false;
 	if (agg_counts->numDistinctAggs != 0)
 		return false;
@@ -1627,6 +1626,9 @@ choose_hashed_grouping(PlannerInfo *root,
 
 	if (((hashentrysize * dNumGroups) + tuplestoresize) > work_mem * 1024L)
 		return false;
+
+	if (isAggproject && prov_use_aggproject_hash_only)
+		return true;
 
 	/*
 	 * See if the estimated cost is no more than doing it the other way. While

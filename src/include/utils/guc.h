@@ -154,6 +154,8 @@ extern bool prov_use_sublink_transfrom_top_level_any_to_join;
 extern bool prov_use_unnest_JA;
 extern bool prov_use_optimizer;
 extern bool prov_use_aggproject;
+extern bool prov_use_aggproject_hash;
+extern bool prov_use_aggproject_hash_only;
 extern bool prov_use_selection_pushdown;
 extern bool prov_xml_whitespace;
 extern bool prov_show_is_prov_attr;

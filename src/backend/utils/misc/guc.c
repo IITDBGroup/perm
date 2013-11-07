@@ -282,6 +282,8 @@ bool prov_use_sublink_transfrom_top_level_any_to_join = true;
 bool prov_use_unnest_JA = true;
 bool prov_use_optimizer = false;
 bool prov_use_aggproject = true;
+bool prov_use_aggproject_hash = true;
+bool prov_use_aggproject_hash_only = false;
 bool prov_use_selection_pushdown = false;
 bool prov_xml_whitespace = false;
 bool prov_show_is_prov_attr = false;
@@ -1167,12 +1169,32 @@ static struct config_bool ConfigureNamesBool[] =
 
 	{
 		{"prov_use_aggproject", PGC_USERSET, QUERY_TUNING,
-			gettext_noop("Use AGGPROJECT clause when rewriting aggregate quries"),
+			gettext_noop("Use AGGPROJECT clause when rewriting aggregate queries"),
 			gettext_noop("If actived aggregate queries use AGGPROJECT provenance extension"
 						 " to rewrite a incoming query. This is alternate approach to rewrites"
                          " that is originally based on JOIN, which could be costly."),
 		},
 		&prov_use_aggproject,
+		true, NULL, NULL
+	},
+
+	{
+		{"prov_use_aggproject_hash", PGC_USERSET, QUERY_TUNING,
+			gettext_noop("Use hash implementation of the AGGPROJECT operator"),
+			gettext_noop("If activated, we consider the hash based implementation"
+						 " of the AGGPROJECT operator in query optimization. If "
+                         " deactivated, only the sorting implementation is used."),
+		},
+		&prov_use_aggproject_hash,
+		false, NULL, NULL
+	},
+
+	{
+		{"prov_use_aggproject_hash_only", PGC_USERSET, QUERY_TUNING,
+			gettext_noop("Use only the hash implemenation of AGGPROJECT clause when rewriting aggregate quries"),
+			gettext_noop("If actived, we only use the hash based implementation of aggproject."),
+		},
+		&prov_use_aggproject_hash_only,
 		true, NULL, NULL
 	},
 

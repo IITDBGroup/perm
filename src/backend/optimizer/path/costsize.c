@@ -1199,12 +1199,18 @@ cost_agg(Path *path, PlannerInfo *root,
 		total_cost = startup_cost;
 	}
 
-	if (aggstrategy != AGG_PLAIN && prov_use_aggproject)
+	// if aggproject have charge for outputing as many tuples as there are input tuples
+	if (root->parse->aggprojectClause)
 	{
-	    total_cost += cpu_operator_cost * input_tuples * numAggs;
+//		AggProjectClause *aggP = (AggProjectClause *) root->parse->aggprojectClause;
+//		int numAggPCols = list_length(aggP->projAttrs)
+//				+ (aggP->genIsProvRowAttr ? 1 : 0);
+
+	    total_cost += cpu_operator_cost * input_tuples * (numAggs); // + numAggPCols);
 	    total_cost += cpu_tuple_cost * input_tuples;
 	}
-	else
+	// if grouping then charge cost for outputing number of groups tuples
+	else if (aggstrategy != AGG_PLAIN)
 	{
 	    total_cost += cpu_operator_cost * numGroups * numAggs;
 	    total_cost += cpu_tuple_cost * numGroups;
@@ -1239,6 +1245,8 @@ cost_group(Path *path, PlannerInfo *root,
 	 * all columns get compared at most of the tuples.
 	 */
 	total_cost += cpu_operator_cost * input_tuples * numGroupCols;
+
+	//TODO WHY DOES POSTGRES NOT CHARGE for outputs like in cost_agg
 
 	path->startup_cost = startup_cost;
 	path->total_cost = total_cost;
