@@ -342,6 +342,7 @@ static const ScanKeyword ScanKeywords[] = {
 	{"some", SOME, RESERVED_KEYWORD},
 	{"sqltext", SQLTEXT, UNRESERVED_KEYWORD},
 	{"sqltextdb2", SQLTEXTDB2, UNRESERVED_KEYWORD},
+	{"sqltextoracle", SQLTEXTORACLE, UNRESERVED_KEYWORD},
 	{"stable", STABLE, UNRESERVED_KEYWORD},
 	{"standalone", STANDALONE_P, UNRESERVED_KEYWORD},
 	{"start", START, UNRESERVED_KEYWORD},

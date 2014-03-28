@@ -36,6 +36,7 @@
 #include "provrewrite/prov_dotnode.h"
 #include "provrewrite/prov_nodes.h"
 #include "provrewrite/parse_back_db2.h"
+#include "provrewrite/parse_back_oracle.h"
 
 /* Hook for plugins to get control in ExplainOneQuery() */
 ExplainOneQuery_hook_type ExplainOneQuery_hook = NULL;
@@ -286,6 +287,23 @@ ExplainOnePlanProv (Query *query, PlannedStmt *plannedstmt, ParamListInfo params
 
 		return;
 	}
+
+	/* if the user requested to get the SQL text of the query as Oracle SQL
+	 * dialect generate it and append it to explain text */
+	if (stmt->generateOracleSQL)
+	{
+		StringInfo buf2;
+
+		buf2 = parseBackOracle(query, true);
+
+		do_text_output_multiline(tstate, buf2->data);
+
+		pfree(buf2->data);
+		pfree(buf2);
+
+		return;
+	}
+
 
 	initStringInfo(&buf);
 

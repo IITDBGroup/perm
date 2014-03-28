@@ -1642,7 +1642,6 @@ yy_match:
 yy_find_action:
 		yy_current_state = *--yy_state_ptr;
 		yy_lp = yy_accept[yy_current_state];
-goto find_rule; /* avoid `defined but not used' warning */
 find_rule: /* we branch to this label when backing up */
 		for ( ; ; ) /* until we find what rule we matched */
 			{
@@ -3005,7 +3004,7 @@ YY_RULE_SETUP
 #line 1131 "pgc.l"
 YY_FATAL_ERROR( "flex scanner jammed" );
 	YY_BREAK
-#line 3009 "pgc.c"
+#line 3008 "pgc.c"
 
 	case YY_END_OF_BUFFER:
 		{

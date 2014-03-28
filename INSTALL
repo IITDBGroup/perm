@@ -10,8 +10,8 @@
 
 Flex 2.5.4 or later
 Bison 1.875 or later
-libxslt
-libxml
+libxslt-dev
+libxml-dev
 libz
 ISO/ANSI C Compiler preferably gcc
 GNU make

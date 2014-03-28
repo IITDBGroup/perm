@@ -1368,6 +1368,7 @@ _equalExplainStmt(ExplainStmt *a, ExplainStmt *b)
 	COMPARE_SCALAR_FIELD(graph);
 	COMPARE_SCALAR_FIELD(generateSQL);
 	COMPARE_SCALAR_FIELD(generateDB2SQL);
+	COMPARE_SCALAR_FIELD(generateOracleSQL);
 
 	return true;
 }
