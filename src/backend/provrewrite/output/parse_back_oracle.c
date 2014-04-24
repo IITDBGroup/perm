@@ -110,16 +110,17 @@ static void appendStringInfoSpaces(StringInfo buf, int count);
 static void appendContextKeyword(deparse_context *context, const char *str,
 					 int indentBefore, int indentAfter, int indentPlus);
 static void get_rule_expr_paren(Node *node, deparse_context *context,
-					bool showimplicit, Node *parentNode, bool inBoolCond);
+					bool showimplicit, Node *parentNode, bool inBoolCond,
+					bool expectValue);
 static void get_rule_expr(Node *node, deparse_context *context,
-			  bool showimplicit, bool inBoolCond);
+			  bool showimplicit, bool inBoolCond, bool expectValue);
 static void get_oper_expr(OpExpr *expr, deparse_context *context);
 static void get_func_expr(FuncExpr *expr, deparse_context *context,
 			  bool showimplicit);
 static void get_agg_expr(Aggref *aggref, deparse_context *context);
 static void get_coercion_expr(Node *arg, deparse_context *context,
 				  Oid resulttype, int32 resulttypmod,
-				  Node *parentNode, bool inBoolCond);
+				  Node *parentNode, bool inBoolCond, bool expectValue);
 static void get_const_expr(Const *constval, deparse_context *context,
 			   int showtype, bool inBoolCond);
 static void get_sublink_expr(SubLink *sublink, deparse_context *context);
@@ -251,7 +252,7 @@ get_values_def(List *values_lists, deparse_context *context)
 			 * then print the result.
 			 */
 			get_rule_expr(processIndirection(col, context, false),
-						  context, false, false);
+						  context, false, false, true);
 		}
 		appendStringInfoChar(buf, ')');
 	}
@@ -505,7 +506,7 @@ get_basic_select_query(Query *query, deparse_context *context,
 							 -PRETTYINDENT_STD, PRETTYINDENT_STD, 1);
 		if (query->limitOffset || query->limitCount)
 			appendStringInfo(buf, "(");
-		get_rule_expr(query->jointree->quals, context, false, true);
+		get_rule_expr(query->jointree->quals, context, false, true, false);
 	}
 	/* Add the LIMIT clause if given */
 	if (query->limitOffset != NULL)
@@ -516,7 +517,7 @@ get_basic_select_query(Query *query, deparse_context *context,
 		else
 			appendStringInfo(buf, ") AND (");
 		appendStringInfo(buf, " ROWNUM >= ");
-		get_rule_expr(query->limitOffset, context, false, false);
+		get_rule_expr(query->limitOffset, context, false, false, true);
 		appendStringInfo(buf, ")");
 	}
 	if (query->limitCount != NULL &&
@@ -532,7 +533,7 @@ get_basic_select_query(Query *query, deparse_context *context,
 		appendContextKeyword(context, " ROWNUM <= ",
 							 -PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
 
-		get_rule_expr(query->limitCount, context, false, false);
+		get_rule_expr(query->limitCount, context, false, false, true);
 		appendStringInfo(buf, ")");
 	}
 
@@ -558,7 +559,7 @@ get_basic_select_query(Query *query, deparse_context *context,
 	{
 		appendContextKeyword(context, " HAVING ",
 							 -PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
-		get_rule_expr(query->havingQual, context, false, true);
+		get_rule_expr(query->havingQual, context, false, true, false);
 	}
 }
 
@@ -606,9 +607,23 @@ get_target_list(List *targetList, deparse_context *context,
 		}
 		else
 		{
-			get_rule_expr((Node *) tle->expr, context, true, false);
+//			bool isCond = isCondExpr((Node *) tle->expr);
+			/* Oracle does not allow conditional expressions as select clause expressions.
+			 * E.g., if we use
+			 * 		(a = 10) OR (b = 10) AS x
+			 * then we have to wrap this expression in
+			 * a case:
+			 * 		CASE WHEN (a = 10) OR (b = 10) THEN 1 ESLE 0 END AS x
+			 */
+//			if (isCond)
+//				appendStringInfoString(buf, "(CASE WHEN (");
+
+			get_rule_expr((Node *) tle->expr, context, true, false, true);
 			/* We'll show the AS name unless it's this: */
 			attname = "?column?";
+
+//			if (isCond)
+//				appendStringInfoString(buf, ") THEN 1 ELSE 0 END)");
 		}
 
 		/*
@@ -749,7 +764,7 @@ get_rule_sortgroupclause(SortClause *srt, List *tlist, bool force_colno,
 	else if (expr && IsA(expr, Const))
 		get_const_expr((Const *) expr, context, 1, false);
 	else
-		get_rule_expr(expr, context, true, false);
+		get_rule_expr(expr, context, true, false, true);
 
 	return expr;
 }
@@ -877,7 +892,7 @@ get_insert_query_def(Query *query, deparse_context *context)
 		/* Add the single-VALUES expression list */
 		appendContextKeyword(context, "VALUES (",
 							 -PRETTYINDENT_STD, PRETTYINDENT_STD, 2);
-		get_rule_expr((Node *) strippedexprs, context, false, false);
+		get_rule_expr((Node *) strippedexprs, context, false, false, true);
 		appendStringInfoChar(buf, ')');
 	}
 
@@ -946,7 +961,7 @@ get_update_query_def(Query *query, deparse_context *context)
 
 		appendStringInfo(buf, " = ");
 
-		get_rule_expr(expr, context, false, false);
+		get_rule_expr(expr, context, false, false, true);
 	}
 
 	/* Add the FROM clause if needed */
@@ -957,7 +972,7 @@ get_update_query_def(Query *query, deparse_context *context)
 	{
 		appendContextKeyword(context, " WHERE ",
 							 -PRETTYINDENT_STD, PRETTYINDENT_STD, 1);
-		get_rule_expr(query->jointree->quals, context, false, true);
+		get_rule_expr(query->jointree->quals, context, false, true, false);
 	}
 
 	/* Add RETURNING if present */
@@ -1002,7 +1017,7 @@ get_delete_query_def(Query *query, deparse_context *context)
 	{
 		appendContextKeyword(context, " WHERE ",
 							 -PRETTYINDENT_STD, PRETTYINDENT_STD, 1);
-		get_rule_expr(query->jointree->quals, context, false, true);
+		get_rule_expr(query->jointree->quals, context, false, true, false);
 	}
 
 	/* Add RETURNING if present */
@@ -1138,7 +1153,7 @@ get_variable(Var *var, int levelsup, bool showstar, deparse_context *context)
 		 */
 		if (!IsA(tle->expr, Var))
 			appendStringInfoChar(buf, '(');
-		get_rule_expr((Node *) tle->expr, context, true, false);
+		get_rule_expr((Node *) tle->expr, context, true, false, false);
 		if (!IsA(tle->expr, Var))
 			appendStringInfoChar(buf, ')');
 
@@ -1167,7 +1182,7 @@ get_variable(Var *var, int levelsup, bool showstar, deparse_context *context)
 		 */
 		if (!IsA(tle->expr, Var))
 			appendStringInfoChar(buf, '(');
-		get_rule_expr((Node *) tle->expr, context, true, false);
+		get_rule_expr((Node *) tle->expr, context, true, false, false);
 		if (!IsA(tle->expr, Var))
 			appendStringInfoChar(buf, ')');
 
@@ -1560,7 +1575,8 @@ appendContextKeyword(deparse_context *context, const char *str,
  */
 static void
 get_rule_expr_paren(Node *node, deparse_context *context,
-					bool showimplicit, Node *parentNode, bool inBoolCond)
+					bool showimplicit, Node *parentNode, bool inBoolCond,
+					bool expectValue)
 {
 	bool		need_paren;
 
@@ -1570,7 +1586,7 @@ get_rule_expr_paren(Node *node, deparse_context *context,
 	if (need_paren)
 		appendStringInfoChar(context->buf, '(');
 
-	get_rule_expr(node, context, showimplicit, inBoolCond);
+	get_rule_expr(node, context, showimplicit, inBoolCond, expectValue);
 
 	if (need_paren)
 		appendStringInfoChar(context->buf, ')');
@@ -1592,12 +1608,22 @@ get_rule_expr_paren(Node *node, deparse_context *context,
  */
 static void
 get_rule_expr(Node *node, deparse_context *context,
-			  bool showimplicit, bool inBoolCond)
-{
+			  bool showimplicit, bool inBoolCond, bool expectValue)
+{ //TODO add additional parameter that determines whether the caller expects a value condition. If yes then wrap conditional expressions in CASE
 	StringInfo	buf = context->buf;
 
 	if (node == NULL)
 		return;
+
+	// caller expects a value expression, turn conditional into value expression
+	if (expectValue && isCondExpr(node))
+	{
+		appendStringInfoString(buf, "(CASE WHEN (");
+		get_rule_expr(node, context, showimplicit, inBoolCond, false);
+		appendStringInfoString(buf, ") THEN 1 ELSE 0 END)");
+		return;
+	}
+
 
 	/*
 	 * Each level of get_rule_expr must emit an indivisible term
@@ -1638,7 +1664,7 @@ get_rule_expr(Node *node, deparse_context *context,
 					!IsA(aref->refexpr, FieldSelect);
 				if (need_parens)
 					appendStringInfoChar(buf, '(');
-				get_rule_expr((Node *) aref->refexpr, context, showimplicit, false);
+				get_rule_expr((Node *) aref->refexpr, context, showimplicit, false, expectValue);
 				if (need_parens)
 					appendStringInfoChar(buf, ')');
 				printSubscripts(aref, context);
@@ -1671,30 +1697,30 @@ get_rule_expr(Node *node, deparse_context *context,
 				 * 		OR (a IS NULL AND b IS NOT NULL) OR (a IS NOT NULL AND b IS NULL))
 				 */
 				appendStringInfoString(buf, "((");
-				get_rule_expr_paren(arg1, context, true, node, false);
+				get_rule_expr_paren(arg1, context, true, node, false, true);
 				appendStringInfo(buf, " IS NOT NULL AND ");
-				get_rule_expr_paren(arg2, context, true, node, false);
+				get_rule_expr_paren(arg2, context, true, node, false, true);
 				appendStringInfo(buf, " IS NOT NULL AND (");
-				get_rule_expr_paren(arg1, context, true, node, false);
+				get_rule_expr_paren(arg1, context, true, node, false, true);
 				appendStringInfo(buf, " != ");
-				get_rule_expr_paren(arg2, context, true, node, false);
+				get_rule_expr_paren(arg2, context, true, node, false, true);
 				appendStringInfoString(buf, "))");
 
 				appendStringInfoString(buf, " OR ");
 
 				appendStringInfoChar(buf, '(');
-				get_rule_expr_paren(arg1, context, true, node, false);
+				get_rule_expr_paren(arg1, context, true, node, false, true);
 				appendStringInfo(buf, " IS NULL AND ");
-				get_rule_expr_paren(arg2, context, true, node, false);
+				get_rule_expr_paren(arg2, context, true, node, false, true);
 				appendStringInfo(buf, " IS NOT NULL ");
 				appendStringInfoChar(buf, ')');
 
 				appendStringInfoString(buf, " OR ");
 
 				appendStringInfoChar(buf, '(');
-				get_rule_expr_paren(arg1, context, true, node, false);
+				get_rule_expr_paren(arg1, context, true, node, false, true);
 				appendStringInfo(buf, " IS NOT NULL AND ");
-				get_rule_expr_paren(arg2, context, true, node, false);
+				get_rule_expr_paren(arg2, context, true, node, false, true);
 				appendStringInfo(buf, " IS NULL ");
 				appendStringInfoChar(buf, ')');
 
@@ -1716,7 +1742,7 @@ get_rule_expr(Node *node, deparse_context *context,
 
 				if (!PRETTY_PAREN(context))
 					appendStringInfoChar(buf, '(');
-				get_rule_expr_paren(arg1, context, true, node, false);
+				get_rule_expr_paren(arg1, context, true, node, false, true);
 
 				if (expr->useOr && strcmp(opname, "=") == 0)
 				{
@@ -1727,7 +1753,7 @@ get_rule_expr(Node *node, deparse_context *context,
 									opname,
 									expr->useOr ? "ANY" : "ALL");
 
-				get_rule_expr(arg2, context, true, false);
+				get_rule_expr(arg2, context, true, false, true);
 
 				if (!PRETTY_PAREN(context))
 					appendStringInfoChar(buf, ')');
@@ -1746,12 +1772,12 @@ get_rule_expr(Node *node, deparse_context *context,
 						if (!PRETTY_PAREN(context))
 							appendStringInfoChar(buf, '(');
 						get_rule_expr_paren(first_arg, context,
-											false, node, true);
+											false, node, true, false);
 						while (arg)
 						{
 							appendStringInfo(buf, " AND ");
 							get_rule_expr_paren((Node *) lfirst(arg), context,
-												false, node, true);
+												false, node, true, false);
 							arg = lnext(arg);
 						}
 						if (!PRETTY_PAREN(context))
@@ -1762,12 +1788,12 @@ get_rule_expr(Node *node, deparse_context *context,
 						if (!PRETTY_PAREN(context))
 							appendStringInfoChar(buf, '(');
 						get_rule_expr_paren(first_arg, context,
-											false, node, true);
+											false, node, true, false);
 						while (arg)
 						{
 							appendStringInfo(buf, " OR ");
 							get_rule_expr_paren((Node *) lfirst(arg), context,
-												false, node, true);
+												false, node, true, false);
 							arg = lnext(arg);
 						}
 						if (!PRETTY_PAREN(context))
@@ -1779,7 +1805,7 @@ get_rule_expr(Node *node, deparse_context *context,
 							appendStringInfoChar(buf, '(');
 						appendStringInfo(buf, "NOT ");
 						get_rule_expr_paren(first_arg, context,
-											false, node, true);
+											false, node, true, false);
 						if (!PRETTY_PAREN(context))
 							appendStringInfoChar(buf, ')');
 						break;
@@ -1825,7 +1851,7 @@ get_rule_expr(Node *node, deparse_context *context,
 				need_parens = !IsA(arg, ArrayRef) &&!IsA(arg, FieldSelect);
 				if (need_parens)
 					appendStringInfoChar(buf, '(');
-				get_rule_expr(arg, context, true, false);
+				get_rule_expr(arg, context, true, false, true);
 				if (need_parens)
 					appendStringInfoChar(buf, ')');
 
@@ -1856,14 +1882,14 @@ get_rule_expr(Node *node, deparse_context *context,
 					!showimplicit)
 				{
 					/* don't show the implicit cast */
-					get_rule_expr_paren(arg, context, false, node, false);
+					get_rule_expr_paren(arg, context, false, node, false, expectValue);
 				}
 				else
 				{
 					get_coercion_expr(arg, context,
 									  relabel->resulttype,
 									  relabel->resulttypmod,
-									  node, inBoolCond);
+									  node, inBoolCond, expectValue);
 				}
 			}
 			break;
@@ -1877,14 +1903,14 @@ get_rule_expr(Node *node, deparse_context *context,
 					!showimplicit)
 				{
 					/* don't show the implicit cast */
-					get_rule_expr_paren(arg, context, false, node, inBoolCond);
+					get_rule_expr_paren(arg, context, false, node, inBoolCond, true);
 				}
 				else
 				{
 					get_coercion_expr(arg, context,
 									  iocoerce->resulttype,
 									  -1,
-									  node, inBoolCond);
+									  node, inBoolCond, expectValue);
 				}
 			}
 			break;
@@ -1895,7 +1921,7 @@ get_rule_expr(Node *node, deparse_context *context,
 				Node	   *arg = (Node *) acoerce->arg;
 
 				/* don't show the implicit cast */
-				get_rule_expr_paren(arg, context, false, node, false);
+				get_rule_expr_paren(arg, context, false, node, false, true);
 			}
 			break;
 
@@ -1908,13 +1934,13 @@ get_rule_expr(Node *node, deparse_context *context,
 					!showimplicit)
 				{
 					/* don't show the implicit cast */
-					get_rule_expr_paren(arg, context, false, node, inBoolCond);
+					get_rule_expr_paren(arg, context, false, node, inBoolCond, true);
 				}
 				else
 				{
 					get_coercion_expr(arg, context,
 									  convert->resulttype, -1,
-									  node, inBoolCond);
+									  node, inBoolCond, true);
 				}
 			}
 			break;
@@ -1929,7 +1955,7 @@ get_rule_expr(Node *node, deparse_context *context,
 				if (caseexpr->arg)
 				{
 					appendStringInfoChar(buf, ' ');
-					get_rule_expr((Node *) caseexpr->arg, context, true, false);
+					get_rule_expr((Node *) caseexpr->arg, context, true, false, false);
 				}
 				foreach(temp, caseexpr->args)
 				{
@@ -1963,7 +1989,7 @@ get_rule_expr(Node *node, deparse_context *context,
 								   IsA(linitial(((OpExpr *) w)->args),
 									   Const));
 							rhs = (Node *) lsecond(((OpExpr *) w)->args);
-							get_rule_expr(rhs, context, false, false);
+							get_rule_expr(rhs, context, false, false, true);
 						}
 						else if (IsA(w, CaseTestExpr))
 							appendStringInfo(buf, "TRUE");
@@ -1978,15 +2004,15 @@ get_rule_expr(Node *node, deparse_context *context,
 								 (int) nodeTag(w));
 					}
 					else
-						get_rule_expr(w, context, false, true);
+						get_rule_expr(w, context, false, true, true);
 					appendStringInfo(buf, " THEN ");
-					get_rule_expr((Node *) when->result, context, true, false);
+					get_rule_expr((Node *) when->result, context, true, false, true);
 				}
 				if (!PRETTY_INDENT(context))
 					appendStringInfoChar(buf, ' ');
 				appendContextKeyword(context, "ELSE ",
 									 0, 0, 0);
-				get_rule_expr((Node *) caseexpr->defresult, context, true, false);
+				get_rule_expr((Node *) caseexpr->defresult, context, true, false, true);
 				if (!PRETTY_INDENT(context))
 					appendStringInfoChar(buf, ' ');
 				appendContextKeyword(context, "END",
@@ -1999,7 +2025,7 @@ get_rule_expr(Node *node, deparse_context *context,
 				ArrayExpr  *arrayexpr = (ArrayExpr *) node;
 
 				appendStringInfo(buf, "(");
-				get_rule_expr((Node *) arrayexpr->elements, context, true, inBoolCond);
+				get_rule_expr((Node *) arrayexpr->elements, context, true, inBoolCond, true);
 				appendStringInfoChar(buf, ')');
 			}
 			break;
@@ -2038,7 +2064,7 @@ get_rule_expr(Node *node, deparse_context *context,
 						!tupdesc->attrs[i]->attisdropped)
 					{
 						appendStringInfoString(buf, sep);
-						get_rule_expr(e, context, true, false);
+						get_rule_expr(e, context, true, false, true);
 						sep = ", ";
 					}
 					i++;
@@ -2082,7 +2108,7 @@ get_rule_expr(Node *node, deparse_context *context,
 					Node	   *e = (Node *) lfirst(arg);
 
 					appendStringInfoString(buf, sep);
-					get_rule_expr(e, context, true, false);
+					get_rule_expr(e, context, true, false, true);
 					sep = ", ";
 				}
 
@@ -2103,7 +2129,7 @@ get_rule_expr(Node *node, deparse_context *context,
 					Node	   *e = (Node *) lfirst(arg);
 
 					appendStringInfoString(buf, sep);
-					get_rule_expr(e, context, true, false);
+					get_rule_expr(e, context, true, false, true);
 					sep = ", ";
 				}
 				appendStringInfo(buf, "))");
@@ -2115,7 +2141,7 @@ get_rule_expr(Node *node, deparse_context *context,
 				CoalesceExpr *coalesceexpr = (CoalesceExpr *) node;
 
 				appendStringInfo(buf, "COALESCE(");
-				get_rule_expr((Node *) coalesceexpr->args, context, true, false);
+				get_rule_expr((Node *) coalesceexpr->args, context, true, false, true);
 				appendStringInfoChar(buf, ')');
 			}
 			break;
@@ -2133,7 +2159,7 @@ get_rule_expr(Node *node, deparse_context *context,
 						appendStringInfo(buf, "LEAST(");
 						break;
 				}
-				get_rule_expr((Node *) minmaxexpr->args, context, true, false);
+				get_rule_expr((Node *) minmaxexpr->args, context, true, false, true);
 				appendStringInfoChar(buf, ')');
 			}
 			break;
@@ -2201,7 +2227,7 @@ get_rule_expr(Node *node, deparse_context *context,
 
 						if (needcomma)
 							appendStringInfoString(buf, ", ");
-						get_rule_expr((Node *) e, context, true, inBoolCond);
+						get_rule_expr((Node *) e, context, true, inBoolCond, true);
 						appendStringInfo(buf, " AS %s",
 										 quote_identifier(map_xml_name_to_sql_identifier(argname)));
 						needcomma = true;
@@ -2221,13 +2247,13 @@ get_rule_expr(Node *node, deparse_context *context,
 						case IS_XMLPI:
 						case IS_XMLSERIALIZE:
 							/* no extra decoration needed */
-							get_rule_expr((Node *) xexpr->args, context, true, inBoolCond);
+							get_rule_expr((Node *) xexpr->args, context, true, inBoolCond, true);
 							break;
 						case IS_XMLPARSE:
 							Assert(list_length(xexpr->args) == 2);
 
 							get_rule_expr((Node *) linitial(xexpr->args),
-										  context, true, false);
+										  context, true, false, true);
 
 							con = (Const *) lsecond(xexpr->args);
 							Assert(IsA(con, Const));
@@ -2243,7 +2269,7 @@ get_rule_expr(Node *node, deparse_context *context,
 							Assert(list_length(xexpr->args) == 3);
 
 							get_rule_expr((Node *) linitial(xexpr->args),
-										  context, true, false);
+										  context, true, false, true);
 
 							appendStringInfoString(buf, ", VERSION ");
 							con = (Const *) lsecond(xexpr->args);
@@ -2251,7 +2277,7 @@ get_rule_expr(Node *node, deparse_context *context,
 								con->constisnull)
 								appendStringInfoString(buf, "NO VALUE");
 							else
-								get_rule_expr((Node *) con, context, false, false);
+								get_rule_expr((Node *) con, context, false, false, true);
 
 							con = (Const *) lthird(xexpr->args);
 							Assert(IsA(con, Const));
@@ -2279,7 +2305,7 @@ get_rule_expr(Node *node, deparse_context *context,
 							}
 							break;
 						case IS_DOCUMENT:
-							get_rule_expr_paren((Node *) xexpr->args, context, false, node, false);
+							get_rule_expr_paren((Node *) xexpr->args, context, false, node, false, true);
 							break;
 					}
 
@@ -2299,7 +2325,7 @@ get_rule_expr(Node *node, deparse_context *context,
 				NullIfExpr *nullifexpr = (NullIfExpr *) node;
 
 				appendStringInfo(buf, "NULLIF(");
-				get_rule_expr((Node *) nullifexpr->args, context, true, inBoolCond);
+				get_rule_expr((Node *) nullifexpr->args, context, true, inBoolCond, false);
 				appendStringInfoChar(buf, ')');
 			}
 			break;
@@ -2315,9 +2341,9 @@ get_rule_expr(Node *node, deparse_context *context,
 				if (isCondExpr((Node *) ntest->arg))
 				{
 					appendStringInfoString(buf, "CASE WHEN ((");
-					get_rule_expr_paren((Node *) ntest->arg, context, true, node, false);
+					get_rule_expr_paren((Node *) ntest->arg, context, true, node, false, true);
 					appendStringInfoString(buf, ") OR NOT(");
-					get_rule_expr_paren((Node *) ntest->arg, context, true, node, false);
+					get_rule_expr_paren((Node *) ntest->arg, context, true, node, false, true);
 					appendStringInfoString(buf, ")) THEN 1 ELSE 0 END");
 					switch (ntest->nulltesttype)
 					{
@@ -2335,7 +2361,7 @@ get_rule_expr(Node *node, deparse_context *context,
 				//
 				else
 				{
-					get_rule_expr_paren((Node *) ntest->arg, context, true, node, false);
+					get_rule_expr_paren((Node *) ntest->arg, context, true, node, false, true);
 					switch (ntest->nulltesttype)
 					{
 						case IS_NULL:
@@ -2360,7 +2386,7 @@ get_rule_expr(Node *node, deparse_context *context,
 
 				if (!PRETTY_PAREN(context))
 					appendStringInfoChar(buf, '(');
-				get_rule_expr_paren((Node *) btest->arg, context, false, node, false);
+				get_rule_expr_paren((Node *) btest->arg, context, false, node, false, true);
 				switch (btest->booltesttype)
 				{
 					case IS_TRUE:
@@ -2399,14 +2425,14 @@ get_rule_expr(Node *node, deparse_context *context,
 					!showimplicit)
 				{
 					/* don't show the implicit cast */
-					get_rule_expr(arg, context, false, inBoolCond);
+					get_rule_expr(arg, context, false, inBoolCond, true);
 				}
 				else
 				{
 					get_coercion_expr(arg, context,
 									  ctest->resulttype,
 									  ctest->resulttypmod,
-									  node, inBoolCond);
+									  node, inBoolCond, true);
 				}
 			}
 			break;
@@ -2441,7 +2467,7 @@ get_rule_expr(Node *node, deparse_context *context,
 				foreach(l, (List *) node)
 				{
 					appendStringInfoString(buf, sep);
-					get_rule_expr((Node *) lfirst(l), context, showimplicit, inBoolCond);
+					get_rule_expr((Node *) lfirst(l), context, showimplicit, inBoolCond, true);
 					sep = ", ";
 				}
 			}
@@ -2494,7 +2520,7 @@ get_oper_expr(OpExpr *expr, deparse_context *context)
 				appendStringInfoString(buf, "ADD_MONTHS(");
 
 			// the date
-			get_rule_expr_paren(arg1, context, true, (Node *) expr, false);
+			get_rule_expr_paren(arg1, context, true, (Node *) expr, false, true);
 
 			// suffix for ADD_MONTH call
 			if (inter->month != 0)
@@ -2507,9 +2533,9 @@ get_oper_expr(OpExpr *expr, deparse_context *context)
 			return;
 		}
 
-		get_rule_expr_paren(arg1, context, true, (Node *) expr, false);
+		get_rule_expr_paren(arg1, context, true, (Node *) expr, false, true);
 		appendStringInfo(buf, " %s ", opName);
-		get_rule_expr_paren(arg2, context, true, (Node *) expr, false);
+		get_rule_expr_paren(arg2, context, true, (Node *) expr, false, true);
 	}
 	else
 	{
@@ -2531,10 +2557,10 @@ get_oper_expr(OpExpr *expr, deparse_context *context)
 								 generate_operator_name_oracle(opno,
 														InvalidOid,
 														exprType(arg)));
-				get_rule_expr_paren(arg, context, true, (Node *) expr, false);
+				get_rule_expr_paren(arg, context, true, (Node *) expr, false, true);
 				break;
 			case 'r':
-				get_rule_expr_paren(arg, context, true, (Node *) expr, false);
+				get_rule_expr_paren(arg, context, true, (Node *) expr, false, true);
 				appendStringInfo(buf, " %s",
 								 generate_operator_name_oracle(opno,
 														exprType(arg),
@@ -2569,7 +2595,7 @@ get_func_expr(FuncExpr *expr, deparse_context *context,
 	if (expr->funcformat == COERCE_IMPLICIT_CAST && !showimplicit)
 	{
 		get_rule_expr_paren((Node *) linitial(expr->args), context,
-							false, (Node *) expr, false);
+							false, (Node *) expr, false, true);
 		return;
 	}
 
@@ -2589,7 +2615,7 @@ get_func_expr(FuncExpr *expr, deparse_context *context,
 
 		get_coercion_expr(arg, context,
 						  rettype, coercedTypmod,
-						  (Node *) expr, false);
+						  (Node *) expr, false, true);
 
 		return;
 	}
@@ -2603,7 +2629,7 @@ get_func_expr(FuncExpr *expr, deparse_context *context,
 	case 1385:
 	case 2021:	//date_part(TEXT, DATE)
 		handleDateExtract(context, (Node *) linitial(expr->args));
-		get_rule_expr((Node *) lsecond(expr->args), context, true, false);
+		get_rule_expr((Node *) lsecond(expr->args), context, true, false, true);
 		appendStringInfoChar(buf, ')');
 		return;
 	default:
@@ -2627,7 +2653,7 @@ get_func_expr(FuncExpr *expr, deparse_context *context,
 
 	appendStringInfo(buf, "%s(",
 					 generate_function_name_oracle(funcoid, nargs, argtypes));
-	get_rule_expr((Node *) expr->args, context, true, false);
+	get_rule_expr((Node *) expr->args, context, true, false, true);
 	appendStringInfoChar(buf, ')');
 }
 
@@ -2701,7 +2727,7 @@ get_agg_expr(Aggref *aggref, deparse_context *context)
 	if (aggref->aggstar)
 		appendStringInfoChar(buf, '*');
 	else
-		get_rule_expr((Node *) aggref->args, context, true, false);
+		get_rule_expr((Node *) aggref->args, context, true, false, true);
 	appendStringInfoChar(buf, ')');
 
 	/* end of cast */
@@ -2719,7 +2745,7 @@ get_agg_expr(Aggref *aggref, deparse_context *context)
 static void
 get_coercion_expr(Node *arg, deparse_context *context,
 				  Oid resulttype, int32 resulttypmod,
-				  Node *parentNode, bool inBoolCond)
+				  Node *parentNode, bool inBoolCond, bool expectValue)
 {
 	StringInfo	buf = context->buf;
 
@@ -2744,7 +2770,7 @@ get_coercion_expr(Node *arg, deparse_context *context,
 	{
 		if (!PRETTY_PAREN(context))
 			appendStringInfoChar(buf, '(');
-		get_rule_expr_paren(arg, context, false, parentNode, inBoolCond);
+		get_rule_expr_paren(arg, context, false, parentNode, inBoolCond, expectValue);
 		if (!PRETTY_PAREN(context))
 			appendStringInfoChar(buf, ')');
 	}
@@ -2854,7 +2880,7 @@ get_const_expr(Const *constval, deparse_context *context, int showtype, bool inB
 		else
 		{
 			if (strcmp(extval, "t") == 0)
-				appendStringInfo(buf, "1)");
+				appendStringInfo(buf, "1");
 			else
 				appendStringInfo(buf, "0");
 		}
@@ -2992,7 +3018,7 @@ get_sublink_expr(SubLink *sublink, deparse_context *context)
 			/* single combining operator */
 			OpExpr	   *opexpr = (OpExpr *) sublink->testexpr;
 
-			get_rule_expr(linitial(opexpr->args), context, true, false);
+			get_rule_expr(linitial(opexpr->args), context, true, false, true);
 			opname = generate_operator_name_oracle(opexpr->opno,
 											exprType(linitial(opexpr->args)),
 											exprType(lsecond(opexpr->args)));
@@ -3011,7 +3037,7 @@ get_sublink_expr(SubLink *sublink, deparse_context *context)
 
 				Assert(IsA(opexpr, OpExpr));
 				appendStringInfoString(buf, sep);
-				get_rule_expr(linitial(opexpr->args), context, true, true);
+				get_rule_expr(linitial(opexpr->args), context, true, true, true);
 				if (!opname)
 					opname = generate_operator_name_oracle(opexpr->opno,
 											exprType(linitial(opexpr->args)),
@@ -3026,7 +3052,7 @@ get_sublink_expr(SubLink *sublink, deparse_context *context)
 			RowCompareExpr *rcexpr = (RowCompareExpr *) sublink->testexpr;
 
 			appendStringInfoChar(buf, '(');
-			get_rule_expr((Node *) rcexpr->largs, context, true, false);
+			get_rule_expr((Node *) rcexpr->largs, context, true, false, true);
 			opname = generate_operator_name_oracle(linitial_oid(rcexpr->opnos),
 											exprType(linitial(rcexpr->largs)),
 										  exprType(linitial(rcexpr->rargs)));
@@ -3184,7 +3210,7 @@ get_from_clause_item(Node *jtnode, Query *query, deparse_context *context)
 				break;
 			case RTE_FUNCTION:
 				/* Function RTE */
-				get_rule_expr(rte->funcexpr, context, true, false);
+				get_rule_expr(rte->funcexpr, context, true, false, false);
 				break;
 			case RTE_VALUES:
 				/* Values list RTE */
@@ -3367,7 +3393,7 @@ get_from_clause_item(Node *jtnode, Query *query, deparse_context *context)
 				appendStringInfo(buf, " ON ");
 				if (!PRETTY_PAREN(context))
 					appendStringInfoChar(buf, '(');
-				get_rule_expr(j->quals, context, false, true);
+				get_rule_expr(j->quals, context, false, true, false);
 				if (!PRETTY_PAREN(context))
 					appendStringInfoChar(buf, ')');
 			}
@@ -3579,11 +3605,11 @@ printSubscripts(ArrayRef *aref, deparse_context *context)
 		appendStringInfoChar(buf, '[');
 		if (lowlist_item)
 		{
-			get_rule_expr((Node *) lfirst(lowlist_item), context, false, false);
+			get_rule_expr((Node *) lfirst(lowlist_item), context, false, false, true);
 			appendStringInfoChar(buf, ':');
 			lowlist_item = lnext(lowlist_item);
 		}
-		get_rule_expr((Node *) lfirst(uplist_item), context, false, false);
+		get_rule_expr((Node *) lfirst(uplist_item), context, false, false, true);
 		appendStringInfoChar(buf, ']');
 	}
 }
