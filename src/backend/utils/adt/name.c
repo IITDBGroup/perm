@@ -273,6 +273,10 @@ namestrcpy(Name name, const char *str)
 {
 	if (!name || !str)
 		return -1;
+	// hack for fixing overlapping string problem where strncpy fails nowadays
+	if (NameStr(*name) == str)
+		return 0;
+
 	StrNCpy(NameStr(*name), str, NAMEDATALEN);
 	return 0;
 }
