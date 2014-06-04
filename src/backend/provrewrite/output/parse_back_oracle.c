@@ -2898,6 +2898,10 @@ get_const_expr(Const *constval, deparse_context *context, int showtype, bool inB
 		case NUMERICOID:
 			needType = false;
 		break;
+		case DATEOID:
+			appendStringInfoString (buf, "to_date(");
+			needType = true;
+			break;
 		default:
 			appendStringInfoString (buf, "CAST (");
 			needType = true;
@@ -2961,7 +2965,10 @@ get_const_expr(Const *constval, deparse_context *context, int showtype, bool inB
 
 	if (needType)
 	{
-		appendStringInfo(buf, " AS %s)",
+		if (constval->consttype == DATEOID)
+			appendStringInfoString(buf, ",\'YYYY-MM-DD\')");
+		else
+			appendStringInfo(buf, " AS %s)",
 							convertPostgresTypeToOracleType(constval->consttype,
 													constval->consttypmod));
 	}
