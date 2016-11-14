@@ -275,7 +275,7 @@ static Node *makeXmlExpr(XmlExprOp op, char *name, List *named_args, List *args)
 %type <ival>	opt_interval
 %type <node>	overlay_placing substr_from substr_for
 
-%type <boolean> opt_instead opt_analyze opt_graph opt_sqltext opt_sqltextdb2
+%type <boolean> opt_instead opt_analyze opt_graph opt_sqltext opt_sqltextdb2 opt_sqltextoracle
 %type <boolean> index_opt_unique opt_verbose opt_full
 %type <boolean> opt_freeze opt_default opt_recheck
 %type <defelt>	opt_binary opt_oids copy_delimiter
@@ -437,7 +437,7 @@ static Node *makeXmlExpr(XmlExprOp op, char *name, List *named_args, List *args)
 
 	SAVEPOINT SCHEMA SCROLL SEARCH SECOND_P SECURITY SELECT SEQUENCE
 	SERIALIZABLE SESSION SESSION_USER SET SETOF SHARE
-	SHOW SIMILAR SIMPLE SMALLINT SOME SQLTEXT SQLTEXTDB2 STABLE STANDALONE_P START STATEMENT
+	SHOW SIMILAR SIMPLE SMALLINT SOME SQLTEXT SQLTEXTDB2 SQLTEXTORACLE STABLE STANDALONE_P START STATEMENT
 	STATISTICS STDIN STDOUT STORAGE STRICT_P STRIP_P SUBSTRING SUPERUSER_P
 	SYMMETRIC SYSID SYSTEM_P
 
@@ -5749,11 +5749,11 @@ opt_name_list:
 /*****************************************************************************
  *
  *		QUERY:
- *				EXPLAIN [ANALYZE] [VERBOSE] query
+ *				EXPLAIN [ANALYZE] [VERBOSE] [SQLTEXT] [SQLTEXTDB2] [SQLTEXTORACLE] query
  *
  *****************************************************************************/
 
-ExplainStmt: EXPLAIN opt_analyze opt_verbose opt_graph opt_sqltext opt_sqltextdb2 ExplainableStmt
+ExplainStmt: EXPLAIN opt_analyze opt_verbose opt_graph opt_sqltext opt_sqltextdb2 opt_sqltextoracle ExplainableStmt
 				{
 					ExplainStmt *n = makeNode(ExplainStmt);
 					n->analyze = $2;
@@ -5761,7 +5761,8 @@ ExplainStmt: EXPLAIN opt_analyze opt_verbose opt_graph opt_sqltext opt_sqltextdb
 					n->graph = $4;
 					n->generateSQL = $5;
 					n->generateDB2SQL = $6;
-					n->query = $7;
+					n->generateOracleSQL = $7;
+					n->query = $8;
 					$$ = (Node *)n;
 				}
 		;
@@ -5793,6 +5794,10 @@ opt_sqltext:
 opt_sqltextdb2:
 			SQLTEXTDB2				{ $$ = TRUE; }
 			| /* EMPTY */			{ $$ = FALSE; }
+			
+opt_sqltextoracle:
+			SQLTEXTORACLE			{ $$ = TRUE; }
+			| /* EMPTY */ 			{ $$ = FALSE; }
 
 /*****************************************************************************
  *
@@ -9397,6 +9402,7 @@ unreserved_keyword:
 			| SIMPLE
 			| SQLTEXT
 			| SQLTEXTDB2
+			| SQLTEXTORACLE
 			| STABLE
 			| STANDALONE_P
 			| START

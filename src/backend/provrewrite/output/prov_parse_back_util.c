@@ -28,6 +28,7 @@
 #include "utils/lsyscache.h"
 #include "optimizer/clauses.h"
 #include "provrewrite/provstack.h"
+
 //#include ""
 
 
@@ -458,6 +459,7 @@ replaceUnnamedColumnsWalker (Node *node, void *context)
 
 	return expression_tree_walker(node, replaceUnnamedColumnsWalker, context);
 }
+
 
 /*
  * find_rte_by_refname		- look up an RTE by refname in a deparse context

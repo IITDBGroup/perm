@@ -12,7 +12,7 @@ subdir = src/backend/provrewrite/output
 top_builddir = ../../../..
 include $(top_builddir)/src/Makefile.global
 
-OBJS = prov_log.o prov_dotnode.o parse_back_db2.o prov_parse_back_util.o
+OBJS = prov_log.o prov_dotnode.o parse_back_db2.o parse_back_oracle.o prov_parse_back_util.o
 
 all: SUBSYS.o
 

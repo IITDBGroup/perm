@@ -2579,6 +2579,7 @@ _copyExplainStmt(ExplainStmt *from)
 	COPY_SCALAR_FIELD(graph);
 	COPY_SCALAR_FIELD(generateSQL);
 	COPY_SCALAR_FIELD(generateDB2SQL);
+	COPY_SCALAR_FIELD(generateOracleSQL);
 
 	return newnode;
 }
