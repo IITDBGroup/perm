@@ -1,0 +1,1 @@
+configure --prefix=/Users/lord_pretzel/systems/perm/install --enable-thread-safety --disable-debug --disable-cassert --with-libxml --with-libxslt  CFLAGS='-O2'
