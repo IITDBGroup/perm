@@ -17,33 +17,30 @@ RUN apt-get -y update && apt-get install -y \
 	bison \
 	flex \
 	git \
-	libsqlite3-dev \
 	libtool \
 	make \
-	libreadline6 \
 	libreadline6-dev \
-	sqlite3 \
-	gnuplot \
+	zlib1g-dev \
 	&& rm -rf /var/lib/apt/lists/*
 ########################################
-# Clone GProM github repository
+# Clone Perm github repository
 ########################################
 RUN git clone https://github.com/IITDBGroup/perm.git /perm/src
 ########################################
-# Build GProM
+# Build Perm
 ########################################
 RUN cd /perm/src \
-	&& ./configure --disable-oracle --disable-postgres --disable-java \
+	&& ./configure --prefix=/perm/install \
 	&& make \
 	&& make install
 ########################################
-# Build GProM
+# Create Data Directory
 ########################################
 
 ########################################
 # Per default start the gprom command line interface
 ########################################
-ENTRYPOINT ["/usr/local/bin/gprom"]
+ENTRYPOINT ["/perm/install/postmaster"]
 ########################################
 # Per default connect to the example SQLite database
 ########################################
