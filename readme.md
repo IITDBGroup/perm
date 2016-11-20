@@ -92,14 +92,14 @@ cd perm
 ~~~
 
 ~~~
-./configure --with-libxml --with-libxslt
+./configure --with-libxml --with-libxslt --prefix=INSTALLDIR
 make
-sudo make install
+make install
 mkdir CLUSTERDIR
-initdb -D CLUSTERDIR
-postgres -D CLUSTERDIR >logfile 2>&1 &
-createdb test
-psql test
+INSTALLDIR/bin/initdb -D CLUSTERDIR
+INSTALLDIR/bin/postgres -D CLUSTERDIR >logfile 2>&1 &
+INSTALLDIR/bin/createdb test
+INSTALLDIR/bin/psql test
 test=# CREATE LANGUAGE plpgsql;
 test=# \i ./contrib/xml2/pgxml.sql
 ~~~

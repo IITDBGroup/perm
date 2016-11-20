@@ -11,7 +11,7 @@ mkdir -p ${DATADIR}
 ${INSTALLBINDIR}/initdb -D ${DATADIR}
 ####################
 echo -start server
-${INSTALLBINDIR}/postgres -D ${DATADIR} > ${DATADIR}/log.txt 2>&1 &
+${INSTALLBINDIR}/postgres -D ${DATADIR} -l ${DATADIR}/log.txt &
 ####################
 echo -create user and testdb
 ${INSTALLBINDIR}/createuser -s -l -U $PGUSER postgres 
