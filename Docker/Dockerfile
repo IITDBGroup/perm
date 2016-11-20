@@ -56,6 +56,10 @@ EXPOSE 5432
 RUN cd /home/perm/src && git pull 
 RUN ["/home/perm/src/Docker/createExampleCluster.sh","perm"]
 ########################################
+# Add datadir as volume to persist across container restarts
+########################################
+VOLUME /home/perm/datadir
+########################################
 # Per default start the gprom command line interface
 ########################################
 ENTRYPOINT ["/home/perm/install/bin/postgres"]
