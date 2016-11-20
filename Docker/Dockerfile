@@ -46,6 +46,11 @@ RUN cd /home/perm/src \
 ########################################
 RUN /home/perm/src/Docker/createExampleCluster.sh postgres
 ########################################
+# Environment
+########################################
+ENV PATH /home/perm/install/bin/:$PATH
+ENV PGDATA /home/perm/datadir
+########################################
 # Expose postmaster port
 ########################################
 EXPOSE 5432
