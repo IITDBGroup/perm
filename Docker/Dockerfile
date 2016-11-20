@@ -44,7 +44,7 @@ RUN cd /home/perm/src \
 ########################################
 # Create Data Directory
 ########################################
-RUN /home/perm/src/Docker/createExampleCluster.sh postgres
+RUN /home/perm/src/Docker/createExampleCluster.sh perm
 ########################################
 # Environment
 ########################################
