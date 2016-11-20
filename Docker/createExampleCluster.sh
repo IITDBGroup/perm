@@ -6,14 +6,14 @@ INSTALLBINDIR=${PERMHOME}/install/bin
 DATADIR=${PERMHOME}/datadir
 ####################
 echo ---- Configure Perm installation and create TestDatabase
-echo -- for user ${PGUSER}
+echo -- for user ${PGUSER} with INSTALLBINDIR=${INSTALLBINDIR} and DATADIR=${DATADIR}
 echo - Create cluster, DB user and testdb database
 mkdir -p ${DATADIR}
 ${INSTALLBINDIR}/initdb -D ${DATADIR}
 ####################
 echo - start server
 #${INSTALLBINDIR}/postgres -D ${DATADIR} -l ${DATADIR}/log.txt
-${INSTALLBINDIR}/pg_ctl -w start
+${INSTALLBINDIR}/pg_ctl -D ${DATADIR} -w start
 ${INSTALLBINDIR}/psql -h localhost -p 5432 -U perm -d template1 -c 'CREATE LANGUAGE plpgsql' 
 ${INSTALLBINDIR}/psql -h localhost -p 5432 -U perm -d template1 -c '\i /home/perm/src/contrib/xml2/pgxml.sql'
 ####################
