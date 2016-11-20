@@ -44,6 +44,7 @@ RUN cd /home/perm/src \
 ########################################
 # Create Data Directory
 ########################################
+RUN cd /home/perm/src && git pull
 RUN ["/home/perm/src/Docker/createExampleCluster.sh","perm"]
 ########################################
 # Environment
@@ -57,7 +58,7 @@ EXPOSE 5432
 ########################################
 # Per default start the gprom command line interface
 ########################################
-ENTRYPOINT ["/home/perm/install/bin/postmaster"]
+ENTRYPOINT ["/home/perm/install/bin/postgres"]
 ########################################
 # Per default connect to the example SQLite database
 ########################################
