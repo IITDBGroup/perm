@@ -23,3 +23,7 @@ ${INSTALLBINDIR}/createdb -U $PGUSER testdb
 ####################
 echo - shutdown server
 ${INSTALLBINDIR}/pg_ctl -w stop
+####################
+echo - change listen addresses
+/bin/sed -i -e "s/#listen_addresses = 'localhost'/listen_addresses = '*'/g" ${DATADIR}/postgresql.conf 
+echo "host all all 0.0.0.0/0 trust" >> ${DATADIR}/pg_hba.conf 
