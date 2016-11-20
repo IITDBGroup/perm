@@ -10,7 +10,7 @@ before_install:
 ####################
 # build script
 script:
-  - ./configure --prefix=/perm/install --enable-thread-safety --with-libxml --with-libxslt  CFLAGS='-O0' && make && make check
+  - ./configure --prefix=/perm/install --enable-thread-safety --with-libxml --with-libxslt  CFLAGS='-O0' && make && make install
 
 ####################
 # branch configuration
