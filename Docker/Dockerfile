@@ -20,6 +20,9 @@ RUN apt-get -y update && apt-get install -y \
 	libtool \
 	make \
 	libreadline6-dev \
+	libxml2 \
+	libxml2-dev \
+	libxslt1-dev \
 	zlib1g-dev \
 	&& rm -rf /var/lib/apt/lists/*
 ########################################
@@ -30,18 +33,22 @@ RUN git clone https://github.com/IITDBGroup/perm.git /perm/src
 # Build Perm
 ########################################
 RUN cd /perm/src \
-	&& ./configure --prefix=/perm/install \
-	&& make \
+	&& ./configure --prefix=/perm/install --enable-thread-safety --with-libxml --with-libxslt  CFLAGS='-O0' \
+	&& make all \
 	&& make install
 ########################################
 # Create Data Directory
 ########################################
-
+RUN /perm/src/Docker/createExampleCluster.sh root
+########################################
+# Expose postmaster port
+########################################
+EXPOSE 5432
 ########################################
 # Per default start the gprom command line interface
 ########################################
-ENTRYPOINT ["/perm/install/postmaster"]
+ENTRYPOINT ["/perm/install/bin/postmaster"]
 ########################################
 # Per default connect to the example SQLite database
 ########################################
-CMD ["-Psqlserializer", "sqlite", "-Pmetadata", "sqlite", "-db", "/gprom/src/examples/test.db"]
+CMD ["-D", "/perm/datadir"]
