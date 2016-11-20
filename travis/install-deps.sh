@@ -17,7 +17,7 @@ if [[ $TRAVIS_OS_NAME == 'osx' ]]; then
 # LINUX	
 else
 	sudo apt-get -qq update
-	apt-get install -y \
+	sudo apt-get install -y \
 			autotools-dev \
 			autoconf \
 			bison \
