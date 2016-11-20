@@ -53,7 +53,7 @@ EXPOSE 5432
 ########################################
 # Create Data Directory
 ########################################
-RUN cd /home/perm/src && git pull
+RUN cd /home/perm/src && git pull 
 RUN ["/home/perm/src/Docker/createExampleCluster.sh","perm"]
 ########################################
 # Per default start the gprom command line interface
