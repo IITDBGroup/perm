@@ -7,7 +7,7 @@ mkdir -p /perm/datadir
 /perm/install/bin/initdb -D /perm/datadir
 ####################
 echo -start server
-perm/install/bin/postmaster -D /perm/datadir > /perm/datadir/log.txt 2>&1 &
+/perm/install/bin/postmaster -D /perm/datadir > /perm/datadir/log.txt 2>&1 &
 ####################
 echo -create user and testdb
 /perm/install/bin/createuser -s -l -U $PGUSER postgres 
