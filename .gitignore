@@ -84,3 +84,10 @@ src/interfaces/libpq/wchar.c
 src/port/pg_config_paths.h
 src/test/regress/pg_regress
 src/timezone/zic
+*.out
+*.sql
+src/test/regress/regression.diffs
+
+src/test/regress/log/
+src/test/regress/results/
+src/test/regress/tmp_check/
