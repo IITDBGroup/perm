@@ -61,11 +61,19 @@ To start the perm server and expose its port `5432` to the host:
 docker run --name myperm -d -p 5432:5432 iitdbgroup/perm
 ~~~
 
-either connect with any PostgreSQL client (if installed on the host) or running psql in the docker container itself:
+either connect with any PostgreSQL client (if installed on the host) 
+
+~~~
+psql -U perm -d testdb -p 5432 -h localhost
+~~~
+
+or by running psql in the docker container itself:
 
 ~~~
 docker exec -ti myperm /home/perm/install/bin/psql -U perm -d testdb
 ~~~
+
+
 
 # Installation
 
