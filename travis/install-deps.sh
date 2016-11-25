@@ -8,6 +8,7 @@ if [[ $TRAVIS_OS_NAME == 'osx' ]]; then
 	popd > /dev/null
 	# install dependencies
 	brew update
+	brew upgrade bison
 	brew outdated bison || brew upgrade bison
 	brew outdated flex || brew upgrade flex
 	brew outdated git || brew upgrade git
