@@ -91,3 +91,4 @@ src/test/regress/regression.diffs
 src/test/regress/log/
 src/test/regress/results/
 src/test/regress/tmp_check/
+perm-0.1-src.tar.gz
