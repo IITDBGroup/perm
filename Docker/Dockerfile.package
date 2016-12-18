@@ -1,0 +1,28 @@
+########################################
+# Derived from ubuntu distribution
+########################################
+FROM iitdbgroup/perm
+MAINTAINER Boris Glavic <bglavic@iit.edu>
+########################################
+# Install packages needed for building
+########################################
+RUN apt-get -y update && apt-get install -y \
+	docbook \
+	docbook-dsssl \
+	lynx \
+	jade \
+	&& rm -rf /var/lib/apt/lists/*
+########################################
+# Create user (other than root to be able to start postgres
+########################################
+USER perm
+########################################
+# Create and test distribution
+########################################
+RUN cd /home/perm/src \
+	&& make dist \
+	&& make distcheck
+########################################
+# Per default start the gprom command line interface
+########################################
+ENTRYPOINT ["/bin/bash"]

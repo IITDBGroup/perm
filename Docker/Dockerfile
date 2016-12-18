@@ -4,11 +4,6 @@
 FROM ubuntu:latest
 MAINTAINER Boris Glavic <bglavic@iit.edu>
 ########################################
-# Create working directories
-########################################
-WORKDIR /perm
-WORKDIR datadir
-########################################
 # Install packages needed for building
 ########################################
 RUN apt-get -y update && apt-get install -y \
@@ -17,34 +12,58 @@ RUN apt-get -y update && apt-get install -y \
 	bison \
 	flex \
 	git \
-	libsqlite3-dev \
 	libtool \
 	make \
-	libreadline6 \
 	libreadline6-dev \
-	sqlite3 \
-	gnuplot \
+	libxml2 \
+	libxml2-dev \
+	libxslt1-dev \
+	sudo \
+	zlib1g-dev \
 	&& rm -rf /var/lib/apt/lists/*
 ########################################
-# Clone GProM github repository
+# Create user (other than root to be able to start postgres
 ########################################
-RUN git clone https://github.com/IITDBGroup/perm.git /perm/src
+RUN useradd -m perm && echo "perm:perm" | chpasswd && adduser perm sudo
+USER perm
 ########################################
-# Build GProM
+# Create working directories
 ########################################
-RUN cd /perm/src \
-	&& ./configure --disable-oracle --disable-postgres --disable-java \
-	&& make \
+WORKDIR /home/perm
+########################################
+# Clone Perm github repository
+########################################
+RUN git clone https://github.com/IITDBGroup/perm.git /home/perm/src
+########################################
+# Build Perm
+########################################
+RUN cd /home/perm/src \
+	&& ./configure --prefix=/home/perm/install --enable-thread-safety --with-libxml --with-libxslt  CFLAGS='-O0' \
+	&& make all \
 	&& make install
 ########################################
-# Build GProM
+# Environment
 ########################################
-
+ENV PATH /home/perm/install/bin/:$PATH
+ENV PGDATA /home/perm/datadir
+########################################
+# Expose postmaster port
+########################################
+EXPOSE 5432
+########################################
+# Create Data Directory
+########################################
+RUN cd /home/perm/src && git pull 
+RUN ["/home/perm/src/Docker/createExampleCluster.sh","perm"]
+########################################
+# Add datadir as volume to persist across container restarts
+########################################
+VOLUME /home/perm/datadir
 ########################################
 # Per default start the gprom command line interface
 ########################################
-ENTRYPOINT ["/usr/local/bin/gprom"]
+ENTRYPOINT ["/home/perm/install/bin/postgres"]
 ########################################
 # Per default connect to the example SQLite database
 ########################################
-CMD ["-Psqlserializer", "sqlite", "-Pmetadata", "sqlite", "-db", "/gprom/src/examples/test.db"]
+CMD ["-D", "/home/perm/datadir"]
