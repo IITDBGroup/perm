@@ -1,3 +1,5 @@
+[![analytics](http://www.google-analytics.com/collect?v=1&t=pageview&_s=1&dl=https%3A%2F%2Fgithub.com%2FIITDBGroup%2Fperm%2Fmain&_u=MAC~&cid=123456789&tid=UA-92255635-4)]()
+
 # Build Status
 
 [![Build Status](https://travis-ci.org/IITDBGroup/perm.svg?branch=master)](https://travis-ci.org/IITDBGroup/perm)
