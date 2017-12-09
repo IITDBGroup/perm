@@ -125,7 +125,7 @@ readAndExecuteQueries ()
 }
 
 static char *
-readQuery ()
+readQuery (void)
 {
 	char *result;
 	char line[160];
@@ -512,7 +512,7 @@ createFile (char *name) {
 }
 
 static void
-connectToDB ()
+connectToDB (void)
 {
 	char *connStr;
 
@@ -595,7 +595,7 @@ static void setOptions (int true)
 }
 
 static void
-printUsage()
+printUsage(void)
 {
 	fprintf(stderr, "$Q(-2): Usage is: mybench [-c] [-h hostname] [-u username] [-p password] [-d database] "
 			"[-n stopAfterNQueries] [-s skipFirstNQueries] [-t option to set true] [-f option to set false] [-e] [-o] \n");
